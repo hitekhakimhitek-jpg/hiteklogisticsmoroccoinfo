@@ -13,17 +13,27 @@ const PRIORITIES = ["critical", "important", "informational"];
 
 // Search queries to find real freight/logistics news
 const SEARCH_QUERIES = [
-  // TIER 1 — Freight & logistics
+  // TIER 1 — Freight & logistics news
   "freight forwarding shipping logistics news today site:freightwaves.com OR site:theloadstar.com OR site:joc.com OR site:lloydslist.com",
   "maritime shipping disruption port congestion today site:hellenicshippingnews.com OR site:splash247.com OR site:gcaptain.com OR site:seatrade-maritime.com",
-  // TIER 2 — Morocco specific
-  "Morocco trade port Tanger Med customs ADII shipping",
+  // TIER 2 — Morocco specific (ADII, PortNet, Tanger Med)
+  "Morocco trade port Tanger Med customs ADII shipping PortNet",
+  "Maroc douane ADII circulaire tarif douanier site:douane.gov.ma OR site:adil.gov.ma OR site:portnet.ma",
+  "Tanger Med port authority community system site:tangermed.ma OR site:tmpa.ma",
   "Maroc commerce port douane fret logistique site:lematin.ma OR site:medias24.com OR site:fnh.ma",
-  // TIER 3 — Regulations & compliance
-  "IMO shipping regulation 2025 OR customs compliance OR trade sanctions site:imo.org OR site:wto.org OR site:iata.org OR site:wcoomd.org",
-  // TIER 4 — Disruptions
+  // TIER 3 — Regulations, compliance & reference bodies
+  "IMO shipping regulation 2025 OR IMDG code dangerous goods OR customs compliance OR trade sanctions site:imo.org OR site:wto.org OR site:iata.org OR site:wcoomd.org",
+  "FIATA freight forwarding documents FBL FCR site:fiata.org OR site:iccwbo.org incoterms",
+  "IATA dangerous goods regulations air cargo DGR site:iata.org",
+  "WCO harmonized system HS code classification site:wcoomd.org",
+  "UNECE CEFACT e-CMR electronic consignment note site:unece.org",
+  // TIER 4 — Disruptions & weather
   "port disruption weather shipping delay Suez Canal Mediterranean Gibraltar",
-  // TIER 5 — General freight keywords
+  // TIER 5 — Market intelligence & benchmarking
+  "World Bank logistics performance index LPI site:lpi.worldbank.org OR site:worldbank.org",
+  "UNCTAD review maritime transport shipping site:unctad.org",
+  "ITC trade map Morocco trade flows site:trademap.org OR site:intracen.org",
+  // TIER 6 — General freight keywords
   "freight forwarding OR shipping disruption OR port congestion OR customs regulation OR supply chain OR tariff update OR Suez Canal OR Mediterranean shipping",
 ];
 
@@ -192,9 +202,14 @@ serve(async (req) => {
     const classifyPrompt = `You are a freight forwarding intelligence analyst specializing in Morocco and global logistics.
 
 I have scraped the following real news articles from the web. Your job is to:
-1. FILTER: Only keep articles relevant to freight forwarding, shipping, logistics, trade, customs, port operations, or supply chain for a company operating from Morocco.
+1. FILTER: Only keep articles relevant to freight forwarding, shipping, logistics, trade, customs, port operations, dangerous goods, compliance, or supply chain for a company operating from Morocco.
 2. CATEGORIZE each relevant article.
-3. ASSESS priority and impact.
+3. ASSESS priority and impact using the CONTENT PRIORITIZATION HIERARCHY below.
+
+CONTENT PRIORITIZATION HIERARCHY (apply strictly):
+1st PRIORITY — COMPLIANCE & REGULATORY: Customs regulations, policy changes, enforcement updates, legal obligations, binding rules (ADII circulars, IMO regulations, WCO HS updates, IATA DGR changes, Incoterms updates, e-CMR standards). These MUST be flagged as "critical" or "important".
+2nd PRIORITY — DIRECT OPERATIONAL IMPACT: Information concretely affecting day-to-day workflows, costs, timelines, or procedures (port closures, route changes, rate surcharges, weather disruptions, carrier schedule changes).
+3rd PRIORITY — EVERYTHING ELSE: Market stories, trend narratives, speculative forecasts, benchmarking data (LPI, UNCTAD reports), general commentary. Flag as "informational" unless they contain concrete operational triggers.
 
 For each relevant article, return a JSON object with these fields:
 - "index": number (the [index] from the input)
@@ -203,9 +218,10 @@ For each relevant article, return a JSON object with these fields:
 - "category": one of ${JSON.stringify(CATEGORIES)}
 - "region": one of ${JSON.stringify(REGIONS)} (based on where the event/regulation applies)
 - "priority": one of ${JSON.stringify(PRIORITIES)}
-  - "critical": Direct operational impact (port closures, new sanctions, route blocked, major regulatory changes)
-  - "important": Indirect but significant impact (rate changes, carrier updates, trade policy shifts)
-  - "informational": Good to know, no immediate action needed
+  - "critical": Direct operational impact OR binding compliance/regulatory change
+  - "important": Significant indirect impact on operations, costs, or procedures
+  - "informational": Good to know, no immediate action needed (market trends, benchmarking, forecasts)
+- "impact_likelihood": "high" | "medium" | "low" (likelihood of actually impacting Morocco-based freight operations)
 - "impact_assessment": string (1-2 sentences on how this affects a Morocco-based freight forwarder)
 - "action_required": boolean
 - "suggested_action": string or null (what should the freight forwarder do)
@@ -213,6 +229,7 @@ For each relevant article, return a JSON object with these fields:
 IMPORTANT RULES:
 - ONLY include articles that are ACTUALLY relevant to freight forwarding / logistics / trade
 - Discard generic news, opinion pieces, or irrelevant content
+- Deprioritize or OMIT items that are speculative or unlikely to have a tangible effect
 - Be accurate with categorization — don't guess
 - Today's date is ${today}
 
@@ -328,8 +345,11 @@ function extractSourceName(url: string): string {
       "gcaptain.com": "gCaptain",
       "seatrade-maritime.com": "Seatrade Maritime",
       "tangermed.ma": "Tanger Med",
+      "tmpa.ma": "Tanger Med Port Authority",
       "anp.org.ma": "ANP Morocco",
-      "douane.gov.ma": "ADII Morocco",
+      "douane.gov.ma": "ADII Morocco (Customs)",
+      "adil.gov.ma": "ADiL (Customs Clearance)",
+      "portnet.ma": "PortNet Morocco",
       "mcinet.gov.ma": "Ministry of Trade Morocco",
       "lematin.ma": "Le Matin",
       "medias24.com": "Medias24",
@@ -339,6 +359,14 @@ function extractSourceName(url: string): string {
       "iata.org": "IATA",
       "ec.europa.eu": "European Commission",
       "wcoomd.org": "WCO",
+      "fiata.org": "FIATA",
+      "iccwbo.org": "ICC (Incoterms)",
+      "unece.org": "UNECE",
+      "unctad.org": "UNCTAD",
+      "worldbank.org": "World Bank",
+      "lpi.worldbank.org": "World Bank LPI",
+      "trademap.org": "ITC Trade Map",
+      "intracen.org": "ITC",
       "marinetraffic.com": "MarineTraffic",
       "portwatch.imf.org": "IMF PortWatch",
     };
