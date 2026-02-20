@@ -14,16 +14,154 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      monthly_summaries: {
+        Row: {
+          compliance_tracker: Json
+          executive_summary: string
+          generated_at: string
+          id: string
+          month: number
+          month_comparison: Json | null
+          morocco_digest: string | null
+          top_events: Json
+          year: number
+        }
+        Insert: {
+          compliance_tracker?: Json
+          executive_summary: string
+          generated_at?: string
+          id?: string
+          month: number
+          month_comparison?: Json | null
+          morocco_digest?: string | null
+          top_events?: Json
+          year: number
+        }
+        Update: {
+          compliance_tracker?: Json
+          executive_summary?: string
+          generated_at?: string
+          id?: string
+          month?: number
+          month_comparison?: Json | null
+          morocco_digest?: string | null
+          top_events?: Json
+          year?: number
+        }
+        Relationships: []
+      }
+      news_entries: {
+        Row: {
+          action_required: boolean
+          category: Database["public"]["Enums"]["news_category"]
+          fetched_date: string
+          full_content: string | null
+          headline: string
+          id: string
+          impact_assessment: string | null
+          month: number
+          priority: Database["public"]["Enums"]["news_priority"]
+          published_date: string
+          region: Database["public"]["Enums"]["news_region"]
+          source_name: string
+          source_url: string | null
+          suggested_action: string | null
+          summary: string
+          week_number: number
+          year: number
+        }
+        Insert: {
+          action_required?: boolean
+          category?: Database["public"]["Enums"]["news_category"]
+          fetched_date?: string
+          full_content?: string | null
+          headline: string
+          id?: string
+          impact_assessment?: string | null
+          month?: number
+          priority?: Database["public"]["Enums"]["news_priority"]
+          published_date?: string
+          region?: Database["public"]["Enums"]["news_region"]
+          source_name?: string
+          source_url?: string | null
+          suggested_action?: string | null
+          summary: string
+          week_number?: number
+          year?: number
+        }
+        Update: {
+          action_required?: boolean
+          category?: Database["public"]["Enums"]["news_category"]
+          fetched_date?: string
+          full_content?: string | null
+          headline?: string
+          id?: string
+          impact_assessment?: string | null
+          month?: number
+          priority?: Database["public"]["Enums"]["news_priority"]
+          published_date?: string
+          region?: Database["public"]["Enums"]["news_region"]
+          source_name?: string
+          source_url?: string | null
+          suggested_action?: string | null
+          summary?: string
+          week_number?: number
+          year?: number
+        }
+        Relationships: []
+      }
+      weekly_reports: {
+        Row: {
+          executive_summary: string
+          generated_at: string
+          id: string
+          report_json: Json
+          week_number: number
+          year: number
+        }
+        Insert: {
+          executive_summary: string
+          generated_at?: string
+          id?: string
+          report_json?: Json
+          week_number: number
+          year: number
+        }
+        Update: {
+          executive_summary?: string
+          generated_at?: string
+          id?: string
+          report_json?: Json
+          week_number?: number
+          year?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cleanup_old_entries: { Args: never; Returns: undefined }
     }
     Enums: {
-      [_ in never]: never
+      news_category:
+        | "regulation"
+        | "weather"
+        | "port"
+        | "trade"
+        | "compliance"
+        | "market"
+        | "general"
+      news_priority: "critical" | "important" | "informational"
+      news_region:
+        | "morocco"
+        | "europe"
+        | "asia"
+        | "americas"
+        | "africa"
+        | "middle_east"
+        | "global"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +288,26 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      news_category: [
+        "regulation",
+        "weather",
+        "port",
+        "trade",
+        "compliance",
+        "market",
+        "general",
+      ],
+      news_priority: ["critical", "important", "informational"],
+      news_region: [
+        "morocco",
+        "europe",
+        "asia",
+        "americas",
+        "africa",
+        "middle_east",
+        "global",
+      ],
+    },
   },
 } as const
