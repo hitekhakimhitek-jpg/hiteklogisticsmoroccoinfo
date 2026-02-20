@@ -66,17 +66,22 @@ serve(async (req) => {
         );
       }
 
-      const prompt = `You are a senior freight intelligence analyst producing a weekly briefing for a Morocco-based freight forwarder. Analyze the following ${news.length} news entries and produce a comprehensive intelligence report.
+      const prompt = `You are a senior freight intelligence analyst producing a weekly briefing for a Morocco-based freight forwarder. Analyze the following ${news.length} news entries and produce a comprehensive, polished intelligence report.
+
+CONTENT PRIORITIZATION (apply this hierarchy strictly):
+1st: Compliance & Regulatory — customs regulations, policy changes, enforcement updates, legal obligations, ADII circulars, IMO/IATA/WCO changes
+2nd: Direct Operational Impact — port closures, route changes, rate surcharges, weather disruptions, carrier changes
+3rd: Everything Else — market stories, trends, forecasts, benchmarking
 
 News entries:
 ${JSON.stringify(news, null, 2)}
 
 Generate a JSON object with these exact fields:
-- "executive_summary": string (4-6 sentence overview highlighting the most impactful developments, their combined effect on operations, and the overall risk posture for the week)
-- "risk_score": integer 1-100 (overall operational risk score for the week, where 1=minimal risk, 100=severe disruption. Consider: number of critical alerts, sanctions, port closures, weather events, regulatory deadlines)
-- "outlook": string (2-3 sentences on what to expect next week based on current trends — upcoming deadlines, weather forecasts, pending regulations)
-- "key_takeaways": array of 3-5 strings (concise bullet-point takeaways a logistics manager can act on immediately)
-- "recommendations": array of objects {priority: "urgent"|"important"|"monitor", action: string, rationale: string} (3-5 concrete operational recommendations)
+- "executive_summary": string (4-6 well-written sentences structured as a professional paragraph, NOT bullet points. Start with compliance/regulatory highlights, then operational impacts, then market context. Write it as a polished executive brief.)
+- "risk_score": integer 1-100 (overall operational risk score for the week, where 1=minimal risk, 100=severe disruption. Weight compliance deadlines and regulatory changes heavily.)
+- "outlook": string (2-3 sentences on what to expect next week — upcoming compliance deadlines first, then operational factors, then market trends)
+- "key_takeaways": array of 3-5 strings (concise takeaways a logistics manager can act on immediately, ordered by priority: compliance first, then operational, then market)
+- "recommendations": array of objects {priority: "urgent"|"important"|"monitor", action: string, rationale: string} (3-5 concrete operational recommendations, ordered by priority)
 - "report_json": object with keys "critical", "regulatory", "trade", "disruptions", "general", "morocco" — each containing an array of entry IDs from the news that belong to that section
 
 Return ONLY valid JSON. No markdown.`;
@@ -122,17 +127,22 @@ Return ONLY valid JSON. No markdown.`;
 
       const prompt = `You are a senior freight intelligence analyst producing a monthly executive summary for a Morocco-based freight forwarder. Analyze the following ${news.length} news entries from this month.
 
+CONTENT PRIORITIZATION (apply this hierarchy strictly throughout the report):
+1st: Compliance & Regulatory — customs regulations, ADII circulars, IMO/IATA/WCO changes, legal obligations
+2nd: Direct Operational Impact — port closures, route changes, rate surcharges, weather disruptions
+3rd: Everything Else — market stories, trends, forecasts, benchmarking data
+
 News entries:
 ${JSON.stringify(news, null, 2)}
 
 Generate a JSON object with these exact fields:
-- "executive_summary": string (5-7 sentence strategic overview of the month)
-- "risk_score": integer 1-100 (overall monthly risk assessment)
-- "top_events": array of {rank: number, headline: string, impact: "Critical"|"High"|"Medium"|"Low", category: string, analysis: string} (top 10 events, where analysis is 1-2 sentences explaining operational impact)
+- "executive_summary": string (5-7 well-written sentences as a polished professional paragraph. Structure: compliance/regulatory highlights first, then operational impacts, then market context. NO bullet points.)
+- "risk_score": integer 1-100 (overall monthly risk assessment, weighting compliance deadlines heavily)
+- "top_events": array of {rank: number, headline: string, impact: "Critical"|"High"|"Medium"|"Low", category: string, analysis: string} (top 10 events ranked by priority hierarchy: compliance first, operational second, market third)
 - "compliance_tracker": array of {item: string, deadline: string, status: "addressed"|"pending"|"action_needed", detail: string} where detail explains what needs to be done
-- "morocco_digest": string (detailed paragraph about Morocco-specific developments — ports, customs, trade lanes, regulatory changes)
+- "morocco_digest": string (detailed paragraph about Morocco-specific developments — ADII changes, PortNet updates, Tanger Med operations, customs procedures, trade lanes, regulatory changes)
 - "trend_analysis": array of {trend: string, direction: "rising"|"stable"|"declining", description: string} (3-5 key trends observed this month)
-- "forward_outlook": string (3-4 sentences on what to expect next month — upcoming deadlines, seasonal patterns, market predictions)
+- "forward_outlook": string (3-4 sentences: upcoming compliance deadlines first, then operational factors, then market predictions)
 - "month_comparison": object with {disruptions, regulations, criticalAlerts, newsItems} each having {current: number, previous: number, change: number (percentage)}
 
 Return ONLY valid JSON. No markdown.`;
