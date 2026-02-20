@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { FileBarChart, AlertTriangle, ShieldCheck, TrendingUp, CloudRain, Newspaper, Flag, RefreshCw, Loader2, Shield, Eye, Lightbulb, Target } from "lucide-react";
+import { FileBarChart, AlertTriangle, ShieldCheck, TrendingUp, CloudRain, Newspaper, Flag, RefreshCw, Loader2, Shield, Eye, Lightbulb, Target, Download } from "lucide-react";
+import { exportToPDF } from "@/lib/exportPDF";
 import { useNewsEntries, useWeeklyReports, triggerGenerateReport } from "@/hooks/useFreightData";
 import { priorityConfig, categoryLabels, regionLabels, categoryColors } from "@/types/freight";
 import { Badge } from "@/components/ui/badge";
@@ -124,11 +125,19 @@ const WeeklyReport = () => {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <button onClick={handleGenerate} disabled={isGenerating || !allNews?.length}
-            className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/90 transition-colors disabled:opacity-50 font-medium">
-            {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            {isGenerating ? "Generating..." : "Generate Report"}
-          </button>
+          <div className="flex items-center gap-2">
+            {weekNews.length > 0 && (
+              <button onClick={() => { exportToPDF("weekly-report-content", `weekly-report-w${weekNumber}-${now.getFullYear()}`).catch(() => toast.error("PDF export failed")); }}
+                className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-input bg-card text-card-foreground hover:bg-muted transition-colors">
+                <Download className="w-4 h-4" /> PDF
+              </button>
+            )}
+            <button onClick={handleGenerate} disabled={isGenerating || !allNews?.length}
+              className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/90 transition-colors disabled:opacity-50 font-medium">
+              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              {isGenerating ? "Generating..." : "Generate Report"}
+            </button>
+          </div>
           {isGenerating && genStep && (
             <span className="text-[11px] text-muted-foreground animate-pulse">{genStep}</span>
           )}
@@ -142,7 +151,7 @@ const WeeklyReport = () => {
           <p className="text-muted-foreground">No news entries for this week. Fetch news from the Dashboard first.</p>
         </div>
       ) : (
-        <>
+        <div id="weekly-report-content" className="space-y-6">
           {/* Risk Score */}
           {riskScore != null && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-lg border border-border card-elevated p-5">
@@ -237,7 +246,7 @@ const WeeklyReport = () => {
               );
             })}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
