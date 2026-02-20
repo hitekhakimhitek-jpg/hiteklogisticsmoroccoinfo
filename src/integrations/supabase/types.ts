@@ -18,34 +18,43 @@ export type Database = {
         Row: {
           compliance_tracker: Json
           executive_summary: string
+          forward_outlook: string | null
           generated_at: string
           id: string
           month: number
           month_comparison: Json | null
           morocco_digest: string | null
+          risk_score: number | null
           top_events: Json
+          trend_analysis: Json | null
           year: number
         }
         Insert: {
           compliance_tracker?: Json
           executive_summary: string
+          forward_outlook?: string | null
           generated_at?: string
           id?: string
           month: number
           month_comparison?: Json | null
           morocco_digest?: string | null
+          risk_score?: number | null
           top_events?: Json
+          trend_analysis?: Json | null
           year: number
         }
         Update: {
           compliance_tracker?: Json
           executive_summary?: string
+          forward_outlook?: string | null
           generated_at?: string
           id?: string
           month?: number
           month_comparison?: Json | null
           morocco_digest?: string | null
+          risk_score?: number | null
           top_events?: Json
+          trend_analysis?: Json | null
           year?: number
         }
         Relationships: []
@@ -115,7 +124,11 @@ export type Database = {
           executive_summary: string
           generated_at: string
           id: string
+          key_takeaways: Json | null
+          outlook: string | null
+          recommendations: Json | null
           report_json: Json
+          risk_score: number | null
           week_number: number
           year: number
         }
@@ -123,7 +136,11 @@ export type Database = {
           executive_summary: string
           generated_at?: string
           id?: string
+          key_takeaways?: Json | null
+          outlook?: string | null
+          recommendations?: Json | null
           report_json?: Json
+          risk_score?: number | null
           week_number: number
           year: number
         }
@@ -131,7 +148,11 @@ export type Database = {
           executive_summary?: string
           generated_at?: string
           id?: string
+          key_takeaways?: Json | null
+          outlook?: string | null
+          recommendations?: Json | null
           report_json?: Json
+          risk_score?: number | null
           week_number?: number
           year?: number
         }

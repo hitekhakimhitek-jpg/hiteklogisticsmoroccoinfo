@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { CalendarDays, TrendingUp, TrendingDown, CheckCircle2, Clock, AlertCircle, RefreshCw, Loader2 } from "lucide-react";
+import { CalendarDays, TrendingUp, TrendingDown, RefreshCw, Loader2, Shield, Eye, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 import { useMonthlySummaries, triggerGenerateReport } from "@/hooks/useFreightData";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { motion } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "sonner";
@@ -20,29 +21,69 @@ const statusDisplay: Record<string, { className: string; label: string }> = {
   action_needed: { className: "text-destructive", label: "🔴 Action Needed" },
 };
 
+const directionIcon: Record<string, typeof ArrowUpRight> = {
+  rising: ArrowUpRight,
+  declining: ArrowDownRight,
+  stable: Minus,
+};
+
+const directionColor: Record<string, string> = {
+  rising: "text-destructive",
+  declining: "text-success",
+  stable: "text-muted-foreground",
+};
+
+function RiskGauge({ score }: { score: number }) {
+  const color = score >= 70 ? "text-destructive" : score >= 40 ? "text-warning" : "text-success";
+  const label = score >= 70 ? "High Risk" : score >= 40 ? "Moderate" : "Low Risk";
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs font-medium text-muted-foreground">Monthly Risk Score</span>
+          <span className={`text-sm font-bold ${color}`}>{score}/100</span>
+        </div>
+        <Progress value={score} className="h-2" />
+      </div>
+      <Badge className={`${score >= 70 ? "bg-destructive/10 text-destructive border-destructive/20" : score >= 40 ? "bg-warning/10 text-warning border-warning/20" : "bg-success/10 text-success border-success/20"} text-[10px] px-2 py-0.5`}>
+        {label}
+      </Badge>
+    </div>
+  );
+}
+
 const MonthlySummary = () => {
   const { data: summaries, isLoading } = useMonthlySummaries();
   const [isGenerating, setIsGenerating] = useState(false);
+  const [genStep, setGenStep] = useState("");
   const queryClient = useQueryClient();
 
   const summary = summaries?.[0];
 
   const handleGenerate = async () => {
     setIsGenerating(true);
+    setGenStep("Collecting monthly data...");
     try {
+      setTimeout(() => setGenStep("Running deep analysis..."), 2000);
+      setTimeout(() => setGenStep("Generating trends & outlook..."), 5000);
       await triggerGenerateReport("monthly");
+      setGenStep("Done!");
       toast.success("Monthly summary generated!");
       queryClient.invalidateQueries({ queryKey: ["monthly_summaries"] });
     } catch (e: any) {
       toast.error(e.message);
     } finally {
       setIsGenerating(false);
+      setGenStep("");
     }
   };
 
   const topEvents = (summary?.top_events as any[]) || [];
   const compliance = (summary?.compliance_tracker as any[]) || [];
   const comparison = summary?.month_comparison as any;
+  const riskScore = (summary as any)?.risk_score as number | undefined;
+  const trendAnalysis = ((summary as any)?.trend_analysis || []) as { trend: string; direction: string; description: string }[];
+  const forwardOutlook = (summary as any)?.forward_outlook as string | undefined;
 
   const comparisonData = comparison
     ? [
@@ -63,11 +104,16 @@ const MonthlySummary = () => {
             <p className="text-sm text-muted-foreground">{summary ? `${new Date(0, (summary.month as number) - 1).toLocaleString("en", { month: "long" })} ${summary.year}` : "No summary yet"}</p>
           </div>
         </div>
-        <button onClick={handleGenerate} disabled={isGenerating}
-          className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/90 transition-colors disabled:opacity-50 font-medium">
-          {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          {isGenerating ? "Generating..." : "Generate Summary"}
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button onClick={handleGenerate} disabled={isGenerating}
+            className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/90 transition-colors disabled:opacity-50 font-medium">
+            {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            {isGenerating ? "Generating..." : "Generate Summary"}
+          </button>
+          {isGenerating && genStep && (
+            <span className="text-[11px] text-muted-foreground animate-pulse">{genStep}</span>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
@@ -78,21 +124,58 @@ const MonthlySummary = () => {
         </div>
       ) : (
         <>
+          {/* Risk Score */}
+          {riskScore != null && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-lg border border-border card-elevated p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Shield className="w-4 h-4 text-secondary" />
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Risk Assessment</h2>
+              </div>
+              <RiskGauge score={riskScore} />
+            </motion.div>
+          )}
+
           {/* Executive Summary */}
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-lg border border-border card-elevated p-5">
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="bg-card rounded-lg border border-border card-elevated p-5">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">Executive Summary</h2>
             <p className="text-sm text-card-foreground leading-relaxed">{summary.executive_summary}</p>
           </motion.div>
 
+          {/* Trend Analysis */}
+          {trendAnalysis.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-card rounded-lg border border-border card-elevated p-5">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Trend Analysis</h2>
+              <div className="space-y-3">
+                {trendAnalysis.map((t, i) => {
+                  const DirIcon = directionIcon[t.direction] || Minus;
+                  const dirColor = directionColor[t.direction] || "text-muted-foreground";
+                  return (
+                    <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
+                      <DirIcon className={`w-5 h-5 shrink-0 mt-0.5 ${dirColor}`} />
+                      <div>
+                        <p className="text-sm font-medium text-card-foreground">{t.trend}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{t.description}</p>
+                      </div>
+                      <Badge className={`ml-auto shrink-0 ${dirColor} bg-transparent border text-[10px]`}>{t.direction}</Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
           {/* Top Events */}
           {topEvents.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-card rounded-lg border border-border card-elevated p-5">
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-card rounded-lg border border-border card-elevated p-5">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Top Events of the Month</h2>
               <div className="space-y-2">
                 {topEvents.map((event: any, i: number) => (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
                     <span className="text-lg font-bold text-muted-foreground w-8 text-center shrink-0">{event.rank || i + 1}</span>
-                    <div className="flex-1 min-w-0"><p className="text-sm font-medium text-card-foreground">{event.headline}</p></div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-card-foreground">{event.headline}</p>
+                      {event.analysis && <p className="text-xs text-muted-foreground mt-0.5">{event.analysis}</p>}
+                    </div>
                     <Badge className={`${impactColors[event.impact] || "bg-muted text-muted-foreground"} text-[10px] px-2 py-0.5 shrink-0`}>{event.impact}</Badge>
                   </div>
                 ))}
@@ -115,7 +198,10 @@ const MonthlySummary = () => {
                     const sd = statusDisplay[item.status] || statusDisplay.pending;
                     return (
                       <tr key={i} className="border-b border-border/50 last:border-0">
-                        <td className="py-3 px-3 text-card-foreground">{item.item}</td>
+                        <td className="py-3 px-3 text-card-foreground">
+                          {item.item}
+                          {item.detail && <p className="text-[11px] text-muted-foreground mt-0.5">{item.detail}</p>}
+                        </td>
                         <td className="py-3 px-3 text-muted-foreground">{item.deadline}</td>
                         <td className="py-3 px-3"><span className={`text-xs font-medium ${sd.className}`}>{sd.label}</span></td>
                       </tr>
@@ -134,9 +220,20 @@ const MonthlySummary = () => {
             </motion.div>
           )}
 
+          {/* Forward Outlook */}
+          {forwardOutlook && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-card rounded-lg border border-border card-elevated p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <Eye className="w-4 h-4 text-secondary" />
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Month Ahead Outlook</h2>
+              </div>
+              <p className="text-sm text-card-foreground leading-relaxed">{forwardOutlook}</p>
+            </motion.div>
+          )}
+
           {/* Comparison Chart */}
           {comparisonData.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-card rounded-lg border border-border card-elevated p-5">
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="bg-card rounded-lg border border-border card-elevated p-5">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Month-over-Month Comparison</h2>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
                 {Object.entries(comparison).map(([key, val]: [string, any]) => {

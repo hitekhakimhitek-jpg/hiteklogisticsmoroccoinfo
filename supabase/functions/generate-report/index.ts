@@ -11,7 +11,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { type } = await req.json(); // "weekly" or "monthly"
+    const { type } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -23,37 +23,7 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const now = new Date();
 
-    if (type === "weekly") {
-      const weekNumber = Math.ceil(
-        (now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000)
-      );
-
-      // Fetch this week's news
-      const { data: news } = await supabase
-        .from("news_entries")
-        .select("*")
-        .eq("week_number", weekNumber)
-        .eq("year", now.getFullYear())
-        .order("priority", { ascending: true });
-
-      if (!news || news.length === 0) {
-        return new Response(
-          JSON.stringify({ success: false, message: "No news entries for this week" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      const prompt = `You are a freight intelligence analyst. Based on the following ${news.length} news entries from this week, generate a weekly intelligence report.
-
-News entries:
-${JSON.stringify(news, null, 2)}
-
-Generate a JSON object with:
-- "executive_summary": string (3-5 sentence overview of the week's key developments)
-- "report_json": object with keys "critical", "regulatory", "trade", "disruptions", "general", "morocco" — each containing an array of entry IDs from the news that belong to that section
-
-Return ONLY valid JSON. No markdown.`;
-
+    const callAI = async (prompt: string) => {
       const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -74,20 +44,60 @@ Return ONLY valid JSON. No markdown.`;
       const aiData = await aiResp.json();
       let content = aiData.choices?.[0]?.message?.content || "";
       content = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      return JSON.parse(content);
+    };
 
-      const report = JSON.parse(content);
+    if (type === "weekly") {
+      const weekNumber = Math.ceil(
+        (now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000)
+      );
+
+      const { data: news } = await supabase
+        .from("news_entries")
+        .select("*")
+        .eq("week_number", weekNumber)
+        .eq("year", now.getFullYear())
+        .order("priority", { ascending: true });
+
+      if (!news || news.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, message: "No news entries for this week" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const prompt = `You are a senior freight intelligence analyst producing a weekly briefing for a Morocco-based freight forwarder. Analyze the following ${news.length} news entries and produce a comprehensive intelligence report.
+
+News entries:
+${JSON.stringify(news, null, 2)}
+
+Generate a JSON object with these exact fields:
+- "executive_summary": string (4-6 sentence overview highlighting the most impactful developments, their combined effect on operations, and the overall risk posture for the week)
+- "risk_score": integer 1-100 (overall operational risk score for the week, where 1=minimal risk, 100=severe disruption. Consider: number of critical alerts, sanctions, port closures, weather events, regulatory deadlines)
+- "outlook": string (2-3 sentences on what to expect next week based on current trends — upcoming deadlines, weather forecasts, pending regulations)
+- "key_takeaways": array of 3-5 strings (concise bullet-point takeaways a logistics manager can act on immediately)
+- "recommendations": array of objects {priority: "urgent"|"important"|"monitor", action: string, rationale: string} (3-5 concrete operational recommendations)
+- "report_json": object with keys "critical", "regulatory", "trade", "disruptions", "general", "morocco" — each containing an array of entry IDs from the news that belong to that section
+
+Return ONLY valid JSON. No markdown.`;
+
+      const report = await callAI(prompt);
 
       const { error } = await supabase.from("weekly_reports").upsert({
         week_number: weekNumber,
         year: now.getFullYear(),
         executive_summary: report.executive_summary,
         report_json: report.report_json || {},
+        risk_score: report.risk_score || null,
+        outlook: report.outlook || null,
+        key_takeaways: report.key_takeaways || [],
+        recommendations: report.recommendations || [],
       }, { onConflict: "week_number,year" });
 
       if (error) throw new Error(`DB error: ${error.message}`);
 
       return new Response(
-        JSON.stringify({ success: true, type: "weekly", week: weekNumber }),
+        JSON.stringify({ success: true, type: "weekly", week: weekNumber, risk_score: report.risk_score }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -110,42 +120,24 @@ Return ONLY valid JSON. No markdown.`;
         );
       }
 
-      const prompt = `You are a freight intelligence analyst. Based on the following ${news.length} news entries from this month, generate a monthly summary.
+      const prompt = `You are a senior freight intelligence analyst producing a monthly executive summary for a Morocco-based freight forwarder. Analyze the following ${news.length} news entries from this month.
 
 News entries:
 ${JSON.stringify(news, null, 2)}
 
-Generate a JSON object with:
-- "executive_summary": string (5-7 sentence overview)
-- "top_events": array of {rank, headline, impact, category} (top 10)
-- "compliance_tracker": array of {item, deadline, status} where status is "addressed"|"pending"|"action_needed"
-- "morocco_digest": string (paragraph about Morocco-specific events)
-- "month_comparison": object with {disruptions, regulations, criticalAlerts, newsItems} each having {current: number, previous: number, change: number}
+Generate a JSON object with these exact fields:
+- "executive_summary": string (5-7 sentence strategic overview of the month)
+- "risk_score": integer 1-100 (overall monthly risk assessment)
+- "top_events": array of {rank: number, headline: string, impact: "Critical"|"High"|"Medium"|"Low", category: string, analysis: string} (top 10 events, where analysis is 1-2 sentences explaining operational impact)
+- "compliance_tracker": array of {item: string, deadline: string, status: "addressed"|"pending"|"action_needed", detail: string} where detail explains what needs to be done
+- "morocco_digest": string (detailed paragraph about Morocco-specific developments — ports, customs, trade lanes, regulatory changes)
+- "trend_analysis": array of {trend: string, direction: "rising"|"stable"|"declining", description: string} (3-5 key trends observed this month)
+- "forward_outlook": string (3-4 sentences on what to expect next month — upcoming deadlines, seasonal patterns, market predictions)
+- "month_comparison": object with {disruptions, regulations, criticalAlerts, newsItems} each having {current: number, previous: number, change: number (percentage)}
 
 Return ONLY valid JSON. No markdown.`;
 
-      const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [{ role: "user", content: prompt }],
-        }),
-      });
-
-      if (!aiResp.ok) {
-        const t = await aiResp.text();
-        throw new Error(`AI error: ${aiResp.status} ${t}`);
-      }
-
-      const aiData = await aiResp.json();
-      let content = aiData.choices?.[0]?.message?.content || "";
-      content = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-
-      const summary = JSON.parse(content);
+      const summary = await callAI(prompt);
 
       const { error } = await supabase.from("monthly_summaries").upsert({
         month,
@@ -155,12 +147,15 @@ Return ONLY valid JSON. No markdown.`;
         compliance_tracker: summary.compliance_tracker || [],
         morocco_digest: summary.morocco_digest || null,
         month_comparison: summary.month_comparison || null,
+        risk_score: summary.risk_score || null,
+        trend_analysis: summary.trend_analysis || [],
+        forward_outlook: summary.forward_outlook || null,
       }, { onConflict: "month,year" });
 
       if (error) throw new Error(`DB error: ${error.message}`);
 
       return new Response(
-        JSON.stringify({ success: true, type: "monthly", month, year }),
+        JSON.stringify({ success: true, type: "monthly", month, year, risk_score: summary.risk_score }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
