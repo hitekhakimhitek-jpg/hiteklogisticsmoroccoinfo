@@ -67,7 +67,7 @@ serve(async (req) => {
           body: JSON.stringify({
             query,
             limit: 5,
-            tbs: "qdr:d", // Last 24 hours
+            tbs: "qdr:w", // Last week for more results
             scrapeOptions: { formats: ["markdown"] },
           }),
         });
@@ -98,16 +98,86 @@ serve(async (req) => {
       allArticles.push(...batch);
     }
 
-    // Deduplicate by URL
+    // Filter out generic/non-article URLs before deduplication
+    const isValidArticleUrl = (url: string): boolean => {
+      try {
+        const u = new URL(url);
+        const path = u.pathname;
+        // Reject generic index/listing pages
+        if (path === "/" || path === "/en/" || path === "/news/" || path === "/en/news/") return false;
+        // Reject generic PHP listing pages
+        if (path.endsWith("view_more_news.php") || path.endsWith("index.php")) return false;
+        // Reject social media links (facebook, twitter, linkedin)
+        if (u.hostname.includes("facebook.com") || u.hostname.includes("twitter.com") || u.hostname.includes("linkedin.com")) return false;
+        // Reject very short paths (likely homepages)
+        if (path.split("/").filter(Boolean).length < 2) return false;
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    // Deduplicate by URL and filter bad URLs
     const uniqueArticles = Array.from(
-      new Map(allArticles.filter(a => a.url && a.title).map(a => [a.url, a])).values()
+      new Map(
+        allArticles
+          .filter(a => a.url && a.title && isValidArticleUrl(a.url))
+          .map(a => [a.url, a])
+      ).values()
     );
 
-    console.log(`Found ${uniqueArticles.length} unique articles from web scraping`);
+    // Step 1b: Validate URLs actually resolve (HEAD request, parallel, with timeout)
+    console.log(`Validating ${uniqueArticles.length} article URLs...`);
+    const validatedArticles: typeof uniqueArticles = [];
+    const validationPromises = uniqueArticles.map(async (article) => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        const resp = await fetch(article.url, {
+          method: "HEAD",
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; FreightPulse/1.0)" },
+          signal: controller.signal,
+          redirect: "follow",
+        });
+        clearTimeout(timeout);
+        if (resp.ok) return article;
+        // Try GET if HEAD fails (some servers don't support HEAD)
+        if (resp.status === 405 || resp.status === 403) {
+          const controller2 = new AbortController();
+          const timeout2 = setTimeout(() => controller2.abort(), 5000);
+          const resp2 = await fetch(article.url, {
+            method: "GET",
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; FreightPulse/1.0)" },
+            signal: controller2.signal,
+            redirect: "follow",
+          });
+          clearTimeout(timeout2);
+          await resp2.text(); // consume body
+          if (resp2.ok) return article;
+        }
+        console.log(`URL validation failed (${resp.status}): ${article.url}`);
+        return null;
+      } catch (e) {
+        console.log(`URL validation error: ${article.url} - ${e}`);
+        return null;
+      }
+    });
 
-    if (uniqueArticles.length === 0) {
+    const validationResults = await Promise.all(validationPromises);
+    for (const article of validationResults) {
+      if (article) validatedArticles.push(article);
+    }
+
+    console.log(`${validatedArticles.length} articles passed URL validation`);
+
+    // Use validated articles from here on
+    const articlesToProcess = validatedArticles;
+
+    console.log(`Found ${articlesToProcess.length} validated articles from web scraping`);
+
+    if (articlesToProcess.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, count: 0, message: "No new articles found" }),
+        JSON.stringify({ success: true, count: 0, message: "No new articles with valid URLs found" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -115,7 +185,7 @@ serve(async (req) => {
     // Step 2: Use AI to categorize, filter, and assess each article for Morocco freight relevance
     console.log("Using AI to categorize and filter articles...");
 
-    const articleSummaries = uniqueArticles.slice(0, 30).map((a, i) =>
+    const articleSummaries = articlesToProcess.slice(0, 30).map((a, i) =>
       `[${i}] TITLE: ${a.title}\nURL: ${a.url}\nSOURCE: ${a.source}\nDESCRIPTION: ${a.description}\nCONTENT PREVIEW: ${a.markdown?.substring(0, 300) || "N/A"}`
     ).join("\n\n---\n\n");
 
@@ -197,7 +267,7 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
     );
 
     const rows = classifiedEntries.map((entry: any) => {
-      const originalArticle = uniqueArticles[entry.index] || {};
+      const originalArticle = articlesToProcess[entry.index] || {};
       return {
         headline: entry.headline || originalArticle.title,
         summary: entry.summary || originalArticle.description,
