@@ -1,5 +1,5 @@
 import { useNewsEntries, triggerFetchNews, triggerGenerateReport } from "@/hooks/useFreightData";
-import { KPICards } from "@/components/dashboard/KPICards";
+
 import { TopStories } from "@/components/dashboard/TopStories";
 import { MoroccoFocus, ComplianceWatchlist } from "@/components/dashboard/QuickPanels";
 import { Search, Calendar, RefreshCw, Loader2 } from "lucide-react";
@@ -96,7 +96,6 @@ const Dashboard = () => {
         </div>
       ) : (
         <>
-          <KPICards entries={newsEntries} />
           <TopStories entries={newsEntries} />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <MoroccoFocus entries={newsEntries} />
