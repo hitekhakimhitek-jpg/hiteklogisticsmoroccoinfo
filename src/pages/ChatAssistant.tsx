@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { MessageSquare, Send, Loader2, Ship, User, Sparkles } from "lucide-react";
+import { MessageSquare, Send, Loader2, Ship, User, Sparkles, Database } from "lucide-react";
+import { useNewsEntries } from "@/hooks/useFreightData";
 import { streamChat } from "@/lib/streamChat";
 import ReactMarkdown from "react-markdown";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,6 +23,8 @@ const ChatAssistant = () => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { data: newsEntries } = useNewsEntries({ limit: 1 });
+  const hasContext = newsEntries && newsEntries.length > 0;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -86,9 +89,16 @@ const ChatAssistant = () => {
           </div>
           <div>
             <h1 className="text-lg font-bold text-foreground">Ask Hitek Info</h1>
-            <p className="text-xs text-muted-foreground">
-              AI-powered freight intelligence assistant
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-muted-foreground">
+                AI-powered freight intelligence assistant
+              </p>
+              {hasContext && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-success/10 text-success border border-success/20">
+                  <Database className="w-2.5 h-2.5" /> Live data
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
