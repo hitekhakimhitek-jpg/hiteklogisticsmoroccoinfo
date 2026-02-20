@@ -1,7 +1,7 @@
 import { priorityConfig, categoryLabels } from "@/types/freight";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
-import { Flag, ShieldCheck, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Flag, ShieldCheck, Clock, AlertCircle, CheckCircle2, ExternalLink } from "lucide-react";
 import type { DbNewsEntry } from "@/hooks/useFreightData";
 
 interface Props {
@@ -29,7 +29,14 @@ export function MoroccoFocus({ entries }: Props) {
                 <Badge className={`${pConfig.className} text-[9px] px-1.5 py-0 mt-1 shrink-0`}>{pConfig.label[0]}</Badge>
                 <div>
                   <p className="text-xs font-medium text-card-foreground leading-tight">{entry.headline}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{entry.published_date} · {categoryLabels[entry.category]}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <p className="text-[10px] text-muted-foreground">{entry.published_date} · {categoryLabels[entry.category]}</p>
+                    {entry.source_url && (
+                      <a href={entry.source_url} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline inline-flex items-center gap-0.5 text-[10px]" onClick={(e) => e.stopPropagation()}>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -63,6 +70,11 @@ export function ComplianceWatchlist({ entries }: Props) {
               <div className="flex-1">
                 <p className="text-xs font-medium text-card-foreground leading-tight">{item.headline}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">{item.suggested_action || item.summary}</p>
+                {item.source_url && (
+                  <a href={item.source_url} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline inline-flex items-center gap-0.5 text-[10px] mt-0.5" onClick={(e) => e.stopPropagation()}>
+                    Source <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                )}
               </div>
             </div>
           ))}

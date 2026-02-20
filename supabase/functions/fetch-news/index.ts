@@ -24,15 +24,16 @@ Each entry must be a JSON object with these exact fields:
 - "impact_assessment": string (1-2 sentences on operational impact)
 - "action_required": boolean
 - "suggested_action": string or null
-- "published_date": string (ISO date, within the last 7 days from today)
+- "published_date": string (MUST be exactly "${new Date().toISOString().split("T")[0]}" — today's date, no exceptions)
 
 Requirements:
+- CRITICAL: ALL entries MUST have published_date set to EXACTLY today: ${new Date().toISOString().split("T")[0]}. Do NOT use any past dates.
 - At least 3 entries should be Morocco-focused (region: "morocco")
 - At least 1-2 should be "critical" priority
 - Mix of categories — cover regulations, weather, port updates, trade, compliance, market
 - Make content realistic and actionable for a Morocco-based freight forwarder
 - Reference real ports (Tanger Med, Casablanca, Agadir), real organizations (ADII, OTC, ANP), real trade lanes
-- Always include a realistic source_url for every entry
+- Always include a realistic source_url for every entry — use real domains like lloydslist.com, freightwaves.com, theloadstar.com, joc.com, douane.gov.ma, moroccoworldnews.com
 - Today's date is ${new Date().toISOString().split("T")[0]}
 
 Return ONLY a valid JSON array. No markdown, no explanation.`;
@@ -106,7 +107,7 @@ serve(async (req) => {
       impact_assessment: e.impact_assessment || null,
       action_required: e.action_required || false,
       suggested_action: e.suggested_action || null,
-      published_date: e.published_date || now.toISOString().split("T")[0],
+      published_date: now.toISOString().split("T")[0], // Always force today's date
       week_number: weekNumber,
       month: now.getMonth() + 1,
       year: now.getFullYear(),
