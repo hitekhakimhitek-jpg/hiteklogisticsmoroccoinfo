@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileBarChart, AlertTriangle, ShieldCheck, TrendingUp, CloudRain, Newspaper, Flag, RefreshCw, Loader2, Shield, Eye, Lightbulb, Target, Download } from "lucide-react";
+import { FileBarChart, AlertTriangle, ShieldCheck, TrendingUp, CloudRain, Newspaper, Flag, RefreshCw, Loader2, Shield, Eye, Lightbulb, Target, Download, ExternalLink } from "lucide-react";
 import { exportToPDF } from "@/lib/exportPDF";
 import { useNewsEntries, useWeeklyReports, triggerGenerateReport } from "@/hooks/useFreightData";
 import { priorityConfig, categoryLabels, regionLabels, categoryColors } from "@/types/freight";
@@ -68,7 +68,14 @@ function ReportEntry({ entry }: { entry: DbNewsEntry }) {
       <div className="flex items-center gap-3 text-[10px] text-muted-foreground pt-1">
         <span className={`px-2 py-0.5 rounded-full border ${categoryColors[entry.category]}`}>{categoryLabels[entry.category]}</span>
         <span className="px-2 py-0.5 rounded-full bg-muted">{regionLabels[entry.region]}</span>
-        <span className="ml-auto">Source: {entry.source_name}</span>
+        <span className="ml-auto flex items-center gap-1.5">
+          Source: {entry.source_name}
+          {entry.source_url && (
+            <a href={entry.source_url} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline inline-flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+              <ExternalLink className="w-2.5 h-2.5" />
+            </a>
+          )}
+        </span>
       </div>
     </div>
   );
