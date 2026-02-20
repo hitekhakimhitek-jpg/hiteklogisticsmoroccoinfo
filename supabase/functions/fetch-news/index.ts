@@ -17,6 +17,7 @@ Each entry must be a JSON object with these exact fields:
 - "headline": string (concise, professional news headline)
 - "summary": string (2-3 sentences summarizing the news)
 - "source_name": string (realistic source like "Lloyd's List", "FreightWaves", "ADII Morocco", "The Loadstar", "JOC", "European Commission", "IATA", "IMO", "Drewry", "Morocco World News")
+- "source_url": string (a plausible real URL for the source — e.g. "https://www.lloydslist.com/...", "https://www.freightwaves.com/news/...", "https://www.theloadstar.com/...", "https://www.joc.com/...", "https://www.iata.org/...", "https://www.imo.org/...", "https://www.moroccoworldnews.com/...", "https://www.douane.gov.ma/...")
 - "category": one of ${JSON.stringify(CATEGORIES)}
 - "region": one of ${JSON.stringify(REGIONS)}
 - "priority": one of ${JSON.stringify(PRIORITIES)}
@@ -31,6 +32,7 @@ Requirements:
 - Mix of categories — cover regulations, weather, port updates, trade, compliance, market
 - Make content realistic and actionable for a Morocco-based freight forwarder
 - Reference real ports (Tanger Med, Casablanca, Agadir), real organizations (ADII, OTC, ANP), real trade lanes
+- Always include a realistic source_url for every entry
 - Today's date is ${new Date().toISOString().split("T")[0]}
 
 Return ONLY a valid JSON array. No markdown, no explanation.`;

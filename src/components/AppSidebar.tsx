@@ -18,8 +18,8 @@ const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Weekly Report", url: "/weekly", icon: FileBarChart },
   { title: "Monthly Summary", url: "/monthly", icon: CalendarDays },
-  { title: "Archive", url: "/archive", icon: Archive },
   { title: "Chat Assistant", url: "/chat", icon: MessageSquare },
+  { title: "Archive", url: "/archive", icon: Archive },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
