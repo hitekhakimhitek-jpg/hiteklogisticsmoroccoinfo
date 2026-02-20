@@ -2,3 +2,9 @@ project_id = "xegehpabifcfhxuvmmrb"
 
 [functions.freight-chat]
 verify_jwt = false
+
+[functions.fetch-news]
+verify_jwt = false
+
+[functions.generate-report]
+verify_jwt = false
