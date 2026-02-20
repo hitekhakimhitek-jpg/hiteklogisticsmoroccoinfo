@@ -1,0 +1,4 @@
+project_id = "xegehpabifcfhxuvmmrb"
+
+[functions.freight-chat]
+verify_jwt = false
