@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { CalendarDays, TrendingUp, TrendingDown, RefreshCw, Loader2, Shield, Eye, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
+import { CalendarDays, TrendingUp, TrendingDown, RefreshCw, Loader2, Shield, Eye, ArrowUpRight, ArrowDownRight, Minus, Download } from "lucide-react";
 import { useMonthlySummaries, triggerGenerateReport } from "@/hooks/useFreightData";
+import { exportToPDF } from "@/lib/exportPDF";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { motion } from "framer-motion";
@@ -105,11 +106,19 @@ const MonthlySummary = () => {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <button onClick={handleGenerate} disabled={isGenerating}
-            className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/90 transition-colors disabled:opacity-50 font-medium">
-            {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            {isGenerating ? "Generating..." : "Generate Summary"}
-          </button>
+          <div className="flex items-center gap-2">
+            {summary && (
+              <button onClick={() => { exportToPDF("monthly-report-content", `monthly-summary-${summary.month}-${summary.year}`).catch(() => toast.error("PDF export failed")); }}
+                className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-input bg-card text-card-foreground hover:bg-muted transition-colors">
+                <Download className="w-4 h-4" /> PDF
+              </button>
+            )}
+            <button onClick={handleGenerate} disabled={isGenerating}
+              className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/90 transition-colors disabled:opacity-50 font-medium">
+              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              {isGenerating ? "Generating..." : "Generate Summary"}
+            </button>
+          </div>
           {isGenerating && genStep && (
             <span className="text-[11px] text-muted-foreground animate-pulse">{genStep}</span>
           )}
@@ -123,7 +132,7 @@ const MonthlySummary = () => {
           <p className="text-muted-foreground">No monthly summary yet. Fetch news first, then generate a summary.</p>
         </div>
       ) : (
-        <>
+        <div id="monthly-report-content" className="space-y-6">
           {/* Risk Score */}
           {riskScore != null && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-lg border border-border card-elevated p-5">
@@ -266,7 +275,7 @@ const MonthlySummary = () => {
               </div>
             </motion.div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
