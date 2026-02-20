@@ -42,10 +42,10 @@ export function AppSidebar() {
         {!collapsed && (
           <div className="flex flex-col">
             <span className="text-sm font-bold text-sidebar-primary-foreground tracking-tight">
-              FreightPulse
+            Hitek Info
             </span>
             <span className="text-[10px] text-sidebar-foreground/60 uppercase tracking-widest">
-              Morocco
+              Dashboard
             </span>
           </div>
         )}
