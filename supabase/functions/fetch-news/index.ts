@@ -207,27 +207,45 @@ I have scraped the following real news articles from the web. Your job is to:
 3. ASSESS priority and impact using the CONTENT PRIORITIZATION HIERARCHY below.
 
 CONTENT PRIORITIZATION HIERARCHY (apply strictly):
-1st PRIORITY — COMPLIANCE & REGULATORY: Customs regulations, policy changes, enforcement updates, legal obligations, binding rules (ADII circulars, IMO regulations, WCO HS updates, IATA DGR changes, Incoterms updates, e-CMR standards). These MUST be flagged as "critical" or "important".
-2nd PRIORITY — DIRECT OPERATIONAL IMPACT: Information concretely affecting day-to-day workflows, costs, timelines, or procedures (port closures, route changes, rate surcharges, weather disruptions, carrier schedule changes).
-3rd PRIORITY — EVERYTHING ELSE: Market stories, trend narratives, speculative forecasts, benchmarking data (LPI, UNCTAD reports), general commentary. Flag as "informational" unless they contain concrete operational triggers.
+
+**ABSOLUTE #1 PRIORITY — NEW LAWS, RULES, CIRCULARS & BINDING CHANGES:**
+Any article about a NEW law, regulation, circular, decree, rule change, tariff update, or policy change that a freight forwarding company MUST act upon. Examples:
+- New ADII customs circular or tariff change
+- New IMO regulation or IMDG Code amendment
+- New IATA DGR requirement
+- New WCO HS classification update
+- New Incoterms interpretation or ICC ruling
+- New EU/Morocco trade agreement clause
+- New port authority rule or procedure change
+- Any government decree affecting import/export
+These MUST be flagged as "critical" with action_required=true. The suggested_action must explain exactly what the company needs to do to comply.
+
+**2nd PRIORITY — DIRECT OPERATIONAL IMPACT:**
+Information concretely affecting day-to-day workflows, costs, timelines, or procedures (port closures, route changes, rate surcharges, weather disruptions, carrier schedule changes). Flag as "important".
+
+**3rd PRIORITY — EVERYTHING ELSE:**
+Market stories, trend narratives, speculative forecasts, benchmarking data (LPI, UNCTAD reports), general commentary. Flag as "informational" unless they contain concrete operational triggers.
 
 For each relevant article, return a JSON object with these fields:
 - "index": number (the [index] from the input)
 - "headline": string (use the original title, cleaned up if needed)
 - "summary": string (2-3 sentences summarizing the news and its relevance to freight)
 - "category": one of ${JSON.stringify(CATEGORIES)}
+  - Use "regulation" for new laws, decrees, government rules
+  - Use "compliance" for circulars, enforcement updates, classification changes, DG requirements
 - "region": one of ${JSON.stringify(REGIONS)} (based on where the event/regulation applies)
 - "priority": one of ${JSON.stringify(PRIORITIES)}
-  - "critical": Direct operational impact OR binding compliance/regulatory change
+  - "critical": New binding law/rule/circular that requires company action
   - "important": Significant indirect impact on operations, costs, or procedures
-  - "informational": Good to know, no immediate action needed (market trends, benchmarking, forecasts)
-- "impact_likelihood": "high" | "medium" | "low" (likelihood of actually impacting Morocco-based freight operations)
+  - "informational": Good to know, no immediate action needed
+- "impact_likelihood": "high" | "medium" | "low"
 - "impact_assessment": string (1-2 sentences on how this affects a Morocco-based freight forwarder)
-- "action_required": boolean
-- "suggested_action": string or null (what should the freight forwarder do)
+- "action_required": boolean (MUST be true for any new law/rule/circular)
+- "suggested_action": string or null (for action_required=true: what exactly must the company do to comply)
 
 IMPORTANT RULES:
 - ONLY include articles that are ACTUALLY relevant to freight forwarding / logistics / trade
+- New laws and regulations are the MOST IMPORTANT content — never skip them
 - Discard generic news, opinion pieces, or irrelevant content
 - Deprioritize or OMIT items that are speculative or unlikely to have a tangible effect
 - Be accurate with categorization — don't guess

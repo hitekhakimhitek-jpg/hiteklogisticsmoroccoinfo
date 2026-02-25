@@ -10,12 +10,14 @@ import {
   Ship,
   ChevronLeft,
   ChevronRight,
+  Scale,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Regulatory Changes", url: "/regulatory", icon: Scale },
   { title: "Weekly Report", url: "/weekly", icon: FileBarChart },
   { title: "Monthly Summary", url: "/monthly", icon: CalendarDays },
   { title: "Chat Assistant", url: "/chat", icon: MessageSquare },
