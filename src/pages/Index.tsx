@@ -1,8 +1,8 @@
-import { useNewsEntries, triggerFetchNews, triggerGenerateReport } from "@/hooks/useFreightData";
+import { useNewsEntries, triggerFetchNews } from "@/hooks/useFreightData";
 
 import { TopStories } from "@/components/dashboard/TopStories";
 import { MoroccoFocus, ComplianceWatchlist } from "@/components/dashboard/QuickPanels";
-import { Search, Calendar, RefreshCw, Loader2 } from "lucide-react";
+import { RefreshCw, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -25,18 +25,6 @@ const Dashboard = () => {
     }
   };
 
-  const handleGenerateReports = async () => {
-    try {
-      await triggerGenerateReport("weekly");
-      toast.success("Weekly report generated");
-      await triggerGenerateReport("monthly");
-      toast.success("Monthly summary generated");
-      queryClient.invalidateQueries({ queryKey: ["weekly_reports"] });
-      queryClient.invalidateQueries({ queryKey: ["monthly_summaries"] });
-    } catch (e: any) {
-      toast.error(e.message || "Failed to generate reports");
-    }
-  };
 
   const hasData = newsEntries && newsEntries.length > 0;
 
@@ -60,15 +48,6 @@ const Dashboard = () => {
             {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             {isFetching ? "Fetching..." : "Fetch News"}
           </button>
-          {hasData && (
-            <button
-              onClick={handleGenerateReports}
-              className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-input bg-card text-card-foreground hover:bg-muted transition-colors"
-            >
-              <Calendar className="w-4 h-4" />
-              Generate Reports
-            </button>
-          )}
         </div>
       </div>
 
