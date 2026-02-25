@@ -226,6 +226,13 @@ Information concretely affecting day-to-day workflows, costs, timelines, or proc
 **3rd PRIORITY — EVERYTHING ELSE:**
 Market stories, trend narratives, speculative forecasts, benchmarking data (LPI, UNCTAD reports), general commentary. Flag as "informational" unless they contain concrete operational triggers.
 
+CRITICAL CATEGORIZATION RULES FOR "regulation" AND "compliance":
+- category "regulation" = ONLY for articles that explicitly announce or describe a NEW law, decree, government rule, official circular, or binding legislative change. The article must reference a specific legal instrument (law number, decree, circular, directive, amendment, etc.).
+- category "compliance" = ONLY for articles about official enforcement updates, binding classification changes, DG requirement changes, or mandatory procedural changes issued by an authority.
+- If an article is general news, market commentary, industry trends, opinion, analysis, or a story ABOUT regulations without announcing a specific new rule — it is NOT "regulation" or "compliance". Categorize it as "trade", "market", "port", "weather", or "general" instead.
+- NEVER put general freight news, market updates, port congestion stories, or shipping disruption reports under "regulation" or "compliance".
+- When in doubt, do NOT use "regulation" or "compliance". Only use them when the article explicitly references a specific new/changed law or binding rule.
+
 For each relevant article, return a JSON object with these fields:
 - "index": number (the [index] from the input)
 - "headline": string (use the original title, cleaned up if needed)
