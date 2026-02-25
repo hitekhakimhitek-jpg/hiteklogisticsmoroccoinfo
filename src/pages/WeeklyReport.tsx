@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { FileBarChart, AlertTriangle, ShieldCheck, TrendingUp, CloudRain, Newspaper, Flag, RefreshCw, Loader2, Shield, Eye, Lightbulb, Target, Download, ExternalLink } from "lucide-react";
-import { exportToPDF } from "@/lib/exportPDF";
+import { FileBarChart, AlertTriangle, ShieldCheck, TrendingUp, CloudRain, Newspaper, Flag, RefreshCw, Loader2, Shield, Eye, Lightbulb, Target, ExternalLink } from "lucide-react";
 import { useNewsEntries, useWeeklyReports, triggerGenerateReport } from "@/hooks/useFreightData";
 import { priorityConfig, categoryLabels, regionLabels, categoryColors } from "@/types/freight";
 import { Badge } from "@/components/ui/badge";
@@ -133,12 +132,6 @@ const WeeklyReport = () => {
         </div>
         <div className="flex flex-col items-end gap-1">
           <div className="flex items-center gap-2">
-            {weekNews.length > 0 && (
-              <button onClick={() => { exportToPDF("weekly-report-content", `weekly-report-w${weekNumber}-${now.getFullYear()}`).catch(() => toast.error("PDF export failed")); }}
-                className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-input bg-card text-card-foreground hover:bg-muted transition-colors">
-                <Download className="w-4 h-4" /> PDF
-              </button>
-            )}
             <button onClick={handleGenerate} disabled={isGenerating || !allNews?.length}
               className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/90 transition-colors disabled:opacity-50 font-medium">
               {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
