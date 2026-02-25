@@ -19,7 +19,7 @@ export function TopStories({ entries }: Props) {
 
   return (
     <div className="space-y-3">
-      <h2 className="text-lg font-semibold text-foreground">Top Stories</h2>
+      <h2 className="text-lg font-semibold text-foreground">Top News</h2>
       <div className="space-y-2">
         {sorted.slice(0, 15).map((entry, i) => {
           const isExpanded = expandedId === entry.id;
