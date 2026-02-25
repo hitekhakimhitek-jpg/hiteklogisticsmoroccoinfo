@@ -14,8 +14,7 @@ const RegulatoryChanges = () => {
       .filter(
         (e) =>
           e.category === "regulation" ||
-          e.category === "compliance" ||
-          (e.action_required && (e.priority === "critical" || e.priority === "important"))
+          e.category === "compliance"
       )
       .sort((a, b) => {
         // Newest first by published_date
@@ -38,7 +37,7 @@ const RegulatoryChanges = () => {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Regulatory & Law Changes</h1>
           <p className="text-sm text-muted-foreground">
-            All compliance and regulatory updates — newest first. Click any entry to read the source.
+            Only actual laws, decrees, circulars, and binding rule changes — newest first. Click any entry to read the official source.
           </p>
         </div>
       </div>
@@ -47,8 +46,8 @@ const RegulatoryChanges = () => {
       <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-destructive/5 border border-destructive/20 text-xs text-destructive">
         <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
         <div>
-          <span className="font-semibold">Action required items appear first.</span>{" "}
-          These are new laws, rules, circulars or regulatory changes that may require your company to take immediate action.
+          <span className="font-semibold">This page only shows actual law & rule changes.</span>{" "}
+          New decrees, circulars, tariff updates, and binding regulatory changes that may require your company to take immediate action. General news is excluded.
         </div>
       </div>
 
