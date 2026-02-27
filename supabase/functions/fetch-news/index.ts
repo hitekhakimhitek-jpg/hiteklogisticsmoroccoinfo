@@ -195,8 +195,8 @@ serve(async (req) => {
     // Step 2: Use AI to categorize, filter, and assess each article for Morocco freight relevance
     console.log("Using AI to categorize and filter articles...");
 
-    const articleSummaries = articlesToProcess.slice(0, 30).map((a, i) =>
-      `[${i}] TITLE: ${a.title}\nURL: ${a.url}\nSOURCE: ${a.source}\nDESCRIPTION: ${a.description}\nCONTENT PREVIEW: ${a.markdown?.substring(0, 300) || "N/A"}`
+    const articleSummaries = articlesToProcess.slice(0, 20).map((a, i) =>
+      `[${i}] TITLE: ${a.title}\nURL: ${a.url}\nSOURCE: ${a.source}\nDESCRIPTION: ${a.description}\nCONTENT PREVIEW: ${a.markdown?.substring(0, 200) || "N/A"}`
     ).join("\n\n---\n\n");
 
     const classifyPrompt = `You are a freight forwarding intelligence analyst specializing in Morocco and global logistics.
@@ -273,6 +273,7 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [{ role: "user", content: classifyPrompt }],
+        max_tokens: 8000,
       }),
     });
 
@@ -290,8 +291,22 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
     try {
       classifiedEntries = JSON.parse(content);
     } catch (e) {
-      console.error("Failed to parse AI classification:", content.substring(0, 500));
-      throw new Error("Failed to parse AI classification response");
+      // Try to salvage truncated JSON by finding the last complete object
+      console.warn("Initial JSON parse failed, attempting to salvage truncated response...");
+      try {
+        // Find the last complete object by looking for the last '}' followed by potential ']'
+        const lastCompleteObj = content.lastIndexOf("}");
+        if (lastCompleteObj > 0) {
+          const salvaged = content.substring(0, lastCompleteObj + 1) + "]";
+          classifiedEntries = JSON.parse(salvaged);
+          console.log(`Salvaged ${classifiedEntries.length} entries from truncated response`);
+        } else {
+          throw new Error("No salvageable JSON found");
+        }
+      } catch (e2) {
+        console.error("Failed to parse AI classification:", content.substring(0, 500));
+        throw new Error("Failed to parse AI classification response");
+      }
     }
 
     if (!Array.isArray(classifiedEntries) || classifiedEntries.length === 0) {
