@@ -21,6 +21,11 @@ const SEARCH_QUERIES = [
   "Maroc douane ADII circulaire tarif douanier site:douane.gov.ma OR site:adil.gov.ma OR site:portnet.ma",
   "Tanger Med port authority community system site:tangermed.ma OR site:tmpa.ma",
   "Maroc commerce port douane fret logistique site:lematin.ma OR site:medias24.com OR site:fnh.ma OR site:economiste.com OR site:lavieeco.com",
+  // TIER 2b — Morocco & international finance impacting freight
+  "Maroc dirham taux change devises import export finance site:economiste.com OR site:lavieeco.com OR site:medias24.com OR site:fnh.ma",
+  "Morocco currency exchange rate dirham trade finance banking site:reuters.com OR site:bloomberg.com OR site:ft.com",
+  "oil price fuel surcharge bunker freight shipping cost impact",
+  "global trade tariffs sanctions embargo impact Africa Morocco shipping",
   // TIER 3 — Regulations, compliance & reference bodies
   "IMO shipping regulation 2025 OR IMDG code dangerous goods OR customs compliance OR trade sanctions site:imo.org OR site:wto.org OR site:iata.org OR site:wcoomd.org",
   "FIATA freight forwarding documents FBL FCR site:fiata.org OR site:iccwbo.org incoterms",
@@ -202,7 +207,7 @@ serve(async (req) => {
     const classifyPrompt = `You are a freight forwarding intelligence analyst specializing in Morocco and global logistics.
 
 I have scraped the following real news articles from the web. Your job is to:
-1. FILTER: Only keep articles relevant to freight forwarding, shipping, logistics, trade, customs, port operations, dangerous goods, compliance, or supply chain for a company operating from Morocco.
+1. FILTER: Only keep articles relevant to freight forwarding, shipping, logistics, trade, customs, port operations, dangerous goods, compliance, supply chain, OR FINANCE (currency exchange rates, oil/fuel prices, trade tariffs, sanctions, banking/credit conditions) that could impact a Morocco-based freight forwarding company.
 2. CATEGORIZE each relevant article.
 3. ASSESS priority and impact using the CONTENT PRIORITIZATION HIERARCHY below.
 
@@ -240,6 +245,7 @@ For each relevant article, return a JSON object with these fields:
 - "category": one of ${JSON.stringify(CATEGORIES)}
   - Use "regulation" for new laws, decrees, government rules
   - Use "compliance" for circulars, enforcement updates, classification changes, DG requirements
+  - Use "market" for currency/exchange rate moves, oil/fuel price changes, financial conditions, and general market trends
 - "region": one of ${JSON.stringify(REGIONS)} (based on where the event/regulation applies)
 - "priority": one of ${JSON.stringify(PRIORITIES)}
   - "critical": New binding law/rule/circular that requires company action
