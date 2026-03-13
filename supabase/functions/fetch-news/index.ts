@@ -21,6 +21,11 @@ const SEARCH_QUERIES = [
   "Maroc douane ADII circulaire tarif douanier site:douane.gov.ma OR site:adil.gov.ma OR site:portnet.ma",
   "Tanger Med port authority community system site:tangermed.ma OR site:tmpa.ma",
   "Maroc commerce port douane fret logistique site:lematin.ma OR site:medias24.com OR site:fnh.ma OR site:economiste.com OR site:lavieeco.com",
+  // TIER 2b — Morocco & international finance impacting freight
+  "Maroc dirham taux change devises import export finance site:economiste.com OR site:lavieeco.com OR site:medias24.com OR site:fnh.ma",
+  "Morocco currency exchange rate dirham trade finance banking site:reuters.com OR site:bloomberg.com OR site:ft.com",
+  "oil price fuel surcharge bunker freight shipping cost impact",
+  "global trade tariffs sanctions embargo impact Africa Morocco shipping",
   // TIER 3 — Regulations, compliance & reference bodies
   "IMO shipping regulation 2025 OR IMDG code dangerous goods OR customs compliance OR trade sanctions site:imo.org OR site:wto.org OR site:iata.org OR site:wcoomd.org",
   "FIATA freight forwarding documents FBL FCR site:fiata.org OR site:iccwbo.org incoterms",
