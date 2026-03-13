@@ -20,7 +20,7 @@ const SEARCH_QUERIES = [
   "Morocco trade port Tanger Med customs ADII shipping PortNet",
   "Maroc douane ADII circulaire tarif douanier site:douane.gov.ma OR site:adil.gov.ma OR site:portnet.ma",
   "Tanger Med port authority community system site:tangermed.ma OR site:tmpa.ma",
-  "Maroc commerce port douane fret logistique site:lematin.ma OR site:medias24.com OR site:fnh.ma",
+  "Maroc commerce port douane fret logistique site:lematin.ma OR site:medias24.com OR site:fnh.ma OR site:economiste.com OR site:lavieeco.com",
   // TIER 3 — Regulations, compliance & reference bodies
   "IMO shipping regulation 2025 OR IMDG code dangerous goods OR customs compliance OR trade sanctions site:imo.org OR site:wto.org OR site:iata.org OR site:wcoomd.org",
   "FIATA freight forwarding documents FBL FCR site:fiata.org OR site:iccwbo.org incoterms",
@@ -394,6 +394,8 @@ function extractSourceName(url: string): string {
       "lematin.ma": "Le Matin",
       "medias24.com": "Medias24",
       "fnh.ma": "Finances News Hebdo",
+      "economiste.com": "L'Economiste",
+      "lavieeco.com": "La Vie Éco",
       "imo.org": "IMO",
       "wto.org": "WTO",
       "iata.org": "IATA",
