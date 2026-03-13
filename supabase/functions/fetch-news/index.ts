@@ -244,7 +244,7 @@ For each relevant article, return a JSON object with these fields:
 - "summary": string (2-3 sentences summarizing the news and its relevance to freight)
 - "category": one of ${JSON.stringify(CATEGORIES)}
   - Use "regulation" for new laws, decrees, government rules
-  - Use "compliance" for circulars, enforcement updates, classification changes, DG requirements
+  - Use "market" for currency/exchange rate moves, oil/fuel price changes, financial conditions, and general market trends
 - "region": one of ${JSON.stringify(REGIONS)} (based on where the event/regulation applies)
 - "priority": one of ${JSON.stringify(PRIORITIES)}
   - "critical": New binding law/rule/circular that requires company action
