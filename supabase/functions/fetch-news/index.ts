@@ -394,6 +394,8 @@ function extractSourceName(url: string): string {
       "lematin.ma": "Le Matin",
       "medias24.com": "Medias24",
       "fnh.ma": "Finances News Hebdo",
+      "economiste.com": "L'Economiste",
+      "lavieeco.com": "La Vie Éco",
       "imo.org": "IMO",
       "wto.org": "WTO",
       "iata.org": "IATA",
