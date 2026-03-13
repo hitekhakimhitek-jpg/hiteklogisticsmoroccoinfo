@@ -207,7 +207,7 @@ serve(async (req) => {
     const classifyPrompt = `You are a freight forwarding intelligence analyst specializing in Morocco and global logistics.
 
 I have scraped the following real news articles from the web. Your job is to:
-1. FILTER: Only keep articles relevant to freight forwarding, shipping, logistics, trade, customs, port operations, dangerous goods, compliance, or supply chain for a company operating from Morocco.
+1. FILTER: Only keep articles relevant to freight forwarding, shipping, logistics, trade, customs, port operations, dangerous goods, compliance, supply chain, OR FINANCE (currency exchange rates, oil/fuel prices, trade tariffs, sanctions, banking/credit conditions) that could impact a Morocco-based freight forwarding company.
 2. CATEGORIZE each relevant article.
 3. ASSESS priority and impact using the CONTENT PRIORITIZATION HIERARCHY below.
 
