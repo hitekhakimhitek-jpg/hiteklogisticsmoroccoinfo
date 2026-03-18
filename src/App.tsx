@@ -9,6 +9,7 @@ import WeeklyReport from "./pages/WeeklyReport";
 import MonthlySummary from "./pages/MonthlySummary";
 import ArchivePage from "./pages/ArchivePage";
 import RegulatoryChanges from "./pages/RegulatoryChanges";
+import FinanceRegulation from "./pages/FinanceRegulation";
 import ChatAssistant from "./pages/ChatAssistant";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
@@ -25,6 +26,7 @@ const App = () => (
           <Route element={<Layout />}>
             <Route path="/" element={<Index />} />
             <Route path="/regulatory" element={<RegulatoryChanges />} />
+            <Route path="/finance-regulation" element={<FinanceRegulation />} />
             <Route path="/weekly" element={<WeeklyReport />} />
             <Route path="/monthly" element={<MonthlySummary />} />
             <Route path="/archive" element={<ArchivePage />} />
