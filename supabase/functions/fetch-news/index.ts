@@ -343,7 +343,38 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
       };
     });
 
-    const { data, error } = await supabase.from("news_entries").insert(rows).select();
+    // Deduplicate: fetch existing headlines and source_urls to avoid re-inserting
+    const existingUrls = new Set<string>();
+    const existingHeadlines = new Set<string>();
+
+    const { data: existing } = await supabase
+      .from("news_entries")
+      .select("source_url, headline")
+      .order("published_date", { ascending: false })
+      .limit(500);
+
+    if (existing) {
+      for (const e of existing) {
+        if (e.source_url) existingUrls.add(e.source_url);
+        existingHeadlines.add(e.headline.toLowerCase().trim());
+      }
+    }
+
+    const newRows = rows.filter((r: any) => {
+      if (r.source_url && existingUrls.has(r.source_url)) return false;
+      if (existingHeadlines.has(r.headline.toLowerCase().trim())) return false;
+      return true;
+    });
+
+    if (newRows.length === 0) {
+      console.log("All articles already exist in database, skipping insert");
+      return new Response(
+        JSON.stringify({ success: true, count: 0, message: "No new unique articles found" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { data, error } = await supabase.from("news_entries").insert(newRows).select();
 
     if (error) {
       console.error("DB insert error:", error);
