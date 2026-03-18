@@ -2,6 +2,7 @@ import { useNewsEntries, triggerFetchNews } from "@/hooks/useFreightData";
 
 import { TopStories } from "@/components/dashboard/TopStories";
 import { MoroccoFocus, ComplianceWatchlist } from "@/components/dashboard/QuickPanels";
+import { FinancePanel } from "@/components/dashboard/FinancePanel";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
