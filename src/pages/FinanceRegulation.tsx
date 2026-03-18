@@ -8,42 +8,20 @@ import { Landmark, ExternalLink, AlertTriangle, Loader2 } from "lucide-react";
 const FinanceRegulation = () => {
   const { data: allEntries, isLoading } = useNewsEntries({});
 
+  const FINANCE_KEYWORDS = [
+    "fiscal", "tax", "tarif", "duty", "customs duty", "douane", "tva", "vat",
+    "exchange rate", "currency", "mad ", "dirham", "finance", "banking",
+    "budget", "surcharge", "invoice", "payment", "impôt", "redevance",
+    "droit de douane", "loi de finances", "taxe", "prélèvement",
+    "contribution", "amende", "pénalité", "trésor", "fisc",
+  ];
+
   const financeEntries = useMemo(() => {
     if (!allEntries) return [];
     return allEntries
-      .filter(
-        (e) =>
-          e.category === "market" ||
-          e.category === "regulation" ||
-          e.category === "compliance"
-      )
       .filter((e) => {
         const text = `${e.headline} ${e.summary} ${e.impact_assessment ?? ""} ${e.suggested_action ?? ""}`.toLowerCase();
-        return (
-          text.includes("fiscal") ||
-          text.includes("tax") ||
-          text.includes("tarif") ||
-          text.includes("duty") ||
-          text.includes("customs") ||
-          text.includes("douane") ||
-          text.includes("tva") ||
-          text.includes("exchange") ||
-          text.includes("currency") ||
-          text.includes("mad") ||
-          text.includes("dirham") ||
-          text.includes("finance") ||
-          text.includes("banking") ||
-          text.includes("budget") ||
-          text.includes("surcharge") ||
-          text.includes("invoice") ||
-          text.includes("payment") ||
-          text.includes("impôt") ||
-          text.includes("redevance") ||
-          text.includes("droit") ||
-          text.includes("loi de finances") ||
-          e.category === "compliance" ||
-          e.category === "regulation"
-        );
+        return FINANCE_KEYWORDS.some((kw) => text.includes(kw));
       })
       .sort((a, b) => {
         if (a.action_required !== b.action_required) return a.action_required ? -1 : 1;
