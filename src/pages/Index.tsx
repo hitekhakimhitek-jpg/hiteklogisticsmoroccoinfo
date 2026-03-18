@@ -77,6 +77,7 @@ const Dashboard = () => {
       ) : (
         <>
           <TopStories entries={newsEntries} />
+          <FinancePanel entries={newsEntries} />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <MoroccoFocus entries={newsEntries} />
             <ComplianceWatchlist entries={newsEntries} />
