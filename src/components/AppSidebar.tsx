@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Regulatory Changes", url: "/regulatory", icon: Scale },
+  { title: "Finance Regulation", url: "/finance-regulation", icon: Landmark },
   { title: "Weekly Report", url: "/weekly", icon: FileBarChart },
   { title: "Monthly Summary", url: "/monthly", icon: CalendarDays },
   { title: "Chat Assistant", url: "/chat", icon: MessageSquare },
