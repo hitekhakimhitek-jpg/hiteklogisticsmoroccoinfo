@@ -2,6 +2,7 @@ import { useNewsEntries, triggerFetchNews } from "@/hooks/useFreightData";
 
 import { TopStories } from "@/components/dashboard/TopStories";
 import { MoroccoFocus, ComplianceWatchlist } from "@/components/dashboard/QuickPanels";
+import { FinancePanel } from "@/components/dashboard/FinancePanel";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -76,6 +77,7 @@ const Dashboard = () => {
       ) : (
         <>
           <TopStories entries={newsEntries} />
+          <FinancePanel entries={newsEntries} />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <MoroccoFocus entries={newsEntries} />
             <ComplianceWatchlist entries={newsEntries} />
