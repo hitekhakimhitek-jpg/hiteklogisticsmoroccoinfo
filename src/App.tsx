@@ -9,6 +9,7 @@ import WeeklyReport from "./pages/WeeklyReport";
 import MonthlySummary from "./pages/MonthlySummary";
 import ArchivePage from "./pages/ArchivePage";
 import RegulatoryChanges from "./pages/RegulatoryChanges";
+import FinanceRegulation from "./pages/FinanceRegulation";
 import ChatAssistant from "./pages/ChatAssistant";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
