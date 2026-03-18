@@ -62,7 +62,9 @@ const FinanceRegulation = () => {
       ) : financeEntries.length === 0 ? (
         <div className="bg-card rounded-lg border border-border card-elevated p-12 text-center">
           <Landmark className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">No finance-relevant regulatory entries found. New entries will appear here automatically when fetched.</p>
+          <p className="text-sm text-muted-foreground">
+            Nothing noteworthy happened this week. We'll update you as soon as something relevant comes up.
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
