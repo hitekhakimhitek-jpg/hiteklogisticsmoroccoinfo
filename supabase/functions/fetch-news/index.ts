@@ -400,6 +400,34 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
 
     console.log(`Successfully inserted ${data.length} REAL news entries from web scraping`);
 
+    // Step 4: Trigger AI classification for Finance/IT section relevance
+    const newIds = data.map((d: any) => d.id);
+    if (newIds.length > 0) {
+      try {
+        console.log(`Triggering classify-sections for ${newIds.length} new articles...`);
+        const classifyResp = await fetch(
+          `${SUPABASE_URL}/functions/v1/classify-sections`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+            body: JSON.stringify({ article_ids: newIds }),
+          }
+        );
+        if (classifyResp.ok) {
+          const classifyResult = await classifyResp.json();
+          console.log(`Classification complete: ${classifyResult.classified} articles scored`);
+        } else {
+          console.error("classify-sections call failed:", classifyResp.status, await classifyResp.text());
+        }
+      } catch (classifyErr) {
+        console.error("Failed to trigger classify-sections:", classifyErr);
+        // Don't fail the whole request — classification can be retried
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

@@ -5,30 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { Monitor, ExternalLink, AlertTriangle, Loader2 } from "lucide-react";
 
-const IT_KEYWORDS = [
-  "cybersecurity", "cyber", "ransomware", "malware", "phishing", "vulnerability",
-  "cve", "zero-day", "zero day", "patch", "exploit", "data breach", "breach",
-  "firewall", "encryption", "ssl", "tls", "authentication", "mfa", "2fa",
-  "cloud security", "cloud computing", "saas", "iaas", "paas",
-  "aws", "azure", "google cloud", "gcp", "microsoft 365",
-  "ai ", "artificial intelligence", "machine learning", "llm", "gpt", "openai", "anthropic",
-  "cisa", "nist", "iso 27001", "soc 2", "gdpr", "data protection",
-  "it infrastructure", "network security", "endpoint", "siem", "soc",
-  "devops", "devsecops", "kubernetes", "docker", "container",
-  "api security", "oauth", "saml", "identity", "iam",
-  "erp", "wms", "tms", "port community system", "edi", "edifact",
-  "software update", "release notes", "security bulletin", "security advisory",
-  "backup", "disaster recovery", "business continuity",
-  "dns", "ddos", "botnet", "trojan", "spyware", "adware",
-  "linux", "windows server", "active directory",
-  "bleepingcomputer", "the register", "ars technica",
-];
-
-const IT_SOURCE_NAMES = [
-  "BleepingComputer", "CISA", "The Register", "TechTarget",
-  "Microsoft Security", "MSRC", "Google Cloud", "AWS Security",
-  "Ars Technica", "OpenAI", "Anthropic",
-];
+const IT_SCORE_THRESHOLD = 70;
 
 const ITNews = () => {
   const { data: allEntries, isLoading } = useNewsEntries({});
@@ -36,21 +13,22 @@ const ITNews = () => {
   const itEntries = useMemo(() => {
     if (!allEntries) return [];
     return allEntries
-      .filter((e) => {
-        // Always include articles from IT-specific sources
-        const isITSource = IT_SOURCE_NAMES.some(
-          (s) => e.source_name.toLowerCase().includes(s.toLowerCase())
-        );
-        if (isITSource) return true;
-
-        const text = `${e.headline} ${e.summary} ${e.impact_assessment ?? ""} ${e.suggested_action ?? ""}`.toLowerCase();
-        return IT_KEYWORDS.some((kw) => text.includes(kw));
+      .filter((e: any) => {
+        // Use AI-assigned it_score when available
+        if (e.it_score != null && e.classification_metadata != null) {
+          return e.it_score >= IT_SCORE_THRESHOLD;
+        }
+        // No classification yet — don't show
+        return false;
       })
-      .sort((a, b) => {
+      .sort((a: any, b: any) => {
+        const scoreA = a.it_score ?? 0;
+        const scoreB = b.it_score ?? 0;
+        if (scoreA !== scoreB) return scoreB - scoreA;
         if (a.action_required !== b.action_required) return a.action_required ? -1 : 1;
         if (a.published_date !== b.published_date) return b.published_date.localeCompare(a.published_date);
-        const order = { critical: 0, important: 1, informational: 2 };
-        return order[a.priority] - order[b.priority];
+        const order: Record<string, number> = { critical: 0, important: 1, informational: 2 };
+        return (order[a.priority] ?? 2) - (order[b.priority] ?? 2);
       });
   }, [allEntries]);
 
@@ -72,7 +50,7 @@ const ITNews = () => {
         <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
         <div>
           <span className="font-semibold">IT-focused view.</span>{" "}
-          Showing cybersecurity advisories, software updates, cloud platform changes, and technology news from specialized IT sources. If no relevant entries are found, nothing is displayed.
+          Articles are AI-classified for IT relevance. Only stories with strong thematic fit to cybersecurity, enterprise infrastructure, cloud platforms, and IT operations are shown.
         </div>
       </div>
 
@@ -89,8 +67,8 @@ const ITNews = () => {
         </div>
       ) : (
         <div className="space-y-2">
-          {itEntries.map((entry, i) => {
-            const pConfig = priorityConfig[entry.priority];
+          {itEntries.map((entry: any, i: number) => {
+            const pConfig = priorityConfig[entry.priority as keyof typeof priorityConfig];
             return (
               <motion.div
                 key={entry.id}
@@ -141,11 +119,11 @@ const ITNews = () => {
                   )}
 
                   <div className="flex items-center gap-2 ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)] flex-wrap">
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${categoryColors[entry.category]}`}>
-                      {categoryLabels[entry.category]}
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${categoryColors[entry.category as keyof typeof categoryColors]}`}>
+                      {categoryLabels[entry.category as keyof typeof categoryLabels]}
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                      {regionLabels[entry.region]}
+                      {regionLabels[entry.region as keyof typeof regionLabels]}
                     </span>
                     <span className="text-[10px] text-muted-foreground">
                       {entry.source_name}
