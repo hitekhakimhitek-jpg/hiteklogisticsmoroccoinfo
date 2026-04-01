@@ -33,7 +33,7 @@ const ITNews = () => {
   }, [allEntries]);
 
   return (
-    <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-4 sm:space-y-6">
       <div className="flex items-center gap-3">
         <div className="bg-primary/10 p-2.5 rounded-lg">
           <Monitor className="w-5 h-5 text-primary" />
@@ -101,24 +101,24 @@ const ITNews = () => {
                     </div>
                   </div>
 
-                  <p className="text-xs text-muted-foreground ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)]">
+                  <p className="text-xs text-muted-foreground sm:ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)]">
                     {entry.summary}
                   </p>
 
                   {entry.action_required && entry.suggested_action && (
-                    <div className="ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)] bg-destructive/5 border border-destructive/20 rounded-md p-2.5">
+                    <div className="sm:ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)] bg-destructive/5 border border-destructive/20 rounded-md p-2.5">
                       <p className="text-[11px] font-semibold text-destructive mb-0.5">⚠ Action Required</p>
                       <p className="text-xs text-card-foreground">{entry.suggested_action}</p>
                     </div>
                   )}
 
                   {entry.impact_assessment && (
-                    <p className="text-[11px] text-muted-foreground ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)] italic">
+                    <p className="text-[11px] text-muted-foreground sm:ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)] italic">
                       Impact: {entry.impact_assessment}
                     </p>
                   )}
 
-                  <div className="flex items-center gap-2 ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)] flex-wrap">
+                  <div className="flex items-center gap-2 sm:ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)] flex-wrap">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border ${categoryColors[entry.category as keyof typeof categoryColors]}`}>
                       {categoryLabels[entry.category as keyof typeof categoryLabels]}
                     </span>

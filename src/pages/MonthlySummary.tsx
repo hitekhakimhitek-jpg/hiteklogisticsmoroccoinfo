@@ -95,7 +95,7 @@ const MonthlySummary = () => {
     : [];
 
   return (
-    <div className="p-6 lg:p-8 max-w-4xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="bg-secondary/10 p-2 rounded-lg"><CalendarDays className="w-5 h-5 text-secondary" /></div>
@@ -237,7 +237,7 @@ const MonthlySummary = () => {
           {comparisonData.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="bg-card rounded-lg border border-border card-elevated p-5">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Month-over-Month Comparison</h2>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+              <div className="grid grid-cols-2 gap-3 mb-6">
                 {Object.entries(comparison).map(([key, val]: [string, any]) => {
                   const labels: Record<string, string> = { disruptions: "Disruptions", regulations: "Regulations", criticalAlerts: "Critical Alerts", newsItems: "Total News" };
                   if (!labels[key]) return null;

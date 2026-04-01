@@ -59,7 +59,7 @@ const SettingsPage = () => {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-3xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto space-y-4 sm:space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="bg-secondary/10 p-2 rounded-lg">
@@ -180,7 +180,7 @@ const SettingsPage = () => {
       {/* Data Sources */}
       <Section icon={Rss} title="Data Sources">
         <p className="text-sm text-muted-foreground mb-3">Enable/disable intelligence sources.</p>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {ALL_SOURCES.map((source) => {
             const active = settings.newsSourcesEnabled.includes(source);
             return (
