@@ -5,29 +5,31 @@ import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { Landmark, ExternalLink, AlertTriangle, Loader2 } from "lucide-react";
 
+const FINANCE_SCORE_THRESHOLD = 70;
+
 const FinanceRegulation = () => {
   const { data: allEntries, isLoading } = useNewsEntries({});
-
-  const FINANCE_KEYWORDS = [
-    "fiscal", "tax", "tarif", "duty", "customs duty", "douane", "tva", "vat",
-    "exchange rate", "currency", "mad ", "dirham", "finance", "banking",
-    "budget", "surcharge", "invoice", "payment", "impôt", "redevance",
-    "droit de douane", "loi de finances", "taxe", "prélèvement",
-    "contribution", "amende", "pénalité", "trésor", "fisc",
-  ];
 
   const financeEntries = useMemo(() => {
     if (!allEntries) return [];
     return allEntries
-      .filter((e) => {
-        const text = `${e.headline} ${e.summary} ${e.impact_assessment ?? ""} ${e.suggested_action ?? ""}`.toLowerCase();
-        return FINANCE_KEYWORDS.some((kw) => text.includes(kw));
+      .filter((e: any) => {
+        // Use AI-assigned finance_score when available
+        if (e.finance_score != null && e.classification_metadata != null) {
+          return e.finance_score >= FINANCE_SCORE_THRESHOLD;
+        }
+        // No classification yet — don't show (wait for classification)
+        return false;
       })
-      .sort((a, b) => {
+      .sort((a: any, b: any) => {
+        // Sort by finance_score desc, then action_required, then date, then priority
+        const scoreA = a.finance_score ?? 0;
+        const scoreB = b.finance_score ?? 0;
+        if (scoreA !== scoreB) return scoreB - scoreA;
         if (a.action_required !== b.action_required) return a.action_required ? -1 : 1;
         if (a.published_date !== b.published_date) return b.published_date.localeCompare(a.published_date);
-        const order = { critical: 0, important: 1, informational: 2 };
-        return order[a.priority] - order[b.priority];
+        const order: Record<string, number> = { critical: 0, important: 1, informational: 2 };
+        return (order[a.priority] ?? 2) - (order[b.priority] ?? 2);
       });
   }, [allEntries]);
 
@@ -51,7 +53,7 @@ const FinanceRegulation = () => {
         <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
         <div>
           <span className="font-semibold">Finance-focused view.</span>{" "}
-          Showing market, regulation, and compliance entries related to fiscal policy, customs duties, exchange rates, and financial compliance. If no relevant entries are found, nothing is displayed.
+          Articles are AI-classified for finance relevance. Only stories with strong thematic fit to fiscal policy, customs duties, exchange rates, and financial compliance are shown.
         </div>
       </div>
 
@@ -68,8 +70,8 @@ const FinanceRegulation = () => {
         </div>
       ) : (
         <div className="space-y-2">
-          {financeEntries.map((entry, i) => {
-            const pConfig = priorityConfig[entry.priority];
+          {financeEntries.map((entry: any, i: number) => {
+            const pConfig = priorityConfig[entry.priority as keyof typeof priorityConfig];
             return (
               <motion.div
                 key={entry.id}
@@ -120,11 +122,11 @@ const FinanceRegulation = () => {
                   )}
 
                   <div className="flex items-center gap-2 ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)] flex-wrap">
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${categoryColors[entry.category]}`}>
-                      {categoryLabels[entry.category]}
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${categoryColors[entry.category as keyof typeof categoryColors]}`}>
+                      {categoryLabels[entry.category as keyof typeof categoryLabels]}
                     </span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                      {regionLabels[entry.region]}
+                      {regionLabels[entry.region as keyof typeof regionLabels]}
                     </span>
                     <span className="text-[10px] text-muted-foreground">
                       {entry.source_name}
