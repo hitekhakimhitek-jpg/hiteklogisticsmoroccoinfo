@@ -27,6 +27,11 @@ const SEARCH_QUERIES = [
   "IATA dangerous goods regulations air cargo DGR site:iata.org",
   "WCO harmonized system HS code classification site:wcoomd.org",
   "UNECE CEFACT e-CMR electronic consignment note site:unece.org",
+  // TIER 3b — Morocco finance & fiscal regulation
+  "Maroc fiscalité impôt TVA taxe douane loi de finances site:tax.gov.ma OR site:bkam.ma OR site:sgg.gov.ma",
+  "Morocco fiscal policy tax customs duty exchange rate Bank Al-Maghrib site:tax.gov.ma OR site:bkam.ma OR site:sgg.gov.ma",
+  "bulletin officiel Maroc loi décret circulaire fiscale site:sgg.gov.ma",
+  "Bank Al-Maghrib taux directeur dirham change réglementation site:bkam.ma",
   // TIER 4 — Disruptions & weather
   "port disruption weather shipping delay Suez Canal Mediterranean Gibraltar",
   // TIER 5 — Market intelligence & benchmarking
