@@ -447,6 +447,9 @@ function extractSourceName(url: string): string {
       "intracen.org": "ITC",
       "marinetraffic.com": "MarineTraffic",
       "portwatch.imf.org": "IMF PortWatch",
+      "tax.gov.ma": "DGI Maroc (Impôts)",
+      "bkam.ma": "Bank Al-Maghrib",
+      "sgg.gov.ma": "SGG (Bulletin Officiel)",
     };
     return sourceMap[hostname] || hostname;
   } catch {
