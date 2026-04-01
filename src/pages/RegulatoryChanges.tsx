@@ -98,7 +98,7 @@ const RegulatoryChanges = () => {
                   </div>
 
                   {/* Summary */}
-                  <p className="text-xs text-muted-foreground ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)]">
+                  <p className="text-xs text-muted-foreground sm:ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)]">
                     {entry.summary}
                   </p>
 
