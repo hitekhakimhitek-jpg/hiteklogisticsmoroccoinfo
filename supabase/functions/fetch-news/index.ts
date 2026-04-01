@@ -34,11 +34,20 @@ const SEARCH_QUERIES = [
   "Bank Al-Maghrib taux directeur dirham change réglementation site:bkam.ma",
   // TIER 4 — Disruptions & weather
   "port disruption weather shipping delay Suez Canal Mediterranean Gibraltar",
-  // TIER 5 — Market intelligence & benchmarking
+  // TIER 5 — IT & Cybersecurity
+  "cybersecurity vulnerability ransomware malware patch critical CVE site:bleepingcomputer.com OR site:theregister.com OR site:arstechnica.com",
+  "CISA advisory vulnerability alert critical infrastructure site:cisa.gov",
+  "Microsoft security update patch Tuesday MSRC site:msrc.microsoft.com OR site:microsoft.com/security",
+  "Google Cloud security bulletin release notes site:cloud.google.com",
+  "AWS security advisory update site:aws.amazon.com/security OR site:aws.amazon.com/about-aws/whats-new",
+  "TechTarget cybersecurity IT infrastructure enterprise site:techtarget.com",
+  "OpenAI news update release site:openai.com/blog OR site:openai.com/index",
+  "Anthropic news update release site:anthropic.com/news OR site:anthropic.com/research",
+  // TIER 6 — Market intelligence & benchmarking
   "World Bank logistics performance index LPI site:lpi.worldbank.org OR site:worldbank.org",
   "UNCTAD review maritime transport shipping site:unctad.org",
   "ITC trade map Morocco trade flows site:trademap.org OR site:intracen.org",
-  // TIER 6 — General freight keywords
+  // TIER 7 — General freight keywords
   "freight forwarding OR shipping disruption OR port congestion OR customs regulation OR supply chain OR tariff update OR Suez Canal OR Mediterranean shipping",
 ];
 
