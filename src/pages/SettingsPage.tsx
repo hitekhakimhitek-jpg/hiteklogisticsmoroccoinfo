@@ -180,7 +180,7 @@ const SettingsPage = () => {
       {/* Data Sources */}
       <Section icon={Rss} title="Data Sources">
         <p className="text-sm text-muted-foreground mb-3">Enable/disable intelligence sources.</p>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {ALL_SOURCES.map((source) => {
             const active = settings.newsSourcesEnabled.includes(source);
             return (

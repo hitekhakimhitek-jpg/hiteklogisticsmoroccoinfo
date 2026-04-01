@@ -118,7 +118,7 @@ const RegulatoryChanges = () => {
                   )}
 
                   {/* Meta row */}
-                  <div className="flex items-center gap-2 ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)] flex-wrap">
+                  <div className="flex items-center gap-2 sm:ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)] flex-wrap">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border ${categoryColors[entry.category]}`}>
                       {categoryLabels[entry.category]}
                     </span>

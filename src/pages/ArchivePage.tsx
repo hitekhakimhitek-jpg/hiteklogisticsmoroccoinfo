@@ -72,7 +72,7 @@ const ArchivePage = () => {
   }, [allEntries, searchQuery, selectedCategories, selectedRegions, selectedPriorities, dateFrom, dateTo]);
 
   return (
-    <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-4 sm:space-y-5">
       <div className="flex items-center gap-3">
         <div className="bg-secondary/10 p-2 rounded-lg"><ArchiveIcon className="w-5 h-5 text-secondary" /></div>
         <div>
