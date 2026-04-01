@@ -109,7 +109,7 @@ const FinanceRegulation = () => {
                   </p>
 
                   {entry.action_required && entry.suggested_action && (
-                    <div className="ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)] bg-destructive/5 border border-destructive/20 rounded-md p-2.5">
+                    <div className="sm:ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)] bg-destructive/5 border border-destructive/20 rounded-md p-2.5">
                       <p className="text-[11px] font-semibold text-destructive mb-0.5">⚠ Action Required</p>
                       <p className="text-xs text-card-foreground">{entry.suggested_action}</p>
                     </div>
