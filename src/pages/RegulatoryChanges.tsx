@@ -112,7 +112,7 @@ const RegulatoryChanges = () => {
 
                   {/* Impact assessment */}
                   {entry.impact_assessment && (
-                    <p className="text-[11px] text-muted-foreground ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)] italic">
+                    <p className="text-[11px] text-muted-foreground sm:ml-[calc(theme(spacing.2)+theme(spacing.3)+2rem)] italic">
                       Impact: {entry.impact_assessment}
                     </p>
                   )}
