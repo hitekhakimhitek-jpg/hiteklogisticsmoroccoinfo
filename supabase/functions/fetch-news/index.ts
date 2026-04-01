@@ -459,6 +459,17 @@ function extractSourceName(url: string): string {
       "tax.gov.ma": "DGI Maroc (Impôts)",
       "bkam.ma": "Bank Al-Maghrib",
       "sgg.gov.ma": "SGG (Bulletin Officiel)",
+      "bleepingcomputer.com": "BleepingComputer",
+      "cisa.gov": "CISA",
+      "theregister.com": "The Register",
+      "techtarget.com": "TechTarget",
+      "msrc.microsoft.com": "Microsoft Security",
+      "microsoft.com": "Microsoft Security",
+      "cloud.google.com": "Google Cloud",
+      "aws.amazon.com": "AWS Security",
+      "arstechnica.com": "Ars Technica",
+      "openai.com": "OpenAI",
+      "anthropic.com": "Anthropic",
     };
     return sourceMap[hostname] || hostname;
   } catch {
