@@ -63,11 +63,14 @@ export type Database = {
         Row: {
           action_required: boolean
           category: Database["public"]["Enums"]["news_category"]
+          classification_metadata: Json | null
           fetched_date: string
+          finance_score: number | null
           full_content: string | null
           headline: string
           id: string
           impact_assessment: string | null
+          it_score: number | null
           month: number
           priority: Database["public"]["Enums"]["news_priority"]
           published_date: string
@@ -82,11 +85,14 @@ export type Database = {
         Insert: {
           action_required?: boolean
           category?: Database["public"]["Enums"]["news_category"]
+          classification_metadata?: Json | null
           fetched_date?: string
+          finance_score?: number | null
           full_content?: string | null
           headline: string
           id?: string
           impact_assessment?: string | null
+          it_score?: number | null
           month?: number
           priority?: Database["public"]["Enums"]["news_priority"]
           published_date?: string
@@ -101,11 +107,14 @@ export type Database = {
         Update: {
           action_required?: boolean
           category?: Database["public"]["Enums"]["news_category"]
+          classification_metadata?: Json | null
           fetched_date?: string
+          finance_score?: number | null
           full_content?: string | null
           headline?: string
           id?: string
           impact_assessment?: string | null
+          it_score?: number | null
           month?: number
           priority?: Database["public"]["Enums"]["news_priority"]
           published_date?: string
