@@ -9,7 +9,21 @@ import { Input } from "@/components/ui/input";
 
 const ALL_REGIONS = Object.keys(regionLabels) as (keyof typeof regionLabels)[];
 const ALL_PRIORITIES = ["critical", "important", "informational"] as const;
-const ALL_SOURCES = ["Lloyd's List", "FreightWaves", "ADII Morocco", "The Loadstar", "JOC", "European Commission", "IATA", "IMO", "Drewry", "Morocco World News"];
+const ALL_SOURCES = [
+  // Tier 1 — International freight & shipping
+  "Lloyd's List", "FreightWaves", "The Loadstar", "JOC",
+  "Hellenic Shipping News", "Splash247", "gCaptain", "Seatrade Maritime",
+  // Tier 2 — Morocco ports & customs
+  "ADII Morocco (Customs)", "ADiL (Customs Clearance)", "PortNet Morocco", "Tanger Med", "Tanger Med Port Authority",
+  // Tier 2b — Moroccan economic press
+  "L'Economiste", "La Vie Éco", "Médias24", "Finances News Hebdo", "Le Matin",
+  // Tier 3 — International regulatory bodies
+  "IMO", "IATA", "WTO", "WCO", "FIATA", "ICC (Incoterms)", "UNECE", "European Commission",
+  // Tier 3b — Morocco finance & fiscal
+  "DGI Maroc (Impôts)", "Bank Al-Maghrib", "SGG (Bulletin Officiel)",
+  // Tier 5 — Market intelligence
+  "UNCTAD", "World Bank", "World Bank LPI", "ITC Trade Map", "ITC",
+];
 
 const SettingsPage = () => {
   const { settings, updateSettings, resetSettings } = useSettings();

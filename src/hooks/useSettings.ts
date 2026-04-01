@@ -17,7 +17,15 @@ const DEFAULT_SETTINGS: AppSettings = {
   archiveRetention: 90,
   autoFetchNews: true,
   autoGenerateReports: true,
-  newsSourcesEnabled: ["Lloyd's List", "FreightWaves", "ADII Morocco", "The Loadstar", "JOC", "European Commission", "IATA", "IMO", "Drewry", "Morocco World News"],
+  newsSourcesEnabled: [
+    "Lloyd's List", "FreightWaves", "The Loadstar", "JOC",
+    "Hellenic Shipping News", "Splash247", "gCaptain", "Seatrade Maritime",
+    "ADII Morocco (Customs)", "ADiL (Customs Clearance)", "PortNet Morocco", "Tanger Med", "Tanger Med Port Authority",
+    "L'Economiste", "La Vie Éco", "Médias24", "Finances News Hebdo", "Le Matin",
+    "IMO", "IATA", "WTO", "WCO", "FIATA", "ICC (Incoterms)", "UNECE", "European Commission",
+    "DGI Maroc (Impôts)", "Bank Al-Maghrib", "SGG (Bulletin Officiel)",
+    "UNCTAD", "World Bank", "World Bank LPI", "ITC Trade Map", "ITC",
+  ],
   companyName: "FreightPulse",
   notifyOnCritical: true,
 };
