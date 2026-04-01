@@ -28,6 +28,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/regulatory" element={<RegulatoryChanges />} />
             <Route path="/finance-regulation" element={<FinanceRegulation />} />
+            <Route path="/it-news" element={<ITNews />} />
             <Route path="/weekly" element={<WeeklyReport />} />
             <Route path="/monthly" element={<MonthlySummary />} />
             <Route path="/archive" element={<ArchivePage />} />

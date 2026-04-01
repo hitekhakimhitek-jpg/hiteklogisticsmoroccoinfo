@@ -21,6 +21,10 @@ const ALL_SOURCES = [
   "IMO", "IATA", "WTO", "WCO", "FIATA", "ICC (Incoterms)", "UNECE", "European Commission",
   // Tier 3b — Morocco finance & fiscal
   "DGI Maroc (Impôts)", "Bank Al-Maghrib", "SGG (Bulletin Officiel)",
+  // Tier 4 — IT & Cybersecurity
+  "BleepingComputer", "CISA", "The Register", "TechTarget",
+  "Microsoft Security", "Google Cloud", "AWS Security",
+  "Ars Technica", "OpenAI", "Anthropic",
   // Tier 5 — Market intelligence
   "UNCTAD", "World Bank", "World Bank LPI", "ITC Trade Map", "ITC",
 ];
