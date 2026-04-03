@@ -7,13 +7,13 @@ import {
   Archive,
   MessageSquare,
   Settings,
-  Ship,
   ChevronLeft,
   ChevronRight,
   Scale,
   Landmark,
   Monitor,
 } from "lucide-react";
+import logoImg from "@/assets/logo.png";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
