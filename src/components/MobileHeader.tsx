@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
-import { Ship, Menu, X, LayoutDashboard, FileBarChart, CalendarDays, Archive, MessageSquare, Settings, Scale, Landmark, Monitor } from "lucide-react";
+import { Menu, X, LayoutDashboard, FileBarChart, CalendarDays, Archive, MessageSquare, Settings, Scale, Landmark, Monitor } from "lucide-react";
+import logoImg from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 
