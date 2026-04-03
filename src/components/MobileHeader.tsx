@@ -25,9 +25,7 @@ export function MobileHeader() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between h-14 px-4 bg-sidebar text-sidebar-foreground border-b border-sidebar-border">
       <div className="flex items-center gap-2">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-secondary">
-          <Ship className="w-5 h-5 text-secondary-foreground" />
-        </div>
+        <img src={logoImg} alt="Hitek Info" className="w-8 h-8 rounded-lg object-contain" />
         <span className="text-sm font-bold text-sidebar-primary-foreground tracking-tight">
           Hitek Info
         </span>
