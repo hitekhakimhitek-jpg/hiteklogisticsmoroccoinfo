@@ -7,13 +7,13 @@ import {
   Archive,
   MessageSquare,
   Settings,
-  Ship,
   ChevronLeft,
   ChevronRight,
   Scale,
   Landmark,
   Monitor,
 } from "lucide-react";
+import logoImg from "@/assets/logo.png";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -42,9 +42,7 @@ export function AppSidebar() {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 h-16 border-b border-sidebar-border">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-secondary">
-          <Ship className="w-5 h-5 text-secondary-foreground" />
-        </div>
+        <img src={logoImg} alt="Hitek Info" className="w-8 h-8 rounded-lg object-contain" />
         {!collapsed && (
           <div className="flex flex-col">
             <span className="text-sm font-bold text-sidebar-primary-foreground tracking-tight">
