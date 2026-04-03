@@ -3,12 +3,18 @@ import { useNewsEntries, triggerFetchNews } from "@/hooks/useFreightData";
 import { TopStories } from "@/components/dashboard/TopStories";
 import { MoroccoFocus, ComplianceWatchlist } from "@/components/dashboard/QuickPanels";
 import { RefreshCw, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAppliedSettings, filterBySettings } from "@/hooks/useAppliedSettings";
 
 const Dashboard = () => {
-  const { data: newsEntries, isLoading } = useNewsEntries({ limit: 50 });
+  const { data: rawEntries, isLoading } = useNewsEntries({ limit: 50 });
+  const appliedSettings = useAppliedSettings();
+  const newsEntries = useMemo(
+    () => (rawEntries ? filterBySettings(rawEntries, appliedSettings) : undefined),
+    [rawEntries, appliedSettings]
+  );
   const [isFetching, setIsFetching] = useState(false);
   const queryClient = useQueryClient();
 

@@ -1,13 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 export interface AppSettings {
   focusRegions: string[];
   priorityFilter: string[];
-  archiveRetention: number; // days
+  archiveRetention: number;
   autoFetchNews: boolean;
   autoGenerateReports: boolean;
   newsSourcesEnabled: string[];
-  companyName: string;
   notifyOnCritical: boolean;
 }
 
@@ -29,32 +28,55 @@ const DEFAULT_SETTINGS: AppSettings = {
     "Ars Technica", "OpenAI", "Anthropic",
     "UNCTAD", "World Bank", "World Bank LPI", "ITC Trade Map", "ITC",
   ],
-  companyName: "FreightPulse",
   notifyOnCritical: true,
 };
 
 const STORAGE_KEY = "freightpulse_settings";
+const APPLIED_KEY = "freightpulse_applied_settings";
+
+function loadFromStorage(key: string): AppSettings {
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored) return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+  } catch {}
+  return DEFAULT_SETTINGS;
+}
 
 export function useSettings() {
-  const [settings, setSettings] = useState<AppSettings>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
-    } catch {}
-    return DEFAULT_SETTINGS;
-  });
+  // Pending = what the user sees in the UI and edits
+  const [pending, setPending] = useState<AppSettings>(() => loadFromStorage(STORAGE_KEY));
+  // Applied = what the dashboard actually uses
+  const [applied, setApplied] = useState<AppSettings>(() => loadFromStorage(APPLIED_KEY));
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  }, [settings]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pending));
+  }, [pending]);
 
-  const updateSettings = (partial: Partial<AppSettings>) => {
-    setSettings((prev) => ({ ...prev, ...partial }));
+  useEffect(() => {
+    localStorage.setItem(APPLIED_KEY, JSON.stringify(applied));
+  }, [applied]);
+
+  const updatePending = (partial: Partial<AppSettings>) => {
+    setPending((prev) => ({ ...prev, ...partial }));
   };
+
+  const applySettings = useCallback(async () => {
+    setIsUpdating(true);
+    // Simulate gathering & analyzing (2.5s)
+    await new Promise((r) => setTimeout(r, 2500));
+    setApplied({ ...pending });
+    setIsUpdating(false);
+  }, [pending]);
 
   const resetSettings = () => {
-    setSettings(DEFAULT_SETTINGS);
+    setPending(DEFAULT_SETTINGS);
+    setApplied(DEFAULT_SETTINGS);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_SETTINGS));
+    localStorage.setItem(APPLIED_KEY, JSON.stringify(DEFAULT_SETTINGS));
   };
 
-  return { settings, updateSettings, resetSettings };
+  const isDirty = JSON.stringify(pending) !== JSON.stringify(applied);
+
+  return { pending, applied, updatePending, applySettings, resetSettings, isUpdating, isDirty };
 }

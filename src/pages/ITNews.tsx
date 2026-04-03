@@ -4,21 +4,24 @@ import { priorityConfig, categoryLabels, regionLabels, categoryColors } from "@/
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { Monitor, ExternalLink, AlertTriangle, Loader2 } from "lucide-react";
+import { useAppliedSettings } from "@/hooks/useAppliedSettings";
 
 const IT_SCORE_THRESHOLD = 70;
 
 const ITNews = () => {
   const { data: allEntries, isLoading } = useNewsEntries({});
+  const appliedSettings = useAppliedSettings();
 
   const itEntries = useMemo(() => {
     if (!allEntries) return [];
     return allEntries
       .filter((e: any) => {
-        // Use AI-assigned it_score when available
+        // IT section is global by design — skip region filter, but respect priority and source
+        if (!appliedSettings.priorityFilter.includes(e.priority)) return false;
+        if (!appliedSettings.newsSourcesEnabled.includes(e.source_name)) return false;
         if (e.it_score != null && e.classification_metadata != null) {
           return e.it_score >= IT_SCORE_THRESHOLD;
         }
-        // No classification yet — don't show
         return false;
       })
       .sort((a: any, b: any) => {
@@ -30,7 +33,7 @@ const ITNews = () => {
         const order: Record<string, number> = { critical: 0, important: 1, informational: 2 };
         return (order[a.priority] ?? 2) - (order[b.priority] ?? 2);
       });
-  }, [allEntries]);
+  }, [allEntries, appliedSettings]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-4 sm:space-y-6">

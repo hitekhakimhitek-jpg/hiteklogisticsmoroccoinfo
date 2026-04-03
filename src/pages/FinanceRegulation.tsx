@@ -4,25 +4,33 @@ import { priorityConfig, categoryLabels, regionLabels, categoryColors } from "@/
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { Landmark, ExternalLink, AlertTriangle, Loader2 } from "lucide-react";
+import { useAppliedSettings } from "@/hooks/useAppliedSettings";
 
 const FINANCE_SCORE_THRESHOLD = 70;
 
 const FinanceRegulation = () => {
   const { data: allEntries, isLoading } = useNewsEntries({});
+  const appliedSettings = useAppliedSettings();
 
   const financeEntries = useMemo(() => {
     if (!allEntries) return [];
     return allEntries
       .filter((e: any) => {
+        // Finance section hyper-focuses on Morocco regardless of region setting,
+        // but also respects priority and source filters
+        if (!appliedSettings.priorityFilter.includes(e.priority)) return false;
+        if (!appliedSettings.newsSourcesEnabled.includes(e.source_name)) return false;
         // Use AI-assigned finance_score when available
         if (e.finance_score != null && e.classification_metadata != null) {
           return e.finance_score >= FINANCE_SCORE_THRESHOLD;
         }
-        // No classification yet — don't show (wait for classification)
         return false;
       })
       .sort((a: any, b: any) => {
-        // Sort by finance_score desc, then action_required, then date, then priority
+        // Morocco-focused entries first
+        const moroccoA = a.region === "morocco" ? 0 : 1;
+        const moroccoB = b.region === "morocco" ? 0 : 1;
+        if (moroccoA !== moroccoB) return moroccoA - moroccoB;
         const scoreA = a.finance_score ?? 0;
         const scoreB = b.finance_score ?? 0;
         if (scoreA !== scoreB) return scoreB - scoreA;
@@ -31,7 +39,7 @@ const FinanceRegulation = () => {
         const order: Record<string, number> = { critical: 0, important: 1, informational: 2 };
         return (order[a.priority] ?? 2) - (order[b.priority] ?? 2);
       });
-  }, [allEntries]);
+  }, [allEntries, appliedSettings]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-4 sm:space-y-6">
