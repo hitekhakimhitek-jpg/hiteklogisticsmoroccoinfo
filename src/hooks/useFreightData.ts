@@ -84,7 +84,11 @@ export function useMonthlySummaries() {
   });
 }
 
-export async function triggerFetchNews() {
+export async function triggerFetchNews(enabledSources?: string[]) {
+  const body: Record<string, unknown> = {};
+  if (enabledSources && enabledSources.length > 0) {
+    body.sources = enabledSources;
+  }
   const resp = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-news`,
     {
@@ -93,7 +97,7 @@ export async function triggerFetchNews() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify(body),
     }
   );
   if (!resp.ok) {
