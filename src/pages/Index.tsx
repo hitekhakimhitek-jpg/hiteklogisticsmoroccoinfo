@@ -21,7 +21,7 @@ const Dashboard = () => {
   const handleFetchNews = async () => {
     setIsFetching(true);
     try {
-      const result = await triggerFetchNews();
+      const result = await triggerFetchNews(appliedSettings.newsSourcesEnabled);
       toast.success(`Fetched ${result.count} new intelligence entries`);
       queryClient.invalidateQueries({ queryKey: ["news_entries"] });
     } catch (e: any) {
