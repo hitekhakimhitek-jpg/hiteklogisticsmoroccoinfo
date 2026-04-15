@@ -11,43 +11,76 @@ const CATEGORIES = ["regulation", "weather", "port", "trade", "compliance", "mar
 const REGIONS = ["morocco", "europe", "asia", "americas", "africa", "middle_east", "global"];
 const PRIORITIES = ["critical", "important", "informational"];
 
-// Search queries to find real freight/logistics news
-const SEARCH_QUERIES = [
-  // TIER 1 — Freight & logistics news
-  "freight forwarding shipping logistics news today site:freightwaves.com OR site:theloadstar.com OR site:joc.com OR site:lloydslist.com",
-  "maritime shipping disruption port congestion today site:hellenicshippingnews.com OR site:splash247.com OR site:gcaptain.com OR site:seatrade-maritime.com",
-  // TIER 2 — Morocco specific (ADII, PortNet, Tanger Med)
-  "Morocco trade port Tanger Med customs ADII shipping PortNet",
-  "Maroc douane ADII circulaire tarif douanier site:douane.gov.ma OR site:adil.gov.ma OR site:portnet.ma",
-  "Tanger Med port authority community system site:tangermed.ma OR site:tmpa.ma",
-  "Maroc commerce port douane fret logistique site:lematin.ma OR site:medias24.com OR site:fnh.ma OR site:economiste.com OR site:lavieeco.com",
-  // TIER 3 — Regulations, compliance & reference bodies
-  "IMO shipping regulation 2025 OR IMDG code dangerous goods OR customs compliance OR trade sanctions site:imo.org OR site:wto.org OR site:iata.org OR site:wcoomd.org",
-  "FIATA freight forwarding documents FBL FCR site:fiata.org OR site:iccwbo.org incoterms",
-  "IATA dangerous goods regulations air cargo DGR site:iata.org",
-  "WCO harmonized system HS code classification site:wcoomd.org",
-  "UNECE CEFACT e-CMR electronic consignment note site:unece.org",
-  // TIER 3b — Morocco finance & fiscal regulation
-  "Maroc fiscalité impôt TVA taxe douane loi de finances site:tax.gov.ma OR site:bkam.ma OR site:sgg.gov.ma",
-  "Morocco fiscal policy tax customs duty exchange rate Bank Al-Maghrib site:tax.gov.ma OR site:bkam.ma OR site:sgg.gov.ma",
-  "bulletin officiel Maroc loi décret circulaire fiscale site:sgg.gov.ma",
-  "Bank Al-Maghrib taux directeur dirham change réglementation site:bkam.ma",
-  // TIER 4 — Disruptions & weather
-  "port disruption weather shipping delay Suez Canal Mediterranean Gibraltar",
+// Map source names → search queries. Only queries whose source name is in the enabled list will run.
+const SOURCE_QUERIES: Record<string, string[]> = {
+  // TIER 1 — Freight & logistics
+  "FreightWaves": ["freight forwarding shipping logistics news today site:freightwaves.com"],
+  "The Loadstar": ["freight shipping logistics news today site:theloadstar.com"],
+  "JOC": ["freight shipping logistics news today site:joc.com"],
+  "Lloyd's List": ["maritime shipping freight news today site:lloydslist.com"],
+  "Hellenic Shipping News": ["maritime shipping disruption port congestion today site:hellenicshippingnews.com"],
+  "Splash247": ["maritime shipping news today site:splash247.com"],
+  "gCaptain": ["maritime shipping news today site:gcaptain.com"],
+  "Seatrade Maritime": ["maritime shipping news today site:seatrade-maritime.com"],
+  // TIER 2 — Morocco specific
+  "ADII Morocco (Customs)": ["Maroc douane ADII circulaire tarif douanier site:douane.gov.ma"],
+  "ADiL (Customs Clearance)": ["Maroc douane ADII site:adil.gov.ma"],
+  "PortNet Morocco": ["Morocco PortNet site:portnet.ma"],
+  "Tanger Med": ["Tanger Med port site:tangermed.ma"],
+  "Tanger Med Port Authority": ["Tanger Med port authority site:tmpa.ma"],
+  "L'Economiste": ["Maroc commerce économie logistique site:economiste.com"],
+  "La Vie Éco": ["Maroc économie commerce logistique site:lavieeco.com"],
+  "Médias24": ["Maroc économie commerce fret site:medias24.com"],
+  "Finances News Hebdo": ["Maroc finance économie site:fnh.ma"],
+  "Le Matin": ["Maroc commerce port douane fret logistique site:lematin.ma"],
+  // TIER 3 — International bodies
+  "IMO": ["IMO shipping regulation site:imo.org"],
+  "IATA": ["IATA dangerous goods regulations air cargo DGR site:iata.org"],
+  "WTO": ["WTO trade regulation site:wto.org"],
+  "WCO": ["WCO harmonized system HS code classification site:wcoomd.org"],
+  "FIATA": ["FIATA freight forwarding documents FBL FCR site:fiata.org"],
+  "ICC (Incoterms)": ["ICC incoterms trade site:iccwbo.org"],
+  "UNECE": ["UNECE CEFACT e-CMR electronic consignment note site:unece.org"],
+  "European Commission": ["European Commission trade regulation customs site:ec.europa.eu"],
+  // TIER 3b — Morocco finance & fiscal
+  "DGI Maroc (Impôts)": [
+    "Maroc fiscalité impôt TVA taxe loi de finances site:tax.gov.ma",
+    "Morocco fiscal policy tax customs duty site:tax.gov.ma",
+  ],
+  "Bank Al-Maghrib": ["Bank Al-Maghrib taux directeur dirham change réglementation site:bkam.ma"],
+  "SGG (Bulletin Officiel)": ["bulletin officiel Maroc loi décret circulaire fiscale site:sgg.gov.ma"],
   // TIER 5 — IT & Cybersecurity
-  "cybersecurity vulnerability ransomware malware patch critical CVE site:bleepingcomputer.com OR site:theregister.com OR site:arstechnica.com",
-  "CISA advisory vulnerability alert critical infrastructure site:cisa.gov",
-  "Microsoft security update patch Tuesday MSRC site:msrc.microsoft.com OR site:microsoft.com/security",
-  "Google Cloud security bulletin release notes site:cloud.google.com",
-  "AWS security advisory update site:aws.amazon.com/security OR site:aws.amazon.com/about-aws/whats-new",
-  "TechTarget cybersecurity IT infrastructure enterprise site:techtarget.com",
-  "OpenAI news update release site:openai.com/blog OR site:openai.com/index",
-  "Anthropic news update release site:anthropic.com/news OR site:anthropic.com/research",
-  // TIER 6 — Market intelligence & benchmarking
-  "World Bank logistics performance index LPI site:lpi.worldbank.org OR site:worldbank.org",
-  "UNCTAD review maritime transport shipping site:unctad.org",
-  "ITC trade map Morocco trade flows site:trademap.org OR site:intracen.org",
-  // TIER 7 — General freight keywords
+  "BleepingComputer": ["cybersecurity vulnerability ransomware malware patch critical CVE site:bleepingcomputer.com"],
+  "CISA": ["CISA advisory vulnerability alert critical infrastructure site:cisa.gov"],
+  "The Register": ["cybersecurity IT infrastructure enterprise site:theregister.com"],
+  "TechTarget": ["TechTarget cybersecurity IT infrastructure enterprise site:techtarget.com"],
+  "Microsoft Security": ["Microsoft security update patch Tuesday MSRC site:msrc.microsoft.com OR site:microsoft.com/security"],
+  "Google Cloud": ["Google Cloud security bulletin release notes site:cloud.google.com"],
+  "AWS Security": ["AWS security advisory update site:aws.amazon.com/security OR site:aws.amazon.com/about-aws/whats-new"],
+  "Ars Technica": ["technology cybersecurity AI news site:arstechnica.com"],
+  "OpenAI": ["OpenAI news update release site:openai.com/blog OR site:openai.com/index"],
+  "Anthropic": ["Anthropic news update release site:anthropic.com/news OR site:anthropic.com/research"],
+  "MIT Technology Review": ["MIT Technology Review AI cybersecurity enterprise technology site:technologyreview.com"],
+  "VentureBeat": ["VentureBeat AI enterprise technology cybersecurity site:venturebeat.com"],
+  "Hugging Face Blog": ["Hugging Face AI machine learning models release site:huggingface.co/blog"],
+  "Computer Weekly": ["Computer Weekly IT enterprise infrastructure cybersecurity site:computerweekly.com"],
+  "IT Security Guru": ["IT Security Guru cybersecurity news vulnerability site:itsecurityguru.org"],
+  "SD Times": ["SD Times software development DevOps enterprise IT site:sdtimes.com"],
+  "ACM TechNews": ["ACM TechNews computing technology research site:technews.acm.org OR site:cacm.acm.org"],
+  // TIER 6 — Market intelligence
+  "UNCTAD": ["UNCTAD review maritime transport shipping site:unctad.org"],
+  "World Bank": ["World Bank logistics trade development site:worldbank.org"],
+  "World Bank LPI": ["World Bank logistics performance index LPI site:lpi.worldbank.org"],
+  "ITC Trade Map": ["ITC trade map Morocco trade flows site:trademap.org"],
+  "ITC": ["ITC trade Morocco site:intracen.org"],
+  // Independent news
+  "Voice of the Independent": ["Morocco news economy trade logistics site:voiceoftheindependent.com"],
+};
+
+// Fallback general queries that always run if no source-specific ones cover the topic
+const GENERAL_QUERIES = [
+  "Morocco trade port Tanger Med customs ADII shipping PortNet",
+  "port disruption weather shipping delay Suez Canal Mediterranean Gibraltar",
   "freight forwarding OR shipping disruption OR port congestion OR customs regulation OR supply chain OR tariff update OR Suez Canal OR Mediterranean shipping",
 ];
 
@@ -65,6 +98,35 @@ serve(async (req) => {
       throw new Error("Missing required environment variables");
     }
 
+    // Accept enabled sources from the request body
+    let enabledSources: string[] | null = null;
+    try {
+      const body = await req.json();
+      if (Array.isArray(body.sources) && body.sources.length > 0) {
+        enabledSources = body.sources;
+      }
+    } catch { /* empty body is fine */ }
+
+    // Build search queries based on enabled sources
+    const searchQueries: string[] = [];
+    if (enabledSources) {
+      for (const source of enabledSources) {
+        if (SOURCE_QUERIES[source]) {
+          searchQueries.push(...SOURCE_QUERIES[source]);
+        }
+      }
+      // Always include general queries
+      searchQueries.push(...GENERAL_QUERIES);
+      console.log(`Using ${searchQueries.length} queries for ${enabledSources.length} enabled sources`);
+    } else {
+      // No filter — use all queries
+      for (const queries of Object.values(SOURCE_QUERIES)) {
+        searchQueries.push(...queries);
+      }
+      searchQueries.push(...GENERAL_QUERIES);
+      console.log(`Using all ${searchQueries.length} queries (no source filter)`);
+    }
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const today = new Date().toISOString().split("T")[0];
 
@@ -79,8 +141,7 @@ serve(async (req) => {
       markdown?: string;
     }> = [];
 
-    // Run searches in parallel batches to stay within timeout
-    const searchPromises = SEARCH_QUERIES.map(async (query) => {
+    const searchPromises = searchQueries.map(async (query) => {
       try {
         const response = await fetch("https://api.firecrawl.dev/v1/search", {
           method: "POST",
@@ -91,7 +152,7 @@ serve(async (req) => {
           body: JSON.stringify({
             query,
             limit: 5,
-            tbs: "qdr:w", // Last week for more results
+            tbs: "qdr:w",
             scrapeOptions: { formats: ["markdown"] },
           }),
         });
@@ -122,18 +183,14 @@ serve(async (req) => {
       allArticles.push(...batch);
     }
 
-    // Filter out generic/non-article URLs before deduplication
+    // Filter out generic/non-article URLs
     const isValidArticleUrl = (url: string): boolean => {
       try {
         const u = new URL(url);
         const path = u.pathname;
-        // Reject generic index/listing pages
         if (path === "/" || path === "/en/" || path === "/news/" || path === "/en/news/") return false;
-        // Reject generic PHP listing pages
         if (path.endsWith("view_more_news.php") || path.endsWith("index.php")) return false;
-        // Reject social media links (facebook, twitter, linkedin)
         if (u.hostname.includes("facebook.com") || u.hostname.includes("twitter.com") || u.hostname.includes("linkedin.com")) return false;
-        // Reject very short paths (likely homepages)
         if (path.split("/").filter(Boolean).length < 2) return false;
         return true;
       } catch {
@@ -141,7 +198,7 @@ serve(async (req) => {
       }
     };
 
-    // Deduplicate by URL and filter bad URLs
+    // Deduplicate by URL
     const uniqueArticles = Array.from(
       new Map(
         allArticles
@@ -150,7 +207,7 @@ serve(async (req) => {
       ).values()
     );
 
-    // Step 1b: Validate URLs actually resolve (HEAD request, parallel, with timeout)
+    // Step 1b: Validate URLs
     console.log(`Validating ${uniqueArticles.length} article URLs...`);
     const validatedArticles: typeof uniqueArticles = [];
     const validationPromises = uniqueArticles.map(async (article) => {
@@ -165,7 +222,6 @@ serve(async (req) => {
         });
         clearTimeout(timeout);
         if (resp.ok) return article;
-        // Try GET if HEAD fails (some servers don't support HEAD)
         if (resp.status === 405 || resp.status === 403) {
           const controller2 = new AbortController();
           const timeout2 = setTimeout(() => controller2.abort(), 5000);
@@ -176,7 +232,7 @@ serve(async (req) => {
             redirect: "follow",
           });
           clearTimeout(timeout2);
-          await resp2.text(); // consume body
+          await resp2.text();
           if (resp2.ok) return article;
         }
         console.log(`URL validation failed (${resp.status}): ${article.url}`);
@@ -194,7 +250,6 @@ serve(async (req) => {
 
     console.log(`${validatedArticles.length} articles passed URL validation`);
 
-    // Use validated articles from here on
     const articlesToProcess = validatedArticles;
 
     console.log(`Found ${articlesToProcess.length} validated articles from web scraping`);
@@ -206,7 +261,7 @@ serve(async (req) => {
       );
     }
 
-    // Step 2: Use AI to categorize, filter, and assess each article for Morocco freight relevance
+    // Step 2: Use AI to categorize and filter
     console.log("Using AI to categorize and filter articles...");
 
     const articleSummaries = articlesToProcess.slice(0, 20).map((a, i) =>
@@ -305,10 +360,8 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
     try {
       classifiedEntries = JSON.parse(content);
     } catch (e) {
-      // Try to salvage truncated JSON by finding the last complete object
       console.warn("Initial JSON parse failed, attempting to salvage truncated response...");
       try {
-        // Find the last complete object by looking for the last '}' followed by potential ']'
         const lastCompleteObj = content.lastIndexOf("}");
         if (lastCompleteObj > 0) {
           const salvaged = content.substring(0, lastCompleteObj + 1) + "]";
@@ -357,7 +410,7 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
       };
     });
 
-    // Deduplicate: fetch existing headlines and source_urls to avoid re-inserting
+    // Deduplicate against existing DB entries
     const existingUrls = new Set<string>();
     const existingHeadlines = new Set<string>();
 
@@ -424,7 +477,6 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
         }
       } catch (classifyErr) {
         console.error("Failed to trigger classify-sections:", classifyErr);
-        // Don't fail the whole request — classification can be retried
       }
     }
 
@@ -498,6 +550,15 @@ function extractSourceName(url: string): string {
       "arstechnica.com": "Ars Technica",
       "openai.com": "OpenAI",
       "anthropic.com": "Anthropic",
+      "technologyreview.com": "MIT Technology Review",
+      "venturebeat.com": "VentureBeat",
+      "huggingface.co": "Hugging Face Blog",
+      "computerweekly.com": "Computer Weekly",
+      "itsecurityguru.org": "IT Security Guru",
+      "sdtimes.com": "SD Times",
+      "technews.acm.org": "ACM TechNews",
+      "cacm.acm.org": "ACM TechNews",
+      "voiceoftheindependent.com": "Voice of the Independent",
     };
     return sourceMap[hostname] || hostname;
   } catch {
