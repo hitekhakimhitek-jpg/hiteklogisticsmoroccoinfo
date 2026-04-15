@@ -19,7 +19,10 @@ const ALL_SOURCES = [
   "BleepingComputer", "CISA", "The Register", "TechTarget",
   "Microsoft Security", "Google Cloud", "AWS Security",
   "Ars Technica", "OpenAI", "Anthropic",
+  "MIT Technology Review", "VentureBeat", "Hugging Face Blog", "Computer Weekly",
+  "IT Security Guru", "SD Times", "ACM TechNews",
   "UNCTAD", "World Bank", "World Bank LPI", "ITC Trade Map", "ITC",
+  "Voice of the Independent",
 ];
 
 const SettingsPage = () => {
