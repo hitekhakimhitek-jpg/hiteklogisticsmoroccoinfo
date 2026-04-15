@@ -66,8 +66,8 @@ export function useSettings() {
 
   const applySettings = useCallback(async () => {
     setIsUpdating(true);
-    // Simulate gathering & analyzing (2.5s)
-    await new Promise((r) => setTimeout(r, 2500));
+    // Brief delay for visual feedback
+    await new Promise((r) => setTimeout(r, 800));
     setApplied({ ...pending });
     setIsUpdating(false);
   }, [pending]);
