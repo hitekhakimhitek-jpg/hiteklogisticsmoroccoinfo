@@ -143,7 +143,7 @@ serve(async (req) => {
 
     const searchPromises = searchQueries.map(async (query) => {
       try {
-        const response = await fetch("https://api.firecrawl.dev/v1/search", {
+        const response = await fetch("https://api.firecrawl.dev/v2/search", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
