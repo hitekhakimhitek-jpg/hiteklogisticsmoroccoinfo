@@ -52,36 +52,67 @@ serve(async (req) => {
         (now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000)
       );
 
+      // Last 7 days window (today + 6 prior days)
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
       const { data: news } = await supabase
         .from("news_entries")
         .select("*")
-        .eq("week_number", weekNumber)
-        .eq("year", now.getFullYear())
+        .gte("published_date", sevenDaysAgo.toISOString())
+        .lte("published_date", now.toISOString())
         .order("priority", { ascending: true });
+
+      // Previous week for comparison
+      const { data: prevNews } = await supabase
+        .from("news_entries")
+        .select("category,priority")
+        .gte("published_date", fourteenDaysAgo.toISOString())
+        .lt("published_date", sevenDaysAgo.toISOString());
 
       if (!news || news.length === 0) {
         return new Response(
-          JSON.stringify({ success: false, message: "No news entries for this week" }),
+          JSON.stringify({ success: false, message: "No news entries for the past 7 days" }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      const prompt = `You are a senior freight intelligence analyst producing a weekly briefing for a Morocco-based freight forwarder. Analyze the following ${news.length} news entries and produce a comprehensive, polished intelligence report.
+      const countMetrics = (arr: any[] | null) => ({
+        disruptions: (arr || []).filter((e) => e.category === "weather" || e.category === "port").length,
+        regulations: (arr || []).filter((e) => e.category === "regulation" || e.category === "compliance").length,
+        criticalAlerts: (arr || []).filter((e) => e.priority === "critical").length,
+        newsItems: (arr || []).length,
+      });
+      const cur = countMetrics(news);
+      const prev = countMetrics(prevNews);
+      const pctChange = (c: number, p: number) => (p === 0 ? (c > 0 ? 100 : 0) : Math.round(((c - p) / p) * 100));
+      const week_comparison = {
+        disruptions: { current: cur.disruptions, previous: prev.disruptions, change: pctChange(cur.disruptions, prev.disruptions) },
+        regulations: { current: cur.regulations, previous: prev.regulations, change: pctChange(cur.regulations, prev.regulations) },
+        criticalAlerts: { current: cur.criticalAlerts, previous: prev.criticalAlerts, change: pctChange(cur.criticalAlerts, prev.criticalAlerts) },
+        newsItems: { current: cur.newsItems, previous: prev.newsItems, change: pctChange(cur.newsItems, prev.newsItems) },
+      };
 
-CONTENT PRIORITIZATION (apply this hierarchy strictly):
-1st: Compliance & Regulatory — customs regulations, policy changes, enforcement updates, legal obligations, ADII circulars, IMO/IATA/WCO changes
-2nd: Direct Operational Impact — port closures, route changes, rate surcharges, weather disruptions, carrier changes
-3rd: Everything Else — market stories, trends, forecasts, benchmarking
+      const prompt = `You are a senior freight intelligence analyst producing a weekly briefing for a Morocco-based freight forwarder. Analyze the following ${news.length} news entries from the past 7 days and produce a comprehensive, polished intelligence report.
+
+CONTENT PRIORITIZATION (apply this hierarchy strictly throughout the report):
+1st: Compliance & Regulatory — customs regulations, ADII circulars, IMO/IATA/WCO changes, legal obligations
+2nd: Direct Operational Impact — port closures, route changes, rate surcharges, weather disruptions
+3rd: Everything Else — market stories, trends, forecasts, benchmarking data
 
 News entries:
 ${JSON.stringify(news, null, 2)}
 
-Generate a JSON object with these exact fields:
-- "executive_summary": string (4-6 well-written sentences structured as a professional paragraph, NOT bullet points. Start with compliance/regulatory highlights, then operational impacts, then market context. Write it as a polished executive brief.)
-- "risk_score": integer 1-100 (overall operational risk score for the week, where 1=minimal risk, 100=severe disruption. Weight compliance deadlines and regulatory changes heavily.)
-- "outlook": string (2-3 sentences on what to expect next week — upcoming compliance deadlines first, then operational factors, then market trends)
-- "key_takeaways": array of 3-5 strings (concise takeaways a logistics manager can act on immediately, ordered by priority: compliance first, then operational, then market)
-- "recommendations": array of objects {priority: "urgent"|"important"|"monitor", action: string, rationale: string} (3-5 concrete operational recommendations, ordered by priority)
+Generate a JSON object with these exact fields (mirroring the monthly summary format):
+- "executive_summary": string (5-7 well-written sentences as a polished professional paragraph. Structure: compliance/regulatory highlights first, then operational impacts, then market context. NO bullet points.)
+- "risk_score": integer 1-100 (overall weekly risk assessment, weighting compliance deadlines heavily)
+- "top_events": array of {rank: number, headline: string, impact: "Critical"|"High"|"Medium"|"Low", category: string, analysis: string} (top 10 events ranked by priority hierarchy)
+- "compliance_tracker": array of {item: string, deadline: string, status: "addressed"|"pending"|"action_needed", detail: string}
+- "morocco_digest": string (detailed paragraph about Morocco-specific developments this week)
+- "trend_analysis": array of {trend: string, direction: "rising"|"stable"|"declining", description: string} (3-5 key trends observed this week)
+- "outlook": string (3-4 sentences on the week ahead — compliance deadlines first, then operational, then market)
+- "key_takeaways": array of 3-5 strings (concise takeaways ordered by priority)
+- "recommendations": array of {priority: "urgent"|"important"|"monitor", action: string, rationale: string} (3-5 items)
 - "report_json": object with keys "critical", "regulatory", "trade", "disruptions", "general", "morocco" — each containing an array of entry IDs from the news that belong to that section
 
 Return ONLY valid JSON. No markdown.`;
@@ -92,7 +123,14 @@ Return ONLY valid JSON. No markdown.`;
         week_number: weekNumber,
         year: now.getFullYear(),
         executive_summary: report.executive_summary,
-        report_json: report.report_json || {},
+        report_json: {
+          ...(report.report_json || {}),
+          top_events: report.top_events || [],
+          compliance_tracker: report.compliance_tracker || [],
+          morocco_digest: report.morocco_digest || null,
+          trend_analysis: report.trend_analysis || [],
+          week_comparison,
+        },
         risk_score: report.risk_score || null,
         outlook: report.outlook || null,
         key_takeaways: report.key_takeaways || [],
@@ -102,7 +140,7 @@ Return ONLY valid JSON. No markdown.`;
       if (error) throw new Error(`DB error: ${error.message}`);
 
       return new Response(
-        JSON.stringify({ success: true, type: "weekly", week: weekNumber, risk_score: report.risk_score }),
+        JSON.stringify({ success: true, type: "weekly", week: weekNumber, risk_score: report.risk_score, items: news.length }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
