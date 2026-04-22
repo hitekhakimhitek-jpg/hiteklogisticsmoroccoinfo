@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { priorityConfig, categoryLabels, regionLabels, categoryColors } from "@/types/freight";
+import { priorityConfig, getContentTag, tagStyles } from "@/types/freight";
 import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ export function TopStories({ entries }: Props) {
         {sorted.slice(0, 15).map((entry, i) => {
           const isExpanded = expandedId === entry.id;
           const pConfig = priorityConfig[entry.priority];
+          const tag = getContentTag(entry);
           return (
             <motion.div
               key={entry.id}
@@ -43,11 +44,8 @@ export function TopStories({ entries }: Props) {
                   <h3 className="text-sm font-semibold text-card-foreground leading-tight">{entry.headline}</h3>
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{entry.summary}</p>
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${categoryColors[entry.category]}`}>
-                      {categoryLabels[entry.category]}
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                      {regionLabels[entry.region]}
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${tagStyles[tag]}`}>
+                      {tag}
                     </span>
                     <span className="text-[10px] text-muted-foreground ml-auto">{entry.published_date}</span>
                   </div>
@@ -73,10 +71,9 @@ export function TopStories({ entries }: Props) {
                         </div>
                       )}
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>Source: {entry.source_name}</span>
                         {entry.source_url && (
                           <a href={entry.source_url} className="text-secondary hover:underline inline-flex items-center gap-1">
-                            Visit <ExternalLink className="w-3 h-3" />
+                            Read full article <ExternalLink className="w-3 h-3" />
                           </a>
                         )}
                       </div>
