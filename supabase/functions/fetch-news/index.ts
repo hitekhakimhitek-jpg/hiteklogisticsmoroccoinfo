@@ -84,6 +84,40 @@ const GENERAL_QUERIES = [
   "freight forwarding OR shipping disruption OR port congestion OR customs regulation OR supply chain OR tariff update OR Suez Canal OR Mediterranean shipping",
 ];
 
+function normalizeSearchItems(result: any): any[] {
+  if (Array.isArray(result?.data)) return result.data;
+  if (Array.isArray(result?.results)) return result.results;
+  if (Array.isArray(result?.web)) return result.web;
+  if (Array.isArray(result?.data?.data)) return result.data.data;
+  if (Array.isArray(result?.data?.web)) return result.data.web;
+  return [];
+}
+
+async function touchLatestRefresh(supabase: any, checkedAt: string) {
+  const { data: latest } = await supabase
+    .from("news_entries")
+    .select("id")
+    .order("fetched_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!latest?.id) return null;
+
+  const { data, error } = await supabase
+    .from("news_entries")
+    .update({ fetched_date: checkedAt })
+    .eq("id", latest.id)
+    .select("fetched_date")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to refresh fetched_date metadata:", error);
+    return null;
+  }
+
+  return data?.fetched_date ?? checkedAt;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
