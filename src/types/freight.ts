@@ -82,3 +82,37 @@ export const categoryColors: Record<Category, string> = {
   market: "bg-success/10 text-success border-success/20",
   general: "bg-muted text-muted-foreground border-muted",
 };
+
+/**
+ * User-friendly content tags shown on dashboard cards.
+ * Maps internal category + priority into a clean, scannable label.
+ */
+export type ContentTag = "Regulatory" | "Customs" | "Port" | "Logistics" | "Market" | "Alert";
+
+export function getContentTag(entry: { category: Category; priority: Priority; action_required?: boolean }): ContentTag {
+  if (entry.priority === "critical" || entry.action_required) return "Alert";
+  switch (entry.category) {
+    case "regulation":
+    case "compliance":
+      return "Regulatory";
+    case "port":
+      return "Port";
+    case "trade":
+      return "Customs";
+    case "weather":
+      return "Logistics";
+    case "market":
+      return "Market";
+    default:
+      return "Logistics";
+  }
+}
+
+export const tagStyles: Record<ContentTag, string> = {
+  Alert: "bg-destructive/10 text-destructive border-destructive/30",
+  Regulatory: "bg-secondary/10 text-secondary border-secondary/30",
+  Port: "bg-accent/10 text-accent border-accent/30",
+  Customs: "bg-primary/10 text-primary border-primary/30",
+  Logistics: "bg-warning/10 text-warning border-warning/30",
+  Market: "bg-success/10 text-success border-success/30",
+};

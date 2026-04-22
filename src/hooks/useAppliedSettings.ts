@@ -38,19 +38,15 @@ export function useAppliedSettings(): AppSettings {
   return settings;
 }
 
-/** Filter a list of news entries by the applied settings */
 /** Filter a list of news entries by the applied settings.
- *  NOTE: source_name filtering is intentionally skipped on the client side
- *  because scraped articles often have raw domain names that don't match
- *  the human-readable source labels. Source filtering is handled at fetch time
- *  by the edge function instead. */
+ *  - Region filtering now happens on the dashboard via the inline region selector,
+ *    so we no longer enforce focusRegions here.
+ *  - source_name filtering is also skipped on the client side because scraped articles
+ *    often expose raw domains that don't match human-readable labels; that filter
+ *    happens at fetch time inside the edge function. */
 export function filterBySettings<T extends { region: string; priority: string }>(
   entries: T[],
   settings: AppSettings
 ): T[] {
-  return entries.filter((e) => {
-    if (!settings.focusRegions.includes(e.region)) return false;
-    if (!settings.priorityFilter.includes(e.priority)) return false;
-    return true;
-  });
+  return entries.filter((e) => settings.priorityFilter.includes(e.priority));
 }

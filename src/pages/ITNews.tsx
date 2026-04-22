@@ -128,9 +128,6 @@ const ITNews = () => {
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                       {regionLabels[entry.region as keyof typeof regionLabels]}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {entry.source_name}
-                    </span>
                     <span className="text-[10px] text-muted-foreground ml-auto font-medium">
                       {entry.published_date}
                     </span>

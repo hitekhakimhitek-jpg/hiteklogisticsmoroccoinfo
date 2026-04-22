@@ -211,10 +211,9 @@ const ArchivePage = () => {
                           </div>
                         )}
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>Source: {entry.source_name}</span>
                           {entry.source_url && (
                             <a href={entry.source_url} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline inline-flex items-center gap-1">
-                              Visit <ExternalLink className="w-3 h-3" />
+                              Read full article <ExternalLink className="w-3 h-3" />
                             </a>
                           )}
                         </div>
