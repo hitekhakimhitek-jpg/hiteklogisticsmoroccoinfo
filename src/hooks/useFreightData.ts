@@ -121,10 +121,18 @@ export async function triggerFetchNews(enabledSources?: string[]) {
     const err = await resp.json();
     throw new Error(err.error || "Failed to fetch news");
   }
-  return resp.json();
+  return resp.json() as Promise<{
+    success: boolean;
+    count: number;
+    status?: "success" | "checked_no_new" | "failed";
+    message?: string;
+    checked_at?: string;
+    updated_at?: string | null;
+    sources?: string[];
+  }>;
 }
 
-export async function triggerGenerateReport(type: "weekly" | "monthly") {
+export async function triggerGenerateReport(type: "weekly" | "monthly", region?: string) {
   const resp = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-report`,
     {
@@ -133,7 +141,7 @@ export async function triggerGenerateReport(type: "weekly" | "monthly") {
         "Content-Type": "application/json",
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       },
-      body: JSON.stringify({ type }),
+      body: JSON.stringify({ type, region }),
     }
   );
   if (!resp.ok) {
