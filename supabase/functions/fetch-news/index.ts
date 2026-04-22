@@ -486,8 +486,16 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
 
     if (newRows.length === 0) {
       console.log("All articles already exist in database, skipping insert");
+      const updatedAt = await touchLatestRefresh(supabase, checkedAt);
       return new Response(
-        JSON.stringify({ success: true, count: 0, message: "No new unique articles found" }),
+        JSON.stringify({
+          success: true,
+          status: "checked_no_new",
+          count: 0,
+          checked_at: checkedAt,
+          updated_at: updatedAt,
+          message: "Refresh successful: 0 new entries",
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -534,7 +542,11 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
     return new Response(
       JSON.stringify({
         success: true,
+        status: "success",
         count: data.length,
+        checked_at: checkedAt,
+        updated_at: data[0]?.fetched_date ?? checkedAt,
+        message: data.length > 0 ? "Refresh successful" : "Refresh successful: 0 new entries",
         sources: [...new Set(rows.map((r: any) => r.source_name))],
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -542,7 +554,12 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
   } catch (e) {
     console.error("fetch-news error:", e);
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      JSON.stringify({
+        success: false,
+        status: "failed",
+        error: e instanceof Error ? e.message : "Unknown error",
+        message: "Refresh failed",
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
