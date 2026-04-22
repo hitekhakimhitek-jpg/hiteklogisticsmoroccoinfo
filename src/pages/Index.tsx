@@ -1,5 +1,4 @@
 import { useNewsEntries, triggerFetchNews, useLastUpdated } from "@/hooks/useFreightData";
-
 import { TopStories } from "@/components/dashboard/TopStories";
 import { MoroccoFocus, ComplianceWatchlist } from "@/components/dashboard/QuickPanels";
 import { DailyDigest } from "@/components/dashboard/DailyDigest";
@@ -10,6 +9,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppliedSettings, filterBySettings } from "@/hooks/useAppliedSettings";
+import { REGION_OPTIONS, isEntryRelevantToRegion, useRegionContext } from "@/contexts/RegionContext";
 import {
   Select,
   SelectContent,
@@ -18,54 +18,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type RegionKey = "all" | "morocco" | "europe" | "asia" | "americas" | "africa" | "middle_east" | "global";
-
-const REGION_OPTIONS: { value: RegionKey; label: string }[] = [
-  { value: "all", label: "All regions" },
-  { value: "morocco", label: "Morocco" },
-  { value: "europe", label: "Europe" },
-  { value: "africa", label: "Africa" },
-  { value: "middle_east", label: "Middle East" },
-  { value: "asia", label: "Asia" },
-  { value: "americas", label: "Americas" },
-  { value: "global", label: "Global" },
-];
-
-/**
- * Internal mapping: when the user picks a region on the dashboard,
- * we forward an explicit list of sources to the scraping function so it
- * focuses on the relevant outlets. This is intentionally invisible to the user.
- */
-const REGION_SOURCE_HINTS: Partial<Record<RegionKey, string[]>> = {
-  morocco: [
-    "ADII Morocco (Customs)", "ADiL (Customs Clearance)", "PortNet Morocco",
-    "Tanger Med", "Tanger Med Port Authority",
-    "L'Economiste", "La Vie Éco", "Médias24", "Finances News Hebdo", "Le Matin",
-    "DGI Maroc (Impôts)", "Bank Al-Maghrib", "SGG (Bulletin Officiel)",
-    "Voice of the Independent",
-  ],
-  europe: [
-    "Lloyd's List", "The Loadstar", "Hellenic Shipping News",
-    "European Commission", "UNECE", "Splash247",
-  ],
-  global: [
-    "FreightWaves", "JOC", "Lloyd's List", "Splash247", "gCaptain",
-    "Seatrade Maritime", "IMO", "IATA", "WTO", "WCO", "FIATA", "ICC (Incoterms)",
-    "UNCTAD", "World Bank",
-  ],
-};
-
 const Dashboard = () => {
   const { data: rawEntries, isLoading } = useNewsEntries({ limit: 50 });
   const { data: lastUpdated } = useLastUpdated();
   const appliedSettings = useAppliedSettings();
-  const [region, setRegion] = useState<RegionKey>("all");
+  const { region, setRegion, activeSources } = useRegionContext();
 
   const newsEntries = useMemo(() => {
     if (!rawEntries) return undefined;
     const filteredBySettings = filterBySettings(rawEntries, appliedSettings);
-    if (region === "all") return filteredBySettings;
-    return filteredBySettings.filter((e) => e.region === region);
+    return filteredBySettings.filter((e) => isEntryRelevantToRegion(e.region, region));
   }, [rawEntries, appliedSettings, region]);
 
   const [isFetching, setIsFetching] = useState(false);
@@ -74,17 +36,18 @@ const Dashboard = () => {
   const handleFetchNews = async () => {
     setIsFetching(true);
     try {
-      // Prefer region-targeted sources when available; otherwise fall back to all enabled sources.
-      const sources =
-        region !== "all" && REGION_SOURCE_HINTS[region]
-          ? REGION_SOURCE_HINTS[region]!
-          : appliedSettings.newsSourcesEnabled;
-      const result = await triggerFetchNews(sources);
-      toast.success(`Fetched ${result.count} new intelligence entries`);
+      const result = await triggerFetchNews(activeSources);
+      if (result.status === "success") {
+        toast.success(result.count > 0 ? "Refresh successful" : "Refresh successful: 0 new entries");
+      } else if (result.status === "checked_no_new") {
+        toast.success("Refresh successful: 0 new entries");
+      } else {
+        toast.error(result.message || "Refresh failed");
+      }
       queryClient.invalidateQueries({ queryKey: ["news_entries"] });
       queryClient.invalidateQueries({ queryKey: ["news_entries_last_updated"] });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to fetch news");
+      toast.error(e instanceof Error ? `Refresh failed — ${e.message}` : "Refresh failed");
     } finally {
       setIsFetching(false);
     }
@@ -109,7 +72,7 @@ const Dashboard = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={region} onValueChange={(v) => setRegion(v as RegionKey)}>
+          <Select value={region} onValueChange={(v) => setRegion(v as typeof region)}>
             <SelectTrigger className="h-9 w-[160px] text-sm">
               <SelectValue placeholder="Region" />
             </SelectTrigger>
