@@ -84,6 +84,23 @@ export function useMonthlySummaries() {
   });
 }
 
+/** Returns the most recent fetched_date across news_entries (for the freshness indicator). */
+export function useLastUpdated() {
+  return useQuery({
+    queryKey: ["news_entries_last_updated"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("news_entries")
+        .select("fetched_date")
+        .order("fetched_date", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return data?.[0]?.fetched_date ?? null;
+    },
+    refetchInterval: 60_000,
+  });
+}
+
 export async function triggerFetchNews(enabledSources?: string[]) {
   const body: Record<string, unknown> = {};
   if (enabledSources && enabledSources.length > 0) {
