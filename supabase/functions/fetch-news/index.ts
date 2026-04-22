@@ -162,7 +162,8 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const today = new Date().toISOString().split("T")[0];
+    const checkedAt = new Date().toISOString();
+    const today = checkedAt.split("T")[0];
 
     // Step 1: Scrape real news using Firecrawl Search API
     console.log("Scraping real news from web sources...");
@@ -198,7 +199,7 @@ serve(async (req) => {
         }
 
         const result = await response.json();
-        const items = result.data || result.results || [];
+        const items = normalizeSearchItems(result);
         return items.map((item: any) => ({
           title: item.title || item.metadata?.title || "",
           url: item.url || item.metadata?.sourceURL || "",
@@ -289,8 +290,16 @@ serve(async (req) => {
     console.log(`Found ${articlesToProcess.length} validated articles from web scraping`);
 
     if (articlesToProcess.length === 0) {
+      const updatedAt = await touchLatestRefresh(supabase, checkedAt);
       return new Response(
-        JSON.stringify({ success: true, count: 0, message: "No new articles with valid URLs found" }),
+        JSON.stringify({
+          success: true,
+          status: "checked_no_new",
+          count: 0,
+          checked_at: checkedAt,
+          updated_at: updatedAt,
+          message: "Refresh successful: 0 new entries",
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -412,8 +421,16 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
 
     if (!Array.isArray(classifiedEntries) || classifiedEntries.length === 0) {
       console.log("AI filtered out all articles as irrelevant");
+      const updatedAt = await touchLatestRefresh(supabase, checkedAt);
       return new Response(
-        JSON.stringify({ success: true, count: 0, message: "No freight-relevant articles found" }),
+        JSON.stringify({
+          success: true,
+          status: "checked_no_new",
+          count: 0,
+          checked_at: checkedAt,
+          updated_at: updatedAt,
+          message: "Refresh successful: 0 new entries",
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
