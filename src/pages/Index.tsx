@@ -83,8 +83,8 @@ const Dashboard = () => {
       toast.success(`Fetched ${result.count} new intelligence entries`);
       queryClient.invalidateQueries({ queryKey: ["news_entries"] });
       queryClient.invalidateQueries({ queryKey: ["news_entries_last_updated"] });
-    } catch (e: any) {
-      toast.error(e.message || "Failed to fetch news");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to fetch news");
     } finally {
       setIsFetching(false);
     }
