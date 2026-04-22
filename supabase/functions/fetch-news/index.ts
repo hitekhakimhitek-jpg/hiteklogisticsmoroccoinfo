@@ -84,6 +84,40 @@ const GENERAL_QUERIES = [
   "freight forwarding OR shipping disruption OR port congestion OR customs regulation OR supply chain OR tariff update OR Suez Canal OR Mediterranean shipping",
 ];
 
+function normalizeSearchItems(result: any): any[] {
+  if (Array.isArray(result?.data)) return result.data;
+  if (Array.isArray(result?.results)) return result.results;
+  if (Array.isArray(result?.web)) return result.web;
+  if (Array.isArray(result?.data?.data)) return result.data.data;
+  if (Array.isArray(result?.data?.web)) return result.data.web;
+  return [];
+}
+
+async function touchLatestRefresh(supabase: any, checkedAt: string) {
+  const { data: latest } = await supabase
+    .from("news_entries")
+    .select("id")
+    .order("fetched_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!latest?.id) return null;
+
+  const { data, error } = await supabase
+    .from("news_entries")
+    .update({ fetched_date: checkedAt })
+    .eq("id", latest.id)
+    .select("fetched_date")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to refresh fetched_date metadata:", error);
+    return null;
+  }
+
+  return data?.fetched_date ?? checkedAt;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -128,7 +162,8 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const today = new Date().toISOString().split("T")[0];
+    const checkedAt = new Date().toISOString();
+    const today = checkedAt.split("T")[0];
 
     // Step 1: Scrape real news using Firecrawl Search API
     console.log("Scraping real news from web sources...");
@@ -164,7 +199,7 @@ serve(async (req) => {
         }
 
         const result = await response.json();
-        const items = result.data || result.results || [];
+        const items = normalizeSearchItems(result);
         return items.map((item: any) => ({
           title: item.title || item.metadata?.title || "",
           url: item.url || item.metadata?.sourceURL || "",
@@ -255,8 +290,16 @@ serve(async (req) => {
     console.log(`Found ${articlesToProcess.length} validated articles from web scraping`);
 
     if (articlesToProcess.length === 0) {
+      const updatedAt = await touchLatestRefresh(supabase, checkedAt);
       return new Response(
-        JSON.stringify({ success: true, count: 0, message: "No new articles with valid URLs found" }),
+        JSON.stringify({
+          success: true,
+          status: "checked_no_new",
+          count: 0,
+          checked_at: checkedAt,
+          updated_at: updatedAt,
+          message: "Refresh successful: 0 new entries",
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -378,8 +421,16 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
 
     if (!Array.isArray(classifiedEntries) || classifiedEntries.length === 0) {
       console.log("AI filtered out all articles as irrelevant");
+      const updatedAt = await touchLatestRefresh(supabase, checkedAt);
       return new Response(
-        JSON.stringify({ success: true, count: 0, message: "No freight-relevant articles found" }),
+        JSON.stringify({
+          success: true,
+          status: "checked_no_new",
+          count: 0,
+          checked_at: checkedAt,
+          updated_at: updatedAt,
+          message: "Refresh successful: 0 new entries",
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -435,8 +486,16 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
 
     if (newRows.length === 0) {
       console.log("All articles already exist in database, skipping insert");
+      const updatedAt = await touchLatestRefresh(supabase, checkedAt);
       return new Response(
-        JSON.stringify({ success: true, count: 0, message: "No new unique articles found" }),
+        JSON.stringify({
+          success: true,
+          status: "checked_no_new",
+          count: 0,
+          checked_at: checkedAt,
+          updated_at: updatedAt,
+          message: "Refresh successful: 0 new entries",
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -483,7 +542,11 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
     return new Response(
       JSON.stringify({
         success: true,
+        status: "success",
         count: data.length,
+        checked_at: checkedAt,
+        updated_at: data[0]?.fetched_date ?? checkedAt,
+        message: data.length > 0 ? "Refresh successful" : "Refresh successful: 0 new entries",
         sources: [...new Set(rows.map((r: any) => r.source_name))],
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -491,7 +554,12 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
   } catch (e) {
     console.error("fetch-news error:", e);
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      JSON.stringify({
+        success: false,
+        status: "failed",
+        error: e instanceof Error ? e.message : "Unknown error",
+        message: "Refresh failed",
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
