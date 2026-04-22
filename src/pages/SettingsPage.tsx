@@ -1,13 +1,9 @@
-import { Settings as SettingsIcon, RotateCcw, Globe, Bell, Database, Rss, RefreshCw } from "lucide-react";
+import { Settings as SettingsIcon, RotateCcw, Bell, Rss, RefreshCw } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
-import { regionLabels } from "@/types/freight";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider";
 import SettingsLoader from "@/components/SettingsLoader";
 
-const ALL_REGIONS = Object.keys(regionLabels) as (keyof typeof regionLabels)[];
 const ALL_PRIORITIES = ["critical", "important", "informational"] as const;
 const ALL_SOURCES = [
   "Lloyd's List", "FreightWaves", "The Loadstar", "JOC",
@@ -27,13 +23,6 @@ const ALL_SOURCES = [
 
 const SettingsPage = () => {
   const { pending, updatePending, applySettings, resetSettings, isUpdating, isDirty } = useSettings();
-
-  const toggleRegion = (region: string) => {
-    const current = pending.focusRegions;
-    updatePending({
-      focusRegions: current.includes(region) ? current.filter((r) => r !== region) : [...current, region],
-    });
-  };
 
   const togglePriority = (p: string) => {
     const current = pending.priorityFilter;
@@ -94,26 +83,6 @@ const SettingsPage = () => {
           </div>
         )}
 
-        {/* Focus Regions */}
-        <Section icon={Globe} title="Focus Regions">
-          <p className="text-sm text-muted-foreground mb-3">Select regions to prioritize in your intelligence feed.</p>
-          <div className="flex flex-wrap gap-2">
-            {ALL_REGIONS.map((region) => {
-              const active = pending.focusRegions.includes(region);
-              return (
-                <button key={region} onClick={() => toggleRegion(region)}
-                  className={`px-3 py-1.5 text-xs rounded-full border transition-colors font-medium ${
-                    active
-                      ? "bg-secondary text-secondary-foreground border-secondary"
-                      : "bg-card text-muted-foreground border-border hover:border-secondary/50"
-                  }`}>
-                  {regionLabels[region]}
-                </button>
-              );
-            })}
-          </div>
-        </Section>
-
         {/* Priority Filter */}
         <Section icon={Bell} title="Notifications & Priority">
           <div className="space-y-4">
@@ -144,43 +113,6 @@ const SettingsPage = () => {
                 <p className="text-xs text-muted-foreground">Show toast notifications for critical news</p>
               </div>
               <Switch checked={pending.notifyOnCritical} onCheckedChange={(v) => updatePending({ notifyOnCritical: v })} />
-            </div>
-          </div>
-        </Section>
-
-        {/* Automation */}
-        <Section icon={Database} title="Automation & Retention">
-          <div className="space-y-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-card-foreground">Auto-fetch news (daily)</p>
-                <p className="text-xs text-muted-foreground">Automatically pull intelligence via scheduled jobs</p>
-              </div>
-              <Switch checked={pending.autoFetchNews} onCheckedChange={(v) => updatePending({ autoFetchNews: v })} />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-card-foreground">Auto-generate reports</p>
-                <p className="text-xs text-muted-foreground">Generate weekly/monthly reports automatically</p>
-              </div>
-              <Switch checked={pending.autoGenerateReports} onCheckedChange={(v) => updatePending({ autoGenerateReports: v })} />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-card-foreground">Archive retention</p>
-                <Badge variant="outline" className="text-xs">{pending.archiveRetention} days</Badge>
-              </div>
-              <Slider
-                value={[pending.archiveRetention]}
-                onValueChange={([v]) => updatePending({ archiveRetention: v })}
-                min={30}
-                max={365}
-                step={30}
-                className="max-w-sm"
-              />
-              <div className="flex justify-between max-w-sm text-[10px] text-muted-foreground mt-1">
-                <span>30 days</span><span>1 year</span>
-              </div>
             </div>
           </div>
         </Section>
