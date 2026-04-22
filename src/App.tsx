@@ -14,31 +14,34 @@ import ITNews from "./pages/ITNews";
 import ChatAssistant from "./pages/ChatAssistant";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
+import { RegionProvider } from "@/contexts/RegionContext";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route element={<Layout />}>
-            <Route path="/" element={<Index />} />
-            <Route path="/regulatory" element={<RegulatoryChanges />} />
-            <Route path="/finance-regulation" element={<FinanceRegulation />} />
-            <Route path="/it-news" element={<ITNews />} />
-            <Route path="/weekly" element={<WeeklyReport />} />
-            <Route path="/monthly" element={<MonthlySummary />} />
-            <Route path="/archive" element={<ArchivePage />} />
-            <Route path="/chat" element={<ChatAssistant />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+    <RegionProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route path="/" element={<Index />} />
+              <Route path="/regulatory" element={<RegulatoryChanges />} />
+              <Route path="/finance-regulation" element={<FinanceRegulation />} />
+              <Route path="/it-news" element={<ITNews />} />
+              <Route path="/weekly" element={<WeeklyReport />} />
+              <Route path="/monthly" element={<MonthlySummary />} />
+              <Route path="/archive" element={<ArchivePage />} />
+              <Route path="/chat" element={<ChatAssistant />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Route>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </RegionProvider>
   </QueryClientProvider>
 );
 
