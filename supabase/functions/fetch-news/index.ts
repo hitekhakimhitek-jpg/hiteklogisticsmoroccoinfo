@@ -84,6 +84,40 @@ const GENERAL_QUERIES = [
   "freight forwarding OR shipping disruption OR port congestion OR customs regulation OR supply chain OR tariff update OR Suez Canal OR Mediterranean shipping",
 ];
 
+// Morocco-specific search queries — always run when "Médias24" or any Morocco
+// source is enabled, or when no source filter is provided. These catch
+// time-sensitive civic events (manifestations, grèves, blocages) that
+// generic logistics queries miss but which directly affect freight ops.
+const MOROCCO_PRIORITY_QUERIES = [
+  "site:medias24.com manifestation OR grève OR protestation",
+  "site:medias24.com port OR douane OR transport OR logistique",
+  "site:medias24.com blocage OR sit-in OR fermeture",
+  "Maroc manifestation OR grève OR sit-in mai 2026",
+  "Maroc Casablanca Rabat Tanger manifestation transport port",
+  "Morocco protest strike port logistics disruption",
+  "site:lematin.ma manifestation OR grève OR transport",
+  "site:economiste.com manifestation OR grève OR douane",
+];
+
+// Sources we hit DIRECTLY (homepage scrape + map) rather than relying only on
+// Firecrawl /search. These are critical Morocco sources for a freight forwarder.
+const MOROCCO_DIRECT_SOURCES: Array<{ name: string; homepage: string; mapKeywords?: string[] }> = [
+  { name: "Médias24", homepage: "https://medias24.com", mapKeywords: ["manifestation", "grève", "port", "douane", "transport"] },
+  { name: "L'Economiste", homepage: "https://www.leconomiste.com", mapKeywords: ["douane", "port", "transport", "logistique"] },
+  { name: "Le Matin", homepage: "https://lematin.ma", mapKeywords: ["manifestation", "port", "douane", "transport"] },
+  { name: "PortNet Morocco", homepage: "https://www.portnet.ma", mapKeywords: ["actualité", "circulaire"] },
+  { name: "Tanger Med", homepage: "https://www.tangermed.ma", mapKeywords: ["news", "port"] },
+  { name: "ADII Morocco (Customs)", homepage: "https://www.douane.gov.ma", mapKeywords: ["circulaire", "tarif"] },
+  { name: "SGG (Bulletin Officiel)", homepage: "https://www.sgg.gov.ma", mapKeywords: ["bulletin", "loi", "décret"] },
+];
+
+const MOROCCO_SOURCE_NAMES = new Set([
+  "Médias24", "L'Economiste", "Le Matin", "PortNet Morocco", "Tanger Med",
+  "Tanger Med Port Authority", "ADII Morocco (Customs)", "ADiL (Customs Clearance)",
+  "SGG (Bulletin Officiel)", "Bank Al-Maghrib", "DGI Maroc (Impôts)",
+  "La Vie Éco", "Finances News Hebdo",
+]);
+
 function normalizeSearchItems(result: any): any[] {
   if (Array.isArray(result?.data)) return result.data;
   if (Array.isArray(result?.results)) return result.results;
@@ -91,6 +125,80 @@ function normalizeSearchItems(result: any): any[] {
   if (Array.isArray(result?.data?.data)) return result.data.data;
   if (Array.isArray(result?.data?.web)) return result.data.web;
   return [];
+}
+
+// Filter article-like URLs out of a /map links list: drop homepages, tag
+// pages, category indexes, and known non-article paths.
+function looksLikeArticleUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    const path = u.pathname;
+    if (!path || path === "/" || path.length < 8) return false;
+    if (/\/(tag|category|categorie|auteur|author|page|search|recherche)\//i.test(path)) return false;
+    if (/\.(jpg|jpeg|png|gif|pdf|mp4|css|js|xml)$/i.test(path)) return false;
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length < 2) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Direct Firecrawl /map call for a domain, optionally filtered by keyword.
+async function firecrawlMapDomain(
+  apiKey: string,
+  homepage: string,
+  search?: string,
+): Promise<string[]> {
+  try {
+    const resp = await fetch("https://api.firecrawl.dev/v2/map", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ url: homepage, search, limit: 30, includeSubdomains: false }),
+    });
+    if (!resp.ok) {
+      console.error(`Firecrawl /map failed for ${homepage} (${search ?? "no kw"}):`, resp.status, await resp.text());
+      return [];
+    }
+    const data = await resp.json();
+    const links: string[] =
+      (Array.isArray(data?.links) && data.links) ||
+      (Array.isArray(data?.data?.links) && data.data.links) ||
+      (Array.isArray(data?.data) && data.data) ||
+      [];
+    return links.filter(looksLikeArticleUrl);
+  } catch (e) {
+    console.error(`/map exception for ${homepage}:`, e);
+    return [];
+  }
+}
+
+// Direct Firecrawl /scrape call returning a normalized article shape.
+async function firecrawlScrapeUrl(
+  apiKey: string,
+  url: string,
+): Promise<{ title: string; url: string; description: string; markdown: string } | null> {
+  try {
+    const resp = await fetch("https://api.firecrawl.dev/v2/scrape", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true }),
+    });
+    if (!resp.ok) {
+      console.error(`Firecrawl /scrape failed for ${url}:`, resp.status);
+      return null;
+    }
+    const data = await resp.json();
+    const markdown: string = data?.markdown || data?.data?.markdown || "";
+    const metadata = data?.metadata || data?.data?.metadata || {};
+    const title: string = metadata.title || markdown.split("\n").find((l: string) => l.startsWith("# "))?.replace(/^#\s*/, "") || "";
+    const description: string = metadata.description || markdown.substring(0, 240).replace(/\n/g, " ");
+    if (!title) return null;
+    return { title, url, description, markdown: markdown.substring(0, 1500) };
+  } catch (e) {
+    console.error(`/scrape exception for ${url}:`, e);
+    return null;
+  }
 }
 
 async function touchLatestRefresh(supabase: any, checkedAt: string) {
@@ -143,11 +251,13 @@ serve(async (req) => {
 
     // Build search queries based on enabled sources
     const searchQueries: string[] = [];
+    let runMoroccoPriority = false;
     if (enabledSources) {
       for (const source of enabledSources) {
         if (SOURCE_QUERIES[source]) {
           searchQueries.push(...SOURCE_QUERIES[source]);
         }
+        if (MOROCCO_SOURCE_NAMES.has(source)) runMoroccoPriority = true;
       }
       // Always include general queries
       searchQueries.push(...GENERAL_QUERIES);
@@ -158,7 +268,13 @@ serve(async (req) => {
         searchQueries.push(...queries);
       }
       searchQueries.push(...GENERAL_QUERIES);
+      runMoroccoPriority = true;
       console.log(`Using all ${searchQueries.length} queries (no source filter)`);
+    }
+
+    if (runMoroccoPriority) {
+      searchQueries.push(...MOROCCO_PRIORITY_QUERIES);
+      console.log(`Added ${MOROCCO_PRIORITY_QUERIES.length} Morocco priority queries`);
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -186,7 +302,7 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             query,
-            limit: 5,
+            limit: 7,
             tbs: "qdr:w",
             scrapeOptions: { formats: ["markdown"] },
           }),
@@ -216,6 +332,51 @@ serve(async (req) => {
     const results = await Promise.all(searchPromises);
     for (const batch of results) {
       allArticles.push(...batch);
+    }
+
+    // ===== Direct Morocco-source scraping (homepage map + scrape top N) =====
+    // This catches time-sensitive items (manifestations, blocages) that
+    // /search misses. Runs whenever a Morocco source is in scope.
+    if (runMoroccoPriority) {
+      console.log(`Running direct scrape for ${MOROCCO_DIRECT_SOURCES.length} Morocco priority sources...`);
+      const directScrapeStats: Record<string, { mapped: number; scraped: number }> = {};
+
+      for (const src of MOROCCO_DIRECT_SOURCES) {
+        directScrapeStats[src.name] = { mapped: 0, scraped: 0 };
+        try {
+          // Run /map for each keyword in parallel; keywords like "manifestation"
+          // surface civic-event articles that pure logistics queries miss.
+          const keywords = src.mapKeywords && src.mapKeywords.length > 0 ? src.mapKeywords : [undefined as unknown as string];
+          const mapResults = await Promise.all(
+            keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
+          );
+          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 10);
+          directScrapeStats[src.name].mapped = candidateUrls.length;
+
+          // Scrape top 5 per source (raised budget per acceptance criteria #3).
+          const toScrape = candidateUrls.slice(0, 5);
+          const scraped = await Promise.all(
+            toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
+          );
+          for (const art of scraped) {
+            if (!art) continue;
+            allArticles.push({
+              title: art.title,
+              url: art.url,
+              description: art.description,
+              source: src.name,
+              markdown: art.markdown,
+            });
+            directScrapeStats[src.name].scraped += 1;
+          }
+        } catch (e) {
+          console.error(`Direct scrape failed for ${src.name}:`, e);
+        }
+      }
+
+      for (const [name, s] of Object.entries(directScrapeStats)) {
+        console.log(`[direct-scrape] ${name}: mapped=${s.mapped}, scraped=${s.scraped}`);
+      }
     }
 
     // Filter out generic/non-article URLs
@@ -307,7 +468,7 @@ serve(async (req) => {
     // Step 2: Use AI to categorize and filter
     console.log("Using AI to categorize and filter articles...");
 
-    const articleSummaries = articlesToProcess.slice(0, 20).map((a, i) =>
+    const articleSummaries = articlesToProcess.slice(0, 30).map((a, i) =>
       `[${i}] TITLE: ${a.title}\nURL: ${a.url}\nSOURCE: ${a.source}\nDESCRIPTION: ${a.description}\nCONTENT PREVIEW: ${a.markdown?.substring(0, 200) || "N/A"}`
     ).join("\n\n---\n\n");
 
@@ -334,6 +495,13 @@ These MUST be flagged as "critical" with action_required=true. The suggested_act
 
 **2nd PRIORITY — DIRECT OPERATIONAL IMPACT:**
 Information concretely affecting day-to-day workflows, costs, timelines, or procedures (port closures, route changes, rate surcharges, weather disruptions, carrier schedule changes). Flag as "important".
+
+**1B PRIORITY — MOROCCAN CIVIC DISRUPTIONS (manifestations, grèves, blocages):**
+Any article reporting a manifestation, protestation, grève, sit-in, blocage, fermeture de route, port closure, road closure, or general strike in Morocco — regardless of category. These directly disrupt freight flows (port access, customs offices, trucking).
+These MUST be flagged as "critical" with action_required=true and region="morocco".
+The suggested_action should describe operational mitigation (e.g. reroute trucks, anticipate customs delay, contact clients about delivery windows).
+Set category="port" if it affects port/road access, "compliance" if it affects customs operations, otherwise "general".
+Look for these French/Arabic-derived keywords in title or content: manifestation, manif, grève, greve, sit-in, blocage, protestation, protest, fermeture, occupation, mobilisation. Also recognize specific Moroccan locations (Casablanca, Rabat, Tanger, Agadir, Tanger Med, Casa Port).
 
 **3rd PRIORITY — EVERYTHING ELSE:**
 Market stories, trend narratives, speculative forecasts, benchmarking data (LPI, UNCTAD reports), general commentary. Flag as "informational" unless they contain concrete operational triggers.
@@ -463,24 +631,25 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
 
     // Deduplicate against existing DB entries
     const existingUrls = new Set<string>();
-    const existingHeadlines = new Set<string>();
 
+    // Only dedupe on exact source_url, and only against the last 14 days,
+    // so genuinely new items with similar headlines still get inserted.
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const { data: existing } = await supabase
       .from("news_entries")
-      .select("source_url, headline")
+      .select("source_url")
+      .gte("published_date", fourteenDaysAgo)
       .order("published_date", { ascending: false })
-      .limit(500);
+      .limit(2000);
 
     if (existing) {
       for (const e of existing) {
         if (e.source_url) existingUrls.add(e.source_url);
-        existingHeadlines.add(e.headline.toLowerCase().trim());
       }
     }
 
     const newRows = rows.filter((r: any) => {
       if (r.source_url && existingUrls.has(r.source_url)) return false;
-      if (existingHeadlines.has(r.headline.toLowerCase().trim())) return false;
       return true;
     });
 
@@ -505,6 +674,24 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
     if (error) {
       console.error("DB insert error:", error);
       throw new Error(`Database error: ${error.message}`);
+    }
+
+    // Per-source counts: how many we scraped vs how many ended up inserted.
+    // This makes it obvious in logs whether Médias24 (etc.) actually
+    // returned anything on a given run.
+    const scrapedBySource: Record<string, number> = {};
+    for (const a of articlesToProcess) {
+      const s = a.source || "Unknown";
+      scrapedBySource[s] = (scrapedBySource[s] || 0) + 1;
+    }
+    const insertedBySource: Record<string, number> = {};
+    for (const r of newRows) {
+      const s = r.source_name || "Unknown";
+      insertedBySource[s] = (insertedBySource[s] || 0) + 1;
+    }
+    const allSources = new Set([...Object.keys(scrapedBySource), ...Object.keys(insertedBySource)]);
+    for (const s of allSources) {
+      console.log(`[per-source] ${s}: ${scrapedBySource[s] || 0} scraped, ${insertedBySource[s] || 0} inserted`);
     }
 
     // Cleanup old entries (>90 days)
@@ -585,7 +772,8 @@ function extractSourceName(url: string): string {
       "portnet.ma": "PortNet Morocco",
       "mcinet.gov.ma": "Ministry of Trade Morocco",
       "lematin.ma": "Le Matin",
-      "medias24.com": "Medias24",
+      "medias24.com": "Médias24",
+      "leconomiste.com": "L'Economiste",
       "fnh.ma": "Finances News Hebdo",
       "economiste.com": "L'Economiste",
       "lavieeco.com": "La Vie Éco",
