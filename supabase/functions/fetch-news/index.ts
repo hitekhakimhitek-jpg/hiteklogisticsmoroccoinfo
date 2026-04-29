@@ -251,11 +251,13 @@ serve(async (req) => {
 
     // Build search queries based on enabled sources
     const searchQueries: string[] = [];
+    let runMoroccoPriority = false;
     if (enabledSources) {
       for (const source of enabledSources) {
         if (SOURCE_QUERIES[source]) {
           searchQueries.push(...SOURCE_QUERIES[source]);
         }
+        if (MOROCCO_SOURCE_NAMES.has(source)) runMoroccoPriority = true;
       }
       // Always include general queries
       searchQueries.push(...GENERAL_QUERIES);
@@ -266,7 +268,13 @@ serve(async (req) => {
         searchQueries.push(...queries);
       }
       searchQueries.push(...GENERAL_QUERIES);
+      runMoroccoPriority = true;
       console.log(`Using all ${searchQueries.length} queries (no source filter)`);
+    }
+
+    if (runMoroccoPriority) {
+      searchQueries.push(...MOROCCO_PRIORITY_QUERIES);
+      console.log(`Added ${MOROCCO_PRIORITY_QUERIES.length} Morocco priority queries`);
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -294,7 +302,7 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             query,
-            limit: 5,
+            limit: 7,
             tbs: "qdr:w",
             scrapeOptions: { formats: ["markdown"] },
           }),
@@ -324,6 +332,51 @@ serve(async (req) => {
     const results = await Promise.all(searchPromises);
     for (const batch of results) {
       allArticles.push(...batch);
+    }
+
+    // ===== Direct Morocco-source scraping (homepage map + scrape top N) =====
+    // This catches time-sensitive items (manifestations, blocages) that
+    // /search misses. Runs whenever a Morocco source is in scope.
+    if (runMoroccoPriority) {
+      console.log(`Running direct scrape for ${MOROCCO_DIRECT_SOURCES.length} Morocco priority sources...`);
+      const directScrapeStats: Record<string, { mapped: number; scraped: number }> = {};
+
+      for (const src of MOROCCO_DIRECT_SOURCES) {
+        directScrapeStats[src.name] = { mapped: 0, scraped: 0 };
+        try {
+          // Run /map for each keyword in parallel; keywords like "manifestation"
+          // surface civic-event articles that pure logistics queries miss.
+          const keywords = src.mapKeywords && src.mapKeywords.length > 0 ? src.mapKeywords : [undefined as unknown as string];
+          const mapResults = await Promise.all(
+            keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
+          );
+          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 10);
+          directScrapeStats[src.name].mapped = candidateUrls.length;
+
+          // Scrape top 5 per source (raised budget per acceptance criteria #3).
+          const toScrape = candidateUrls.slice(0, 5);
+          const scraped = await Promise.all(
+            toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
+          );
+          for (const art of scraped) {
+            if (!art) continue;
+            allArticles.push({
+              title: art.title,
+              url: art.url,
+              description: art.description,
+              source: src.name,
+              markdown: art.markdown,
+            });
+            directScrapeStats[src.name].scraped += 1;
+          }
+        } catch (e) {
+          console.error(`Direct scrape failed for ${src.name}:`, e);
+        }
+      }
+
+      for (const [name, s] of Object.entries(directScrapeStats)) {
+        console.log(`[direct-scrape] ${name}: mapped=${s.mapped}, scraped=${s.scraped}`);
+      }
     }
 
     // Filter out generic/non-article URLs
