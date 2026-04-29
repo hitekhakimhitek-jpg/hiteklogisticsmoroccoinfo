@@ -84,6 +84,40 @@ const GENERAL_QUERIES = [
   "freight forwarding OR shipping disruption OR port congestion OR customs regulation OR supply chain OR tariff update OR Suez Canal OR Mediterranean shipping",
 ];
 
+// Morocco-specific search queries — always run when "Médias24" or any Morocco
+// source is enabled, or when no source filter is provided. These catch
+// time-sensitive civic events (manifestations, grèves, blocages) that
+// generic logistics queries miss but which directly affect freight ops.
+const MOROCCO_PRIORITY_QUERIES = [
+  "site:medias24.com manifestation OR grève OR protestation",
+  "site:medias24.com port OR douane OR transport OR logistique",
+  "site:medias24.com blocage OR sit-in OR fermeture",
+  "Maroc manifestation OR grève OR sit-in mai 2026",
+  "Maroc Casablanca Rabat Tanger manifestation transport port",
+  "Morocco protest strike port logistics disruption",
+  "site:lematin.ma manifestation OR grève OR transport",
+  "site:economiste.com manifestation OR grève OR douane",
+];
+
+// Sources we hit DIRECTLY (homepage scrape + map) rather than relying only on
+// Firecrawl /search. These are critical Morocco sources for a freight forwarder.
+const MOROCCO_DIRECT_SOURCES: Array<{ name: string; homepage: string; mapKeywords?: string[] }> = [
+  { name: "Médias24", homepage: "https://medias24.com", mapKeywords: ["manifestation", "grève", "port", "douane", "transport"] },
+  { name: "L'Economiste", homepage: "https://www.leconomiste.com", mapKeywords: ["douane", "port", "transport", "logistique"] },
+  { name: "Le Matin", homepage: "https://lematin.ma", mapKeywords: ["manifestation", "port", "douane", "transport"] },
+  { name: "PortNet Morocco", homepage: "https://www.portnet.ma", mapKeywords: ["actualité", "circulaire"] },
+  { name: "Tanger Med", homepage: "https://www.tangermed.ma", mapKeywords: ["news", "port"] },
+  { name: "ADII Morocco (Customs)", homepage: "https://www.douane.gov.ma", mapKeywords: ["circulaire", "tarif"] },
+  { name: "SGG (Bulletin Officiel)", homepage: "https://www.sgg.gov.ma", mapKeywords: ["bulletin", "loi", "décret"] },
+];
+
+const MOROCCO_SOURCE_NAMES = new Set([
+  "Médias24", "L'Economiste", "Le Matin", "PortNet Morocco", "Tanger Med",
+  "Tanger Med Port Authority", "ADII Morocco (Customs)", "ADiL (Customs Clearance)",
+  "SGG (Bulletin Officiel)", "Bank Al-Maghrib", "DGI Maroc (Impôts)",
+  "La Vie Éco", "Finances News Hebdo",
+]);
+
 function normalizeSearchItems(result: any): any[] {
   if (Array.isArray(result?.data)) return result.data;
   if (Array.isArray(result?.results)) return result.results;
@@ -91,6 +125,80 @@ function normalizeSearchItems(result: any): any[] {
   if (Array.isArray(result?.data?.data)) return result.data.data;
   if (Array.isArray(result?.data?.web)) return result.data.web;
   return [];
+}
+
+// Filter article-like URLs out of a /map links list: drop homepages, tag
+// pages, category indexes, and known non-article paths.
+function looksLikeArticleUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    const path = u.pathname;
+    if (!path || path === "/" || path.length < 8) return false;
+    if (/\/(tag|category|categorie|auteur|author|page|search|recherche)\//i.test(path)) return false;
+    if (/\.(jpg|jpeg|png|gif|pdf|mp4|css|js|xml)$/i.test(path)) return false;
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length < 2) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Direct Firecrawl /map call for a domain, optionally filtered by keyword.
+async function firecrawlMapDomain(
+  apiKey: string,
+  homepage: string,
+  search?: string,
+): Promise<string[]> {
+  try {
+    const resp = await fetch("https://api.firecrawl.dev/v2/map", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ url: homepage, search, limit: 30, includeSubdomains: false }),
+    });
+    if (!resp.ok) {
+      console.error(`Firecrawl /map failed for ${homepage} (${search ?? "no kw"}):`, resp.status, await resp.text());
+      return [];
+    }
+    const data = await resp.json();
+    const links: string[] =
+      (Array.isArray(data?.links) && data.links) ||
+      (Array.isArray(data?.data?.links) && data.data.links) ||
+      (Array.isArray(data?.data) && data.data) ||
+      [];
+    return links.filter(looksLikeArticleUrl);
+  } catch (e) {
+    console.error(`/map exception for ${homepage}:`, e);
+    return [];
+  }
+}
+
+// Direct Firecrawl /scrape call returning a normalized article shape.
+async function firecrawlScrapeUrl(
+  apiKey: string,
+  url: string,
+): Promise<{ title: string; url: string; description: string; markdown: string } | null> {
+  try {
+    const resp = await fetch("https://api.firecrawl.dev/v2/scrape", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true }),
+    });
+    if (!resp.ok) {
+      console.error(`Firecrawl /scrape failed for ${url}:`, resp.status);
+      return null;
+    }
+    const data = await resp.json();
+    const markdown: string = data?.markdown || data?.data?.markdown || "";
+    const metadata = data?.metadata || data?.data?.metadata || {};
+    const title: string = metadata.title || markdown.split("\n").find((l: string) => l.startsWith("# "))?.replace(/^#\s*/, "") || "";
+    const description: string = metadata.description || markdown.substring(0, 240).replace(/\n/g, " ");
+    if (!title) return null;
+    return { title, url, description, markdown: markdown.substring(0, 1500) };
+  } catch (e) {
+    console.error(`/scrape exception for ${url}:`, e);
+    return null;
+  }
 }
 
 async function touchLatestRefresh(supabase: any, checkedAt: string) {
