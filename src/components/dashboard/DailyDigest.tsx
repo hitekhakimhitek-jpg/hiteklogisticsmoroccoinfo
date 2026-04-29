@@ -8,17 +8,21 @@ interface Props {
 }
 
 export function DailyDigest({ entries }: Props) {
-  // Pick the 5 most important items for today's executive view
+  // Pick the most important items for today's executive view.
+  // Always surface critical items (including regulatory) — even if more than 3.
   const order = { critical: 0, important: 1, informational: 2 } as const;
-  const top5 = [...entries]
-    .sort((a, b) => {
-      if (a.action_required !== b.action_required) return a.action_required ? -1 : 1;
-      if (order[a.priority] !== order[b.priority]) return order[a.priority] - order[b.priority];
-      return b.published_date.localeCompare(a.published_date);
-    })
-    .slice(0, 5);
+  const sorted = [...entries].sort((a, b) => {
+    if (a.action_required !== b.action_required) return a.action_required ? -1 : 1;
+    if (order[a.priority] !== order[b.priority]) return order[a.priority] - order[b.priority];
+    return b.published_date.localeCompare(a.published_date);
+  });
 
-  if (top5.length === 0) return null;
+  const criticals = sorted.filter((e) => e.priority === "critical");
+  const topItems = criticals.length >= 3
+    ? criticals
+    : [...criticals, ...sorted.filter((e) => e.priority !== "critical")].slice(0, 3);
+
+  if (topItems.length === 0) return null;
 
   return (
     <motion.div
@@ -32,12 +36,12 @@ export function DailyDigest({ entries }: Props) {
           <Sparkles className="w-4 h-4 text-secondary" />
         </div>
         <div>
-          <h2 className="text-sm font-semibold text-card-foreground">Daily Executive Digest</h2>
-          <p className="text-[11px] text-muted-foreground">The 5 updates that matter most today</p>
+          <h2 className="text-sm font-semibold text-card-foreground">Top News</h2>
+          <p className="text-[11px] text-muted-foreground">The updates that matter most today</p>
         </div>
       </div>
       <ol className="space-y-2.5">
-        {top5.map((entry, i) => {
+        {topItems.map((entry, i) => {
           const tag = getContentTag(entry);
           return (
             <li key={entry.id} className="flex items-start gap-3">
