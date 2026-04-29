@@ -631,24 +631,25 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
 
     // Deduplicate against existing DB entries
     const existingUrls = new Set<string>();
-    const existingHeadlines = new Set<string>();
 
+    // Only dedupe on exact source_url, and only against the last 14 days,
+    // so genuinely new items with similar headlines still get inserted.
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const { data: existing } = await supabase
       .from("news_entries")
-      .select("source_url, headline")
+      .select("source_url")
+      .gte("published_date", fourteenDaysAgo)
       .order("published_date", { ascending: false })
-      .limit(500);
+      .limit(2000);
 
     if (existing) {
       for (const e of existing) {
         if (e.source_url) existingUrls.add(e.source_url);
-        existingHeadlines.add(e.headline.toLowerCase().trim());
       }
     }
 
     const newRows = rows.filter((r: any) => {
       if (r.source_url && existingUrls.has(r.source_url)) return false;
-      if (existingHeadlines.has(r.headline.toLowerCase().trim())) return false;
       return true;
     });
 
@@ -673,6 +674,24 @@ Return ONLY a valid JSON array of the relevant articles. No markdown fences, no 
     if (error) {
       console.error("DB insert error:", error);
       throw new Error(`Database error: ${error.message}`);
+    }
+
+    // Per-source counts: how many we scraped vs how many ended up inserted.
+    // This makes it obvious in logs whether Médias24 (etc.) actually
+    // returned anything on a given run.
+    const scrapedBySource: Record<string, number> = {};
+    for (const a of articlesToProcess) {
+      const s = a.source || "Unknown";
+      scrapedBySource[s] = (scrapedBySource[s] || 0) + 1;
+    }
+    const insertedBySource: Record<string, number> = {};
+    for (const r of newRows) {
+      const s = r.source_name || "Unknown";
+      insertedBySource[s] = (insertedBySource[s] || 0) + 1;
+    }
+    const allSources = new Set([...Object.keys(scrapedBySource), ...Object.keys(insertedBySource)]);
+    for (const s of allSources) {
+      console.log(`[per-source] ${s}: ${scrapedBySource[s] || 0} scraped, ${insertedBySource[s] || 0} inserted`);
     }
 
     // Cleanup old entries (>90 days)
