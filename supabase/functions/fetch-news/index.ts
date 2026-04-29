@@ -468,7 +468,7 @@ serve(async (req) => {
     // Step 2: Use AI to categorize and filter
     console.log("Using AI to categorize and filter articles...");
 
-    const articleSummaries = articlesToProcess.slice(0, 20).map((a, i) =>
+    const articleSummaries = articlesToProcess.slice(0, 30).map((a, i) =>
       `[${i}] TITLE: ${a.title}\nURL: ${a.url}\nSOURCE: ${a.source}\nDESCRIPTION: ${a.description}\nCONTENT PREVIEW: ${a.markdown?.substring(0, 200) || "N/A"}`
     ).join("\n\n---\n\n");
 
@@ -495,6 +495,13 @@ These MUST be flagged as "critical" with action_required=true. The suggested_act
 
 **2nd PRIORITY — DIRECT OPERATIONAL IMPACT:**
 Information concretely affecting day-to-day workflows, costs, timelines, or procedures (port closures, route changes, rate surcharges, weather disruptions, carrier schedule changes). Flag as "important".
+
+**1B PRIORITY — MOROCCAN CIVIC DISRUPTIONS (manifestations, grèves, blocages):**
+Any article reporting a manifestation, protestation, grève, sit-in, blocage, fermeture de route, port closure, road closure, or general strike in Morocco — regardless of category. These directly disrupt freight flows (port access, customs offices, trucking).
+These MUST be flagged as "critical" with action_required=true and region="morocco".
+The suggested_action should describe operational mitigation (e.g. reroute trucks, anticipate customs delay, contact clients about delivery windows).
+Set category="port" if it affects port/road access, "compliance" if it affects customs operations, otherwise "general".
+Look for these French/Arabic-derived keywords in title or content: manifestation, manif, grève, greve, sit-in, blocage, protestation, protest, fermeture, occupation, mobilisation. Also recognize specific Moroccan locations (Casablanca, Rabat, Tanger, Agadir, Tanger Med, Casa Port).
 
 **3rd PRIORITY — EVERYTHING ELSE:**
 Market stories, trend narratives, speculative forecasts, benchmarking data (LPI, UNCTAD reports), general commentary. Flag as "informational" unless they contain concrete operational triggers.
