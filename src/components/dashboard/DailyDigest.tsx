@@ -11,9 +11,14 @@ export function DailyDigest({ entries }: Props) {
   // Pick the most important items for today's executive view.
   // Always surface critical items (including regulatory) — even if more than 3.
   const order = { critical: 0, important: 1, informational: 2 } as const;
+  // Regulatory/compliance items are the most consequential for a freight forwarder,
+  // so rank them above other categories at the same priority level.
+  const isRegulatory = (e: DbNewsEntry) =>
+    e.category === "regulation" || e.category === "compliance";
   const sorted = [...entries].sort((a, b) => {
     if (a.action_required !== b.action_required) return a.action_required ? -1 : 1;
     if (order[a.priority] !== order[b.priority]) return order[a.priority] - order[b.priority];
+    if (isRegulatory(a) !== isRegulatory(b)) return isRegulatory(a) ? -1 : 1;
     return b.published_date.localeCompare(a.published_date);
   });
 
