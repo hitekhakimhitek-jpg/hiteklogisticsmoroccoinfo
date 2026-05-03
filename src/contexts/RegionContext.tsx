@@ -95,7 +95,6 @@ const IT_SOURCES = [
 ];
 
 const REGION_SOURCE_MAP: Record<RegionKey, string[]> = {
-  all: [...new Set([...CORE_LOGISTICS_SOURCES, ...MOROCCO_SOURCES, ...IT_SOURCES])],
   morocco: [...new Set([...CORE_LOGISTICS_SOURCES, ...MOROCCO_SOURCES, ...IT_SOURCES])],
   europe: [...new Set([
     ...CORE_LOGISTICS_SOURCES,
@@ -120,6 +119,22 @@ const REGION_SOURCE_MAP: Record<RegionKey, string[]> = {
     "JOC",
     "World Bank",
     "ITC",
+    ...IT_SOURCES,
+  ])],
+  north_america: [...new Set([
+    ...CORE_LOGISTICS_SOURCES,
+    "FreightWaves",
+    "JOC",
+    ...IT_SOURCES,
+  ])],
+  south_america: [...new Set([
+    ...CORE_LOGISTICS_SOURCES,
+    "World Bank",
+    "ITC",
+    ...IT_SOURCES,
+  ])],
+  oceania: [...new Set([
+    ...CORE_LOGISTICS_SOURCES,
     ...IT_SOURCES,
   ])],
   africa: [...new Set([
