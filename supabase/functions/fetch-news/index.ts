@@ -497,77 +497,113 @@ serve(async (req) => {
       `[${i}] TITLE: ${a.title}\nURL: ${a.url}\nSOURCE: ${a.source}\nDESCRIPTION: ${a.description}\nCONTENT PREVIEW: ${a.markdown?.substring(0, 200) || "N/A"}`
     ).join("\n\n---\n\n");
 
-    const classifyPrompt = `You are a freight forwarding intelligence analyst specializing in Morocco and global logistics.
+    const classifyPrompt = `You are a freight forwarding intelligence analyst. The dashboard serves a Morocco-based freight forwarder but covers worldwide events that affect international trade flows.
 
-I have scraped the following real news articles from the web. Your job is to:
-1. FILTER: Only keep articles relevant to freight forwarding, shipping, logistics, trade, customs, port operations, dangerous goods, compliance, or supply chain for a company operating from Morocco.
-2. CATEGORIZE each relevant article.
-3. ASSESS priority and impact using the CONTENT PRIORITIZATION HIERARCHY below.
+Your job, for each article below:
+1. FILTER: keep only items relevant to freight forwarding, shipping, logistics, trade, customs, ports, dangerous goods, compliance, infrastructure, finance regulation affecting trade, or enterprise IT/cybersecurity for logistics. Drop everything else.
+2. CLASSIFY GEOGRAPHY based on what the article is ACTUALLY about — never default to Morocco.
+3. CLASSIFY CONTENT TYPE and assign an impact score for a freight forwarder.
 
-CONTENT PRIORITIZATION HIERARCHY (apply strictly):
+============================================================
+GEOGRAPHIC CLASSIFICATION — STRICT RULES
+============================================================
+Use evidence in the title, body, source, and named entities (countries, cities, ports, authorities). Decide what AREA IS ACTUALLY AFFECTED, not the publisher's nationality.
 
-**ABSOLUTE #1 PRIORITY — NEW LAWS, RULES, CIRCULARS & BINDING CHANGES:**
-Any article about a NEW law, regulation, circular, decree, rule change, tariff update, or policy change that a freight forwarding company MUST act upon. Examples:
-- New ADII customs circular or tariff change
-- New IMO regulation or IMDG Code amendment
-- New IATA DGR requirement
-- New WCO HS classification update
-- New Incoterms interpretation or ICC ruling
-- New EU/Morocco trade agreement clause
-- New port authority rule or procedure change
-- Any government decree affecting import/export
-These MUST be flagged as "critical" with action_required=true. The suggested_action must explain exactly what the company needs to do to comply.
+Output these fields:
+- "geographic_scope": "morocco" | "region" | "global"
+- "primary_region": one of ${JSON.stringify(REGIONS)}
+- "affected_regions": array of region slugs (subset of primary_region values, excluding "americas" alias)
+- "affected_countries": array of country names or ISO codes mentioned as actually affected
+- "display_regions": array — where the item must appear in the UI
+- "region_confidence": number 0-1
+- "classification_notes": one short sentence explaining the geographic decision
 
-**2nd PRIORITY — DIRECT OPERATIONAL IMPACT:**
-Information concretely affecting day-to-day workflows, costs, timelines, or procedures (port closures, route changes, rate surcharges, weather disruptions, carrier schedule changes). Flag as "important".
+RULES for display_regions:
+A. Morocco-specific (Moroccan authorities, ports, customs, cities, Bank Al-Maghrib, ADII, Tanger Med, Casablanca, Rabat, Tangier, Agadir, etc.):
+   geographic_scope="morocco", primary_region="morocco", display_regions=["morocco"]
+B. Region-specific (one continent / major region affected):
+   geographic_scope="region", primary_region=<that region>, display_regions=[<that region>, "global"]
+   Examples:
+   - Brussels / EU / European Commission / Germany / France / Rotterdam / Antwerp → europe
+   - Shanghai / China / Singapore / India / ASEAN / Japan / Korea → asia
+   - Dubai / UAE / Saudi / Qatar / Red Sea / Houthi / Iran → middle_east
+   - US / FMC / CBP / Washington / California / New York → north_america
+   - Canada / Mexico → north_america
+   - Brazil / Argentina / Chile / Peru → south_america
+   - Australia / New Zealand → oceania
+   - South Africa / Nigeria / Kenya / Egypt / Algeria / Tunisia (non-Morocco Africa) → africa
+C. Truly global (worldwide regulation, global shipping, multiple continents, IMO/IATA/WTO/WCO worldwide rules, global supply chain, sanctions affecting many markets):
+   geographic_scope="global", primary_region="global", display_regions=["global"]
+D. NEVER default to Morocco. If the strongest evidence points elsewhere, use that region. If genuinely uncertain, fall back to "global", NOT Morocco.
+E. A Moroccan publisher reporting on a strike in France → primary_region="europe", display_regions=["europe","global"]. The publisher's nationality is NOT the affected geography.
+F. Region-only items (Europe, Asia, etc.) MUST also include "global" in display_regions so they appear in the Global filter.
+G. Morocco-only items must NOT include "global" in display_regions.
 
-**1B PRIORITY — MOROCCAN CIVIC DISRUPTIONS (manifestations, grèves, blocages):**
-Any article reporting a manifestation, protestation, grève, sit-in, blocage, fermeture de route, port closure, road closure, or general strike in Morocco — regardless of category. These directly disrupt freight flows (port access, customs offices, trucking).
-These MUST be flagged as "critical" with action_required=true and region="morocco".
-The suggested_action should describe operational mitigation (e.g. reroute trucks, anticipate customs delay, contact clients about delivery windows).
-Set category="port" if it affects port/road access, "compliance" if it affects customs operations, otherwise "general".
-Look for these French/Arabic-derived keywords in title or content: manifestation, manif, grève, greve, sit-in, blocage, protestation, protest, fermeture, occupation, mobilisation. Also recognize specific Moroccan locations (Casablanca, Rabat, Tanger, Agadir, Tanger Med, Casa Port).
-
-**3rd PRIORITY — EVERYTHING ELSE:**
-Market stories, trend narratives, speculative forecasts, benchmarking data (LPI, UNCTAD reports), general commentary. Flag as "informational" unless they contain concrete operational triggers.
-
-CRITICAL CATEGORIZATION RULES FOR "regulation" AND "compliance":
-- category "regulation" = ONLY for articles that explicitly announce or describe a NEW law, decree, government rule, official circular, or binding legislative change. The article must reference a specific legal instrument (law number, decree, circular, directive, amendment, etc.).
-- category "compliance" = ONLY for articles about official enforcement updates, binding classification changes, DG requirement changes, or mandatory procedural changes issued by an authority.
-- If an article is general news, market commentary, industry trends, opinion, analysis, or a story ABOUT regulations without announcing a specific new rule — it is NOT "regulation" or "compliance". Categorize it as "trade", "market", "port", "weather", or "general" instead.
-- NEVER put general freight news, market updates, port congestion stories, or shipping disruption reports under "regulation" or "compliance".
-- When in doubt, do NOT use "regulation" or "compliance". Only use them when the article explicitly references a specific new/changed law or binding rule.
-
-For each relevant article, return a JSON object with these fields:
-- "index": number (the [index] from the input)
-- "headline": string (use the original title, cleaned up if needed)
-- "summary": string (2-3 sentences summarizing the news and its relevance to freight)
-- "category": one of ${JSON.stringify(CATEGORIES)}
-  - Use "regulation" for new laws, decrees, government rules
-  - Use "compliance" for circulars, enforcement updates, classification changes, DG requirements
-- "region": one of ${JSON.stringify(REGIONS)} (based on where the event/regulation applies)
+============================================================
+CONTENT TYPE & PRIORITY
+============================================================
+- "content_type": one of ${JSON.stringify(CONTENT_TYPES)}
+- "category": one of ${JSON.stringify(CATEGORIES)} (legacy, keep consistent with content_type)
 - "priority": one of ${JSON.stringify(PRIORITIES)}
-  - "critical": New binding law/rule/circular that requires company action
-  - "important": Significant indirect impact on operations, costs, or procedures
-  - "informational": Good to know, no immediate action needed
-- "impact_likelihood": "high" | "medium" | "low"
-- "impact_assessment": string (1-2 sentences on how this affects a Morocco-based freight forwarder)
-- "action_required": boolean (MUST be true for any new law/rule/circular)
-- "suggested_action": string or null (for action_required=true: what exactly must the company do to comply)
+- "impact_score": integer 0-100 — how much this disrupts a freight forwarder's operations
 
-IMPORTANT RULES:
-- ONLY include articles that are ACTUALLY relevant to freight forwarding / logistics / trade
-- New laws and regulations are the MOST IMPORTANT content — never skip them
-- Discard generic news, opinion pieces, or irrelevant content
-- Deprioritize or OMIT items that are speculative or unlikely to have a tangible effect
-- Be accurate with categorization — don't guess
-- Today's date is ${today}
+Content type guidance:
+- regulatory_change: NEW binding law/decree/circular/directive
+- customs_update: customs procedural changes, ADII / CBP / EU customs notices
+- compliance: enforcement updates, mandatory procedural changes
+- sanctions_trade_restriction: trade restrictions, sanctions, export controls, embargoes
+- port_disruption: port closure, congestion, weather closure of port/route, road closure
+- strike_protest_manifestation: manifestation, grève, sit-in, blocage, strike, protest disrupting freight flows
+- carrier_air_sea_road: carrier schedule changes, blank sailings, airline route changes, trucker actions
+- freight_market_update: rate movements, capacity reports, demand outlook
+- finance_regulation: fiscal policy, central bank rule, banking regulation MATERIALLY affecting trade
+- infrastructure: new port, terminal, rail, corridor, major investment
+- technology_it_news: enterprise IT, cybersecurity, ERP/WMS/TMS, cloud advisories
+- general_news: anything else still relevant
 
-Here are the scraped articles:
+Priority guidance:
+- critical: new binding law/rule the company must act on, OR a confirmed disruption (strike, port closure, sanctions taking effect)
+- important: significant indirect impact on costs/timelines/procedures
+- informational: good to know, no action needed
+
+Impact score guidance (0-100):
+- 80-100: regulatory_change with action required, or confirmed major disruption (port closed, strike on)
+- 60-79: customs/compliance change, sanctions, large carrier disruption, multi-country effect
+- 40-59: market shift, regional infrastructure, finance reg with trade impact
+- 20-39: minor operational item, IT advisory affecting enterprise
+- 0-19: general news, soft market commentary
+
+============================================================
+OUTPUT
+============================================================
+Return ONLY a JSON array. One object per kept article, with these fields:
+{
+  "index": number,
+  "headline": string,
+  "summary": string (2-3 sentences),
+  "category": one of ${JSON.stringify(CATEGORIES)},
+  "content_type": one of ${JSON.stringify(CONTENT_TYPES)},
+  "primary_region": one of ${JSON.stringify(REGIONS)},
+  "affected_regions": string[],
+  "affected_countries": string[],
+  "display_regions": string[],
+  "geographic_scope": "morocco" | "region" | "global",
+  "region_confidence": number 0-1,
+  "classification_notes": string,
+  "priority": one of ${JSON.stringify(PRIORITIES)},
+  "impact_score": number 0-100,
+  "impact_assessment": string,
+  "action_required": boolean,
+  "suggested_action": string | null
+}
+
+Today's date is ${today}.
+
+Articles:
 
 ${articleSummaries}
 
-Return ONLY a valid JSON array of the relevant articles. No markdown fences, no explanation.`;
+Return ONLY the JSON array. No markdown fences, no commentary.`;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
