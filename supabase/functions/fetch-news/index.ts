@@ -614,7 +614,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [{ role: "user", content: classifyPrompt }],
-        max_tokens: 8000,
+        max_tokens: 12000,
       }),
     });
 
@@ -672,13 +672,56 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
 
     const rows = classifiedEntries.map((entry: any) => {
       const originalArticle = articlesToProcess[entry.index] || {};
+
+      // ----- Geographic classification -----
+      const validRegion = (r: any) =>
+        typeof r === "string" && REGIONS.includes(r) ? r : null;
+
+      const primaryRegion = validRegion(entry.primary_region) || validRegion(entry.region) || "global";
+
+      let displayRegions: string[] = Array.isArray(entry.display_regions)
+        ? entry.display_regions.filter((r: any) => typeof r === "string" && REGIONS.includes(r))
+        : [];
+
+      // Safety net: enforce the rules even if the model slipped.
+      if (displayRegions.length === 0) {
+        if (primaryRegion === "morocco") {
+          displayRegions = ["morocco"];
+        } else if (primaryRegion === "global") {
+          displayRegions = ["global"];
+        } else {
+          displayRegions = [primaryRegion, "global"];
+        }
+      }
+      // Region-specific items must also be in global; morocco-only must not.
+      if (primaryRegion === "morocco") {
+        displayRegions = ["morocco"];
+      } else if (primaryRegion !== "global" && !displayRegions.includes("global")) {
+        displayRegions.push("global");
+      }
+
+      // The DB region enum doesn't have an "all" — pick something it accepts.
+      // Map the new NA/SA/Oceania values straight through (enum was extended).
+      const dbRegion = primaryRegion;
+
+      const affectedCountries = Array.isArray(entry.affected_countries)
+        ? entry.affected_countries.filter((c: any) => typeof c === "string").slice(0, 20)
+        : [];
+
+      const contentType = typeof entry.content_type === "string" && CONTENT_TYPES.includes(entry.content_type)
+        ? entry.content_type
+        : "general_news";
+
+      const impactScore = Math.max(0, Math.min(100, Math.round(Number(entry.impact_score) || 0)));
+      const regionConfidence = Math.max(0, Math.min(1, Number(entry.region_confidence) || 0));
+
       return {
         headline: entry.headline || originalArticle.title,
         summary: entry.summary || originalArticle.description,
         source_name: originalArticle.source || extractSourceName(originalArticle.url || ""),
         source_url: originalArticle.url || null,
         category: CATEGORIES.includes(entry.category) ? entry.category : "general",
-        region: REGIONS.includes(entry.region) ? entry.region : "global",
+        region: dbRegion,
         priority: PRIORITIES.includes(entry.priority) ? entry.priority : "informational",
         impact_assessment: entry.impact_assessment || null,
         action_required: entry.action_required || false,
@@ -687,6 +730,14 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         week_number: weekNumber,
         month: now.getMonth() + 1,
         year: now.getFullYear(),
+        display_regions: displayRegions,
+        affected_countries: affectedCountries,
+        content_type: contentType,
+        impact_score: impactScore,
+        region_confidence: regionConfidence || null,
+        classification_notes: typeof entry.classification_notes === "string"
+          ? entry.classification_notes.slice(0, 500)
+          : null,
       };
     });
 
