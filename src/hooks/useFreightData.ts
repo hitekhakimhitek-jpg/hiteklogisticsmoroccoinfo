@@ -9,7 +9,17 @@ export type DbNewsEntry = {
   source_url: string | null;
   source_name: string;
   category: "regulation" | "weather" | "port" | "trade" | "compliance" | "market" | "general";
-  region: "morocco" | "europe" | "asia" | "americas" | "africa" | "middle_east" | "global";
+  region:
+    | "morocco"
+    | "europe"
+    | "asia"
+    | "americas"
+    | "africa"
+    | "middle_east"
+    | "north_america"
+    | "south_america"
+    | "oceania"
+    | "global";
   priority: "critical" | "important" | "informational";
   impact_assessment: string | null;
   action_required: boolean;
@@ -19,6 +29,12 @@ export type DbNewsEntry = {
   week_number: number;
   month: number;
   year: number;
+  display_regions?: string[] | null;
+  affected_countries?: string[] | null;
+  content_type?: string | null;
+  impact_score?: number | null;
+  region_confidence?: number | null;
+  classification_notes?: string | null;
 };
 
 export function useNewsEntries(filters?: {
