@@ -8,24 +8,27 @@ import {
 } from "react";
 
 export type RegionKey =
-  | "all"
   | "morocco"
   | "europe"
   | "asia"
   | "americas"
   | "africa"
   | "middle_east"
+  | "north_america"
+  | "south_america"
+  | "oceania"
   | "global";
 
 export const REGION_OPTIONS: { value: RegionKey; label: string }[] = [
-  { value: "all", label: "All regions" },
+  { value: "global", label: "Global" },
   { value: "morocco", label: "Morocco" },
   { value: "europe", label: "Europe" },
   { value: "africa", label: "Africa" },
   { value: "middle_east", label: "Middle East" },
   { value: "asia", label: "Asia" },
-  { value: "americas", label: "Americas" },
-  { value: "global", label: "Global" },
+  { value: "north_america", label: "North America" },
+  { value: "south_america", label: "South America" },
+  { value: "oceania", label: "Oceania" },
 ];
 
 const STORAGE_KEY = "freightpulse_active_region";
@@ -156,9 +159,28 @@ export function getRegionLabel(region: RegionKey): string {
 }
 
 export function isEntryRelevantToRegion(entryRegion: string, activeRegion: RegionKey): boolean {
-  if (activeRegion === "all") return true;
-  if (activeRegion === "global") return entryRegion === "global";
-  return entryRegion === activeRegion || entryRegion === "global";
+  // Legacy fallback used when display_regions isn't available on an entry.
+  // Prefer isEntryVisibleInRegion(entry, region) which uses display_regions.
+  if (activeRegion === "global") {
+    // Global filter shows everything except Morocco-only items.
+    return entryRegion !== "morocco";
+  }
+  return entryRegion === activeRegion;
+}
+
+/**
+ * Primary visibility check. Uses display_regions when present (set by the
+ * classifier), and falls back to legacy single-region matching otherwise.
+ */
+export function isEntryVisibleInRegion(
+  entry: { region: string; display_regions?: string[] | null },
+  activeRegion: RegionKey,
+): boolean {
+  const dr = entry.display_regions && entry.display_regions.length > 0
+    ? entry.display_regions
+    : null;
+  if (dr) return dr.includes(activeRegion);
+  return isEntryRelevantToRegion(entry.region, activeRegion);
 }
 
 export function RegionProvider({ children }: { children: ReactNode }) {
