@@ -201,7 +201,8 @@ export function isEntryVisibleInRegion(
 export function RegionProvider({ children }: { children: ReactNode }) {
   const [region, setRegion] = useState<RegionKey>(() => {
     const stored = localStorage.getItem(STORAGE_KEY) as RegionKey | null;
-    return stored ?? "global";
+    const valid = stored && REGION_OPTIONS.some((o) => o.value === stored);
+    return valid ? (stored as RegionKey) : "global";
   });
 
   useEffect(() => {
