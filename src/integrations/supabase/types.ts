@@ -62,19 +62,25 @@ export type Database = {
       news_entries: {
         Row: {
           action_required: boolean
+          affected_countries: string[]
           category: Database["public"]["Enums"]["news_category"]
           classification_metadata: Json | null
+          classification_notes: string | null
+          content_type: string | null
+          display_regions: string[]
           fetched_date: string
           finance_score: number | null
           full_content: string | null
           headline: string
           id: string
           impact_assessment: string | null
+          impact_score: number
           it_score: number | null
           month: number
           priority: Database["public"]["Enums"]["news_priority"]
           published_date: string
           region: Database["public"]["Enums"]["news_region"]
+          region_confidence: number | null
           source_name: string
           source_url: string | null
           suggested_action: string | null
@@ -84,19 +90,25 @@ export type Database = {
         }
         Insert: {
           action_required?: boolean
+          affected_countries?: string[]
           category?: Database["public"]["Enums"]["news_category"]
           classification_metadata?: Json | null
+          classification_notes?: string | null
+          content_type?: string | null
+          display_regions?: string[]
           fetched_date?: string
           finance_score?: number | null
           full_content?: string | null
           headline: string
           id?: string
           impact_assessment?: string | null
+          impact_score?: number
           it_score?: number | null
           month?: number
           priority?: Database["public"]["Enums"]["news_priority"]
           published_date?: string
           region?: Database["public"]["Enums"]["news_region"]
+          region_confidence?: number | null
           source_name?: string
           source_url?: string | null
           suggested_action?: string | null
@@ -106,19 +118,25 @@ export type Database = {
         }
         Update: {
           action_required?: boolean
+          affected_countries?: string[]
           category?: Database["public"]["Enums"]["news_category"]
           classification_metadata?: Json | null
+          classification_notes?: string | null
+          content_type?: string | null
+          display_regions?: string[]
           fetched_date?: string
           finance_score?: number | null
           full_content?: string | null
           headline?: string
           id?: string
           impact_assessment?: string | null
+          impact_score?: number
           it_score?: number | null
           month?: number
           priority?: Database["public"]["Enums"]["news_priority"]
           published_date?: string
           region?: Database["public"]["Enums"]["news_region"]
+          region_confidence?: number | null
           source_name?: string
           source_url?: string | null
           suggested_action?: string | null
@@ -192,6 +210,9 @@ export type Database = {
         | "africa"
         | "middle_east"
         | "global"
+        | "north_america"
+        | "south_america"
+        | "oceania"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -337,6 +358,9 @@ export const Constants = {
         "africa",
         "middle_east",
         "global",
+        "north_america",
+        "south_america",
+        "oceania",
       ],
     },
   },

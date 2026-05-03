@@ -1,5 +1,15 @@
 export type Category = "regulation" | "weather" | "port" | "trade" | "compliance" | "market" | "general";
-export type Region = "morocco" | "europe" | "asia" | "americas" | "africa" | "middle_east" | "global";
+export type Region =
+  | "morocco"
+  | "europe"
+  | "asia"
+  | "americas"
+  | "africa"
+  | "middle_east"
+  | "north_america"
+  | "south_america"
+  | "oceania"
+  | "global";
 export type Priority = "critical" | "important" | "informational";
 
 export interface NewsEntry {
@@ -64,6 +74,9 @@ export const regionLabels: Record<Region, string> = {
   americas: "Americas",
   africa: "Africa",
   middle_east: "Middle East",
+  north_america: "North America",
+  south_america: "South America",
+  oceania: "Oceania",
   global: "Global",
 };
 

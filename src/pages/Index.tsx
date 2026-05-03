@@ -9,7 +9,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppliedSettings, filterBySettings } from "@/hooks/useAppliedSettings";
-import { REGION_OPTIONS, isEntryRelevantToRegion, useRegionContext } from "@/contexts/RegionContext";
+import { REGION_OPTIONS, isEntryVisibleInRegion, useRegionContext } from "@/contexts/RegionContext";
 import {
   Select,
   SelectContent,
@@ -27,7 +27,7 @@ const Dashboard = () => {
   const newsEntries = useMemo(() => {
     if (!rawEntries) return undefined;
     const filteredBySettings = filterBySettings(rawEntries, appliedSettings);
-    return filteredBySettings.filter((e) => isEntryRelevantToRegion(e.region, region));
+    return filteredBySettings.filter((e) => isEntryVisibleInRegion(e, region));
   }, [rawEntries, appliedSettings, region]);
 
   const [isFetching, setIsFetching] = useState(false);
@@ -104,10 +104,10 @@ const Dashboard = () => {
           <RefreshCw className="w-10 h-10 text-muted-foreground mx-auto" />
           <div>
             <h2 className="text-lg font-semibold text-foreground mb-1">
-              {region === "all" ? "No intelligence data yet" : "No items for this region"}
+              {region === "global" ? "No intelligence data yet" : "No items for this region"}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {region === "all"
+              {region === "global"
                 ? 'Click "Fetch News" to pull the latest freight intelligence using AI.'
                 : "Try a different region or fetch new data."}
             </p>
