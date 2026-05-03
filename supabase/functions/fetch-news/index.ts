@@ -8,7 +8,32 @@ const corsHeaders = {
 };
 
 const CATEGORIES = ["regulation", "weather", "port", "trade", "compliance", "market", "general"];
-const REGIONS = ["morocco", "europe", "asia", "americas", "africa", "middle_east", "global"];
+const REGIONS = [
+  "morocco",
+  "europe",
+  "asia",
+  "africa",
+  "middle_east",
+  "north_america",
+  "south_america",
+  "americas",
+  "oceania",
+  "global",
+];
+const CONTENT_TYPES = [
+  "regulatory_change",
+  "customs_update",
+  "compliance",
+  "sanctions_trade_restriction",
+  "port_disruption",
+  "strike_protest_manifestation",
+  "freight_market_update",
+  "finance_regulation",
+  "technology_it_news",
+  "infrastructure",
+  "carrier_air_sea_road",
+  "general_news",
+];
 const PRIORITIES = ["critical", "important", "informational"];
 
 // Map source names → search queries. Only queries whose source name is in the enabled list will run.
