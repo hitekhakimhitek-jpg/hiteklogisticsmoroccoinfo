@@ -2,25 +2,15 @@ import { Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { getContentTag, tagStyles } from "@/types/freight";
 import type { DbNewsEntry } from "@/hooks/useFreightData";
+import { rankEntries } from "@/lib/ranking";
 
 interface Props {
   entries: DbNewsEntry[];
 }
 
 export function DailyDigest({ entries }: Props) {
-  // Pick the most important items for today's executive view.
-  // Always surface critical items (including regulatory) — even if more than 3.
-  const order = { critical: 0, important: 1, informational: 2 } as const;
-  // Regulatory/compliance items are the most consequential for a freight forwarder,
-  // so rank them above other categories at the same priority level.
-  const isRegulatory = (e: DbNewsEntry) =>
-    e.category === "regulation" || e.category === "compliance";
-  const sorted = [...entries].sort((a, b) => {
-    if (a.action_required !== b.action_required) return a.action_required ? -1 : 1;
-    if (order[a.priority] !== order[b.priority]) return order[a.priority] - order[b.priority];
-    if (isRegulatory(a) !== isRegulatory(b)) return isRegulatory(a) ? -1 : 1;
-    return b.published_date.localeCompare(a.published_date);
-  });
+  // Unified ranking: regulatory first, then operational disruptions, IT/general last.
+  const sorted = rankEntries(entries);
 
   const criticals = sorted.filter((e) => e.priority === "critical");
   const topItems = criticals.length >= 3

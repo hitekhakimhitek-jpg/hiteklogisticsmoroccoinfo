@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import type { DbNewsEntry } from "@/hooks/useFreightData";
+import { rankEntries } from "@/lib/ranking";
 
 interface Props {
   entries: DbNewsEntry[];
@@ -12,10 +13,7 @@ interface Props {
 export function TopStories({ entries }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const sorted = [...entries].sort((a, b) => {
-    const order = { critical: 0, important: 1, informational: 2 };
-    return order[a.priority] - order[b.priority];
-  });
+  const sorted = rankEntries(entries);
 
   return (
     <div className="space-y-3">
