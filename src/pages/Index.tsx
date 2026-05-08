@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppliedSettings, filterBySettings } from "@/hooks/useAppliedSettings";
 import { REGION_OPTIONS, isEntryVisibleInRegion, useRegionContext } from "@/contexts/RegionContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,7 @@ const Dashboard = () => {
   const { data: lastUpdated } = useLastUpdated();
   const appliedSettings = useAppliedSettings();
   const { region, setRegion, activeSources } = useRegionContext();
+  const { lang, toggle: toggleLang } = useLanguage();
 
   const newsEntries = useMemo(() => {
     if (!rawEntries) return undefined;
@@ -71,7 +73,7 @@ const Dashboard = () => {
             <FreshnessIndicator lastUpdated={lastUpdated} />
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-start gap-2">
           <Select value={region} onValueChange={(v) => setRegion(v as typeof region)}>
             <SelectTrigger className="h-9 w-[160px] text-sm">
               <SelectValue placeholder="Region" />
@@ -84,14 +86,23 @@ const Dashboard = () => {
               ))}
             </SelectContent>
           </Select>
-          <button
-            onClick={handleFetchNews}
-            disabled={isFetching}
-            className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/90 transition-colors disabled:opacity-50 font-medium"
-          >
-            {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            {isFetching ? "Fetching..." : "Fetch News"}
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={handleFetchNews}
+              disabled={isFetching}
+              className="flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/90 transition-colors disabled:opacity-50 font-medium"
+            >
+              {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              {isFetching ? "Fetching..." : "Fetch News"}
+            </button>
+            <button
+              onClick={toggleLang}
+              className="flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg border border-border bg-card text-card-foreground hover:bg-accent hover:text-accent-foreground transition-colors font-medium"
+              aria-label="Toggle language"
+            >
+              {lang === "en" ? "Français" : "English"}
+            </button>
+          </div>
         </div>
       </div>
 

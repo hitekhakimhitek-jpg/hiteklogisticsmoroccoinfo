@@ -15,11 +15,13 @@ import ChatAssistant from "./pages/ChatAssistant";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import { RegionProvider } from "@/contexts/RegionContext";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <LanguageProvider>
     <RegionProvider>
       <TooltipProvider>
         <Toaster />
@@ -42,6 +44,7 @@ const App = () => (
         </BrowserRouter>
       </TooltipProvider>
     </RegionProvider>
+    </LanguageProvider>
   </QueryClientProvider>
 );
 
