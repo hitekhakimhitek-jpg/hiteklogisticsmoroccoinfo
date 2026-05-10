@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { translateEntries } from "@/lib/translateEntries";
+import { translateEntries, translateDeep } from "@/lib/translateEntries";
 
 export type DbNewsEntry = {
   id: string;
@@ -81,8 +81,9 @@ export function useNewsEntries(filters?: {
 }
 
 export function useWeeklyReports() {
+  const { lang } = useLanguage();
   return useQuery({
-    queryKey: ["weekly_reports"],
+    queryKey: ["weekly_reports", lang],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("weekly_reports")
@@ -91,14 +92,24 @@ export function useWeeklyReports() {
         .order("week_number", { ascending: false })
         .limit(12);
       if (error) throw error;
-      return data || [];
+      const rows = data || [];
+      if (lang === "fr" && rows.length > 0) {
+        try {
+          return await translateDeep(rows, "fr");
+        } catch (e) {
+          console.error("weekly translate failed", e);
+          return rows;
+        }
+      }
+      return rows;
     },
   });
 }
 
 export function useMonthlySummaries() {
+  const { lang } = useLanguage();
   return useQuery({
-    queryKey: ["monthly_summaries"],
+    queryKey: ["monthly_summaries", lang],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("monthly_summaries")
@@ -107,7 +118,16 @@ export function useMonthlySummaries() {
         .order("month", { ascending: false })
         .limit(3);
       if (error) throw error;
-      return data || [];
+      const rows = data || [];
+      if (lang === "fr" && rows.length > 0) {
+        try {
+          return await translateDeep(rows, "fr");
+        } catch (e) {
+          console.error("monthly translate failed", e);
+          return rows;
+        }
+      }
+      return rows;
     },
   });
 }
