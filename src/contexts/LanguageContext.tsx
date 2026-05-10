@@ -102,6 +102,76 @@ const EXACT: Record<string, string> = {
     "Uniquement les lois, décrets, circulaires et changements contraignants — du plus récent au plus ancien. Cliquez sur une entrée pour lire la source officielle.",
   "No regulatory or compliance entries found yet. Fetch news from the Dashboard.":
     "Aucune entrée réglementaire ou de conformité trouvée. Actualisez depuis le tableau de bord.",
+  "This page only shows actual law & rule changes.":
+    "Cette page affiche uniquement les changements de lois et de règles.",
+  "New decrees, circulars, tariff updates, and binding regulatory changes that may require your company to take immediate action. General news is excluded.":
+    "Nouveaux décrets, circulaires, mises à jour tarifaires et changements réglementaires contraignants pouvant nécessiter une action immédiate de votre entreprise. Les actualités générales sont exclues.",
+
+  // Finance Regulation page
+  "Finance & Fiscal Regulation": "Réglementation financière & fiscale",
+  "Regulatory, compliance, and fiscal policy updates relevant to your finance department — taxes, duties, exchange rates, customs fees, and budget laws.":
+    "Mises à jour réglementaires, de conformité et de politique fiscale pertinentes pour votre département financier — taxes, droits, taux de change, frais douaniers et lois budgétaires.",
+  "Finance-focused view.": "Vue axée sur la finance.",
+  "Articles are AI-classified for finance relevance. Only stories with strong thematic fit to fiscal policy, customs duties, exchange rates, and financial compliance are shown.":
+    "Les articles sont classés par IA selon leur pertinence financière. Seules les actualités liées à la politique fiscale, aux droits de douane, aux taux de change et à la conformité financière sont affichées.",
+
+  // IT News page
+  "IT News & Cybersecurity": "Actualités IT & cybersécurité",
+  "IT-focused view.": "Vue axée sur l'IT.",
+  "Articles are AI-classified for IT relevance. Only stories with strong thematic fit to cybersecurity, enterprise infrastructure, cloud platforms, and IT operations are shown.":
+    "Les articles sont classés par IA selon leur pertinence IT. Seules les actualités liées à la cybersécurité, aux infrastructures d'entreprise, aux plateformes cloud et aux opérations IT sont affichées.",
+  "Nothing noteworthy happened this week. We'll update you as soon as something relevant comes up.":
+    "Rien de notable cette semaine. Nous vous tiendrons informé dès qu'une actualité pertinente apparaîtra.",
+
+  // Reports / Archive
+  "Weekly Intelligence Report": "Rapport hebdomadaire de renseignement",
+  "Top Events of the Week": "Principaux événements de la semaine",
+  "Top Events of the Month": "Principaux événements du mois",
+  "Weekly Risk Score": "Score de risque hebdomadaire",
+  "Monthly Risk Score": "Score de risque mensuel",
+  "Executive Summary": "Synthèse exécutive",
+  "Key Takeaways": "Points clés",
+  Recommendations: "Recommandations",
+  "Week Ahead Outlook": "Perspectives de la semaine à venir",
+  "Month Ahead Outlook": "Perspectives du mois à venir",
+  "Week-over-Week Comparison": "Comparaison semaine sur semaine",
+  "Month-over-Month Comparison": "Comparaison mois sur mois",
+  "Trend Analysis": "Analyse des tendances",
+  "Compliance Tracker": "Suivi de conformité",
+  "Risk Assessment": "Évaluation des risques",
+  Requirement: "Exigence",
+  "No weekly report yet. Fetch news first, then generate a report.":
+    "Aucun rapport hebdomadaire pour le moment. Actualisez les actualités, puis générez un rapport.",
+  "No monthly summary yet. Fetch news first, then generate a summary.":
+    "Aucun résumé mensuel pour le moment. Actualisez les actualités, puis générez un résumé.",
+  "Searchable 3-month rolling intelligence archive":
+    "Archives de renseignement consultables sur 3 mois glissants",
+
+  // Settings
+  "Configure your FreightPulse preferences": "Configurez vos préférences FreightPulse",
+  "Enable/disable intelligence sources.": "Activer/désactiver les sources de renseignement.",
+  "Show entries by priority level.": "Afficher les entrées par niveau de priorité.",
+  "Show toast notifications for critical news":
+    "Afficher les notifications pour les actualités critiques",
+  "Alert on critical events": "Alerter en cas d'événements critiques",
+  "Date Range": "Plage de dates",
+  "Clear all filters": "Effacer tous les filtres",
+
+  // Chat
+  "Ask Hitek Info": "Demandez à Hitek Info",
+  "Type a message...": "Tapez un message...",
+
+  // Misc
+  "Impact:": "Impact :",
+  "Impact: ": "Impact : ",
+  "Source:": "Source :",
+  Navigation: "Navigation",
+  "More pages": "Autres pages",
+  "Toggle Sidebar": "Basculer la barre latérale",
+  "Next slide": "Diapositive suivante",
+  "Previous slide": "Diapositive précédente",
+  "Oops! Page not found": "Oups ! Page introuvable",
+  "Morocco-specific entries": "Entrées spécifiques au Maroc",
 };
 
 // Pattern-based dictionary (full text-node match via regex).
