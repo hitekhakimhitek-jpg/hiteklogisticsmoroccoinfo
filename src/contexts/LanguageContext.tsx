@@ -199,7 +199,6 @@ const EXACT: Record<string, string> = {
   "Critical Alerts": "Alertes critiques",
   "Total News": "Actualités totales",
   Total: "Total",
-  Critical: "Critique",
   High: "Élevé",
   Medium: "Moyen",
   Low: "Faible",
@@ -217,7 +216,6 @@ const EXACT: Record<string, string> = {
   declining: "en baisse",
   stable: "stable",
   urgent: "urgent",
-  important: "important",
   monitor: "à surveiller",
 };
 
