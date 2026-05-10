@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { translateEntries } from "@/lib/translateEntries";
 
 export type DbNewsEntry = {
   id: string;
@@ -44,8 +46,9 @@ export function useNewsEntries(filters?: {
   search?: string;
   limit?: number;
 }) {
+  const { lang } = useLanguage();
   return useQuery({
-    queryKey: ["news_entries", filters],
+    queryKey: ["news_entries", filters, lang],
     queryFn: async () => {
       let query = supabase
         .from("news_entries")
@@ -63,7 +66,16 @@ export function useNewsEntries(filters?: {
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as DbNewsEntry[];
+      const entries = (data || []) as DbNewsEntry[];
+      if (lang === "fr" && entries.length > 0) {
+        try {
+          return await translateEntries(entries, "fr");
+        } catch (e) {
+          console.error("translation failed", e);
+          return entries;
+        }
+      }
+      return entries;
     },
   });
 }
