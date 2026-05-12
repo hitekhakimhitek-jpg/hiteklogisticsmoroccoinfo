@@ -26,15 +26,17 @@ serve(async (req) => {
       });
     }
 
-    const prompt = `Translate each string in the JSON array below to ${lang}.
+    const prompt = `You are a professional translator. Translate EVERY string in the JSON array below into ${lang}.
 Rules:
+- Translate ALL strings, even short ones. Do not echo English back.
 - Preserve meaning, tone, and freight/logistics terminology.
-- Keep proper nouns (company names, ports, "Morocco", "Tanger Med", "ADII", "EU", etc.) as-is.
-- Do NOT add or remove items. Output array length MUST equal input length.
-- If a string is already in ${lang}, return it unchanged.
-- Return ONLY a valid JSON array of strings. No prose, no code fences.
+- Keep proper nouns (company names, ports, "Morocco", "Tanger Med", "ADII", "EU", "Maersk", "DHL", "Amazon", "WTO", "ICC", currencies, route codes) as-is.
+- Convert idioms naturally — do not transliterate.
+- If a string is ALREADY fully in ${lang}, return it unchanged. Otherwise it MUST be translated.
+- Output array length MUST equal input length. Same order.
+- Return ONLY a valid JSON array of strings. No prose, no code fences, no keys.
 
-INPUT:
+INPUT (translate to ${lang}):
 ${JSON.stringify(texts)}`;
 
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -44,8 +46,14 @@ ${JSON.stringify(texts)}`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
-        messages: [{ role: "user", content: prompt }],
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          {
+            role: "system",
+            content: `You translate JSON arrays of strings into ${lang}. You MUST translate every English (or non-${lang}) string. Output only a JSON array of the same length, same order.`,
+          },
+          { role: "user", content: prompt },
+        ],
       }),
     });
 
