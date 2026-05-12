@@ -86,23 +86,13 @@ const Dashboard = () => {
               ))}
             </SelectContent>
           </Select>
-          <div className="flex flex-col gap-2">
-            <button
-              onClick={handleFetchNews}
-              disabled={isFetching}
-              className="flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/90 transition-colors disabled:opacity-50 font-medium"
-            >
-              {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              {isFetching ? "Fetching..." : "Fetch News"}
-            </button>
-            <button
-              onClick={toggleLang}
-              className="flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg border border-border bg-card text-card-foreground hover:bg-accent hover:text-accent-foreground transition-colors font-medium"
-              aria-label="Toggle language"
-            >
-              {lang === "en" ? "Français" : "English"}
-            </button>
-          </div>
+          <button
+            onClick={toggleLang}
+            className="flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg border border-border bg-card text-card-foreground hover:bg-accent hover:text-accent-foreground transition-colors font-medium"
+            aria-label="Toggle language"
+          >
+            {lang === "en" ? "Français" : "English"}
+          </button>
         </div>
       </div>
 
@@ -119,18 +109,10 @@ const Dashboard = () => {
             </h2>
             <p className="text-sm text-muted-foreground">
               {region === "global"
-                ? 'Click "Fetch News" to pull the latest freight intelligence using AI.'
+                ? "News is automatically refreshed every day at 8 AM."
                 : "Try a different region or fetch new data."}
             </p>
           </div>
-          <button
-            onClick={handleFetchNews}
-            disabled={isFetching}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/90 transition-colors disabled:opacity-50 font-medium"
-          >
-            {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            {isFetching ? "Fetching..." : "Fetch News Now"}
-          </button>
         </div>
       ) : (
         <>
