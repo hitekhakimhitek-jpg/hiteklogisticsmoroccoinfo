@@ -5,6 +5,7 @@ import { streamChat } from "@/lib/streamChat";
 import ReactMarkdown from "react-markdown";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -25,6 +26,7 @@ const ChatAssistant = () => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { data: newsEntries } = useNewsEntries({ limit: 1 });
   const hasContext = newsEntries && newsEntries.length > 0;
+  const { lang } = useLanguage();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -58,6 +60,7 @@ const ChatAssistant = () => {
     try {
       await streamChat({
         messages: [...messages, userMsg],
+        lang,
         onDelta: (chunk) => upsertAssistant(chunk),
         onDone: () => setIsLoading(false),
         onError: (error) => {
