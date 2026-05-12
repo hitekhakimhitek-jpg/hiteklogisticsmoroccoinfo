@@ -40,7 +40,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages } = await req.json();
+    const { messages, lang } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -129,7 +129,11 @@ serve(async (req) => {
       }
     }
 
-    const systemPrompt = BASE_SYSTEM_PROMPT + contextBlock;
+    let systemPrompt = BASE_SYSTEM_PROMPT + contextBlock;
+    if (lang === "fr") {
+      systemPrompt +=
+        "\n\nIMPORTANT: Réponds toujours en français. Toutes tes réponses, explications, listes à puces et recommandations doivent être rédigées en français professionnel, même si l'utilisateur écrit en anglais. Conserve les noms propres, acronymes (ADII, CBAM, IMO, IATA, etc.) et noms de ports tels quels.";
+    }
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
