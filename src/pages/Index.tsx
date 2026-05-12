@@ -1,13 +1,11 @@
-import { useNewsEntries, triggerFetchNews, useLastUpdated } from "@/hooks/useFreightData";
+import { useNewsEntries, useLastUpdated } from "@/hooks/useFreightData";
 import { TopStories } from "@/components/dashboard/TopStories";
 import { MoroccoFocus, ComplianceWatchlist } from "@/components/dashboard/QuickPanels";
 import { DailyDigest } from "@/components/dashboard/DailyDigest";
 import { ChangeSummaryBanner } from "@/components/dashboard/ChangeSummaryBanner";
 import { FreshnessIndicator } from "@/components/dashboard/FreshnessIndicator";
 import { RefreshCw, Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
-import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { useAppliedSettings, filterBySettings } from "@/hooks/useAppliedSettings";
 import { REGION_OPTIONS, isEntryVisibleInRegion, useRegionContext } from "@/contexts/RegionContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -23,7 +21,7 @@ const Dashboard = () => {
   const { data: rawEntries, isLoading } = useNewsEntries({ limit: 50 });
   const { data: lastUpdated } = useLastUpdated();
   const appliedSettings = useAppliedSettings();
-  const { region, setRegion, activeSources } = useRegionContext();
+  const { region, setRegion } = useRegionContext();
   const { lang, toggle: toggleLang } = useLanguage();
 
   const newsEntries = useMemo(() => {
@@ -31,29 +29,6 @@ const Dashboard = () => {
     const filteredBySettings = filterBySettings(rawEntries, appliedSettings);
     return filteredBySettings.filter((e) => isEntryVisibleInRegion(e, region));
   }, [rawEntries, appliedSettings, region]);
-
-  const [isFetching, setIsFetching] = useState(false);
-  const queryClient = useQueryClient();
-
-  const handleFetchNews = async () => {
-    setIsFetching(true);
-    try {
-      const result = await triggerFetchNews(activeSources);
-      if (result.status === "success") {
-        toast.success(result.count > 0 ? "Refresh successful" : "Refresh successful: 0 new entries");
-      } else if (result.status === "checked_no_new") {
-        toast.success("Refresh successful: 0 new entries");
-      } else {
-        toast.error(result.message || "Refresh failed");
-      }
-      queryClient.invalidateQueries({ queryKey: ["news_entries"] });
-      queryClient.invalidateQueries({ queryKey: ["news_entries_last_updated"] });
-    } catch (e) {
-      toast.error(e instanceof Error ? `Refresh failed — ${e.message}` : "Refresh failed");
-    } finally {
-      setIsFetching(false);
-    }
-  };
 
   const hasData = newsEntries && newsEntries.length > 0;
 
