@@ -120,6 +120,8 @@ const EXACT: Record<string, string> = {
   "IT-focused view.": "Vue axée sur l'IT.",
   "Articles are AI-classified for IT relevance. Only stories with strong thematic fit to cybersecurity, enterprise infrastructure, cloud platforms, and IT operations are shown.":
     "Les articles sont classés par IA selon leur pertinence IT. Seules les actualités liées à la cybersécurité, aux infrastructures d'entreprise, aux plateformes cloud et aux opérations IT sont affichées.",
+  "Technology, cybersecurity, and IT infrastructure updates relevant to your operations — vulnerabilities, patches, cloud updates, AI developments, and security advisories.":
+    "Mises à jour technologie, cybersécurité et infrastructures IT pertinentes pour vos opérations — vulnérabilités, correctifs, mises à jour cloud, avancées IA et avis de sécurité.",
   "Nothing noteworthy happened this week. We'll update you as soon as something relevant comes up.":
     "Rien de notable cette semaine. Nous vous tiendrons informé dès qu'une actualité pertinente apparaîtra.",
 
@@ -146,6 +148,19 @@ const EXACT: Record<string, string> = {
     "Aucun résumé mensuel pour le moment. Actualisez les actualités, puis générez un résumé.",
   "Searchable 3-month rolling intelligence archive":
     "Archives de renseignement consultables sur 3 mois glissants",
+  "Archive retains the last 90 days of intelligence data.":
+    "Les archives conservent les 90 derniers jours de données de renseignement.",
+  "Search headlines, summaries, sources...":
+    "Rechercher titres, résumés, sources...",
+  Filters: "Filtres",
+  Category: "Catégorie",
+  Priority: "Priorité",
+  "No results match your search criteria.":
+    "Aucun résultat ne correspond à votre recherche.",
+  "No entries in the archive. Fetch news from the Dashboard.":
+    "Aucune entrée dans les archives.",
+  "News is automatically refreshed every day at 8 AM.":
+    "Les actualités sont mises à jour automatiquement chaque jour à 8 h.",
 
   // Settings
   "Configure your FreightPulse preferences": "Configurez vos préférences FreightPulse",
@@ -160,6 +175,27 @@ const EXACT: Record<string, string> = {
   // Chat
   "Ask Hitek Info": "Demandez à Hitek Info",
   "Type a message...": "Tapez un message...",
+  "AI-powered freight intelligence assistant":
+    "Assistant de renseignement fret propulsé par l'IA",
+  "How can I help with your freight operations?":
+    "Comment puis-je vous aider avec vos opérations fret ?",
+  "Ask me about shipping lanes, regulations, port updates, compliance requirements, or any freight intelligence topic.":
+    "Posez-moi des questions sur les routes maritimes, la réglementation, les mises à jour portuaires, les exigences de conformité ou tout sujet de renseignement fret.",
+  "Ask about freight, logistics, or compliance...":
+    "Posez une question sur le fret, la logistique ou la conformité...",
+  "Live data": "Données en direct",
+  "What happened this week in Morocco freight?":
+    "Que s'est-il passé cette semaine dans le fret au Maroc ?",
+  "Any disruptions on Europe–Morocco lanes?":
+    "Y a-t-il des perturbations sur les routes Europe–Maroc ?",
+  "Am I compliant with the latest customs regulations?":
+    "Suis-je conforme aux dernières réglementations douanières ?",
+  "Summarize the most critical alerts right now":
+    "Résume les alertes les plus critiques en ce moment",
+  "I'm shipping electronics to Spain. Anything I should know?":
+    "J'expédie de l'électronique vers l'Espagne. Quelque chose à savoir ?",
+  "What's the current status at Tanger Med port?":
+    "Quel est l'état actuel du port de Tanger Med ?",
 
   // Misc
   "Impact:": "Impact :",
