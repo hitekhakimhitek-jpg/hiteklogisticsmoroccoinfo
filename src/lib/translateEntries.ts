@@ -9,8 +9,11 @@ const FIELDS: (keyof DbNewsEntry)[] = [
   "full_content",
 ];
 
+// Bump version to invalidate stale cached translations (e.g. when the
+// edge function previously echoed English back unchanged).
+const CACHE_VERSION = "v2";
 function cacheKey(target: "fr" | "en", text: string) {
-  return `tr:${target}:${text}`;
+  return `tr:${CACHE_VERSION}:${target}:${text}`;
 }
 
 function getCached(target: "fr" | "en", text: string): string | null {
