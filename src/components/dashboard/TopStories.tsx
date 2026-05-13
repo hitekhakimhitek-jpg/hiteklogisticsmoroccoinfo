@@ -39,7 +39,20 @@ export function TopStories({ entries }: Props) {
                   {pConfig.label}
                 </Badge>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-card-foreground leading-tight">{entry.headline}</h3>
+                  {entry.source_url ? (
+                    <a
+                      href={entry.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-sm font-semibold text-card-foreground leading-tight hover:text-secondary hover:underline inline-flex items-start gap-1"
+                    >
+                      {entry.headline}
+                      <ExternalLink className="w-3 h-3 shrink-0 mt-0.5 opacity-60" />
+                    </a>
+                  ) : (
+                    <h3 className="text-sm font-semibold text-card-foreground leading-tight">{entry.headline}</h3>
+                  )}
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{entry.summary}</p>
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${tagStyles[tag]}`}>
