@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { Sparkles, ExternalLink } from "lucide-react";
 import { motion } from "framer-motion";
 import { getContentTag, tagStyles } from "@/types/freight";
 import type { DbNewsEntry } from "@/hooks/useFreightData";
