@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { Sparkles, ExternalLink } from "lucide-react";
 import { motion } from "framer-motion";
 import { getContentTag, tagStyles } from "@/types/freight";
 import type { DbNewsEntry } from "@/hooks/useFreightData";
@@ -44,9 +44,21 @@ export function DailyDigest({ entries }: Props) {
                 {i + 1}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-card-foreground leading-snug">
-                  {entry.headline}
-                </p>
+                {entry.source_url ? (
+                  <a
+                    href={entry.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-card-foreground leading-snug hover:text-secondary hover:underline inline-flex items-start gap-1"
+                  >
+                    {entry.headline}
+                    <ExternalLink className="w-3 h-3 shrink-0 mt-0.5 opacity-60" />
+                  </a>
+                ) : (
+                  <p className="text-sm font-medium text-card-foreground leading-snug">
+                    {entry.headline}
+                  </p>
+                )}
                 <div className="flex items-center gap-2 mt-1">
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${tagStyles[tag]}`}>
                     {tag}
