@@ -10,6 +10,7 @@ const ALL_SOURCES = [
   "Hellenic Shipping News", "Splash247", "gCaptain", "Seatrade Maritime",
   "ADII Morocco (Customs)", "ADiL (Customs Clearance)", "PortNet Morocco", "Tanger Med", "Tanger Med Port Authority",
   "L'Economiste", "La Vie Éco", "Médias24", "Finances News Hebdo", "Le Matin",
+  "Hespress",
   "IMO", "IATA", "WTO", "WCO", "FIATA", "ICC (Incoterms)", "UNECE", "European Commission",
   "DGI Maroc (Impôts)", "Bank Al-Maghrib", "SGG (Bulletin Officiel)",
   "BleepingComputer", "CISA", "The Register", "TechTarget",
