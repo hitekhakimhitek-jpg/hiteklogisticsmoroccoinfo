@@ -58,6 +58,11 @@ const SOURCE_QUERIES: Record<string, string[]> = {
   "Médias24": ["Maroc économie commerce fret site:medias24.com"],
   "Finances News Hebdo": ["Maroc finance économie site:fnh.ma"],
   "Le Matin": ["Maroc commerce port douane fret logistique site:lematin.ma"],
+  "Hespress": [
+    "Maroc économie commerce port douane transport site:hespress.com",
+    "Morocco economy trade port customs site:en.hespress.com",
+    "Maroc économie commerce site:fr.hespress.com",
+  ],
   // TIER 3 — International bodies
   "IMO": ["IMO shipping regulation site:imo.org"],
   "IATA": ["IATA dangerous goods regulations air cargo DGR site:iata.org"],
@@ -122,6 +127,8 @@ const MOROCCO_PRIORITY_QUERIES = [
   "Morocco protest strike port logistics disruption",
   "site:lematin.ma manifestation OR grève OR transport",
   "site:economiste.com manifestation OR grève OR douane",
+  "site:hespress.com manifestation OR grève OR port OR douane OR transport",
+  "site:fr.hespress.com économie OR port OR douane OR transport",
 ];
 
 // Sources we hit DIRECTLY (homepage scrape + map) rather than relying only on
@@ -130,6 +137,7 @@ const MOROCCO_DIRECT_SOURCES: Array<{ name: string; homepage: string; mapKeyword
   { name: "Médias24", homepage: "https://medias24.com", mapKeywords: ["manifestation", "grève", "port", "douane", "transport"] },
   { name: "L'Economiste", homepage: "https://www.leconomiste.com", mapKeywords: ["douane", "port", "transport", "logistique"] },
   { name: "Le Matin", homepage: "https://lematin.ma", mapKeywords: ["manifestation", "port", "douane", "transport"] },
+  { name: "Hespress", homepage: "https://fr.hespress.com", mapKeywords: ["économie", "port", "douane", "transport", "manifestation"] },
   { name: "PortNet Morocco", homepage: "https://www.portnet.ma", mapKeywords: ["actualité", "circulaire"] },
   { name: "Tanger Med", homepage: "https://www.tangermed.ma", mapKeywords: ["news", "port"] },
   { name: "ADII Morocco (Customs)", homepage: "https://www.douane.gov.ma", mapKeywords: ["circulaire", "tarif"] },
@@ -137,7 +145,7 @@ const MOROCCO_DIRECT_SOURCES: Array<{ name: string; homepage: string; mapKeyword
 ];
 
 const MOROCCO_SOURCE_NAMES = new Set([
-  "Médias24", "L'Economiste", "Le Matin", "PortNet Morocco", "Tanger Med",
+  "Médias24", "L'Economiste", "Le Matin", "Hespress", "PortNet Morocco", "Tanger Med",
   "Tanger Med Port Authority", "ADII Morocco (Customs)", "ADiL (Customs Clearance)",
   "SGG (Bulletin Officiel)", "Bank Al-Maghrib", "DGI Maroc (Impôts)",
   "La Vie Éco", "Finances News Hebdo",
@@ -889,6 +897,9 @@ function extractSourceName(url: string): string {
       "fnh.ma": "Finances News Hebdo",
       "economiste.com": "L'Economiste",
       "lavieeco.com": "La Vie Éco",
+      "hespress.com": "Hespress",
+      "en.hespress.com": "Hespress",
+      "fr.hespress.com": "Hespress",
       "imo.org": "IMO",
       "wto.org": "WTO",
       "iata.org": "IATA",
