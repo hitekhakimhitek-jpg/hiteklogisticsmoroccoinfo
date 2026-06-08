@@ -16,6 +16,8 @@ import SettingsPage from "./pages/SettingsPage";
 import ReviewQueue from "./pages/ReviewQueue";
 import WeeklyDigest from "./pages/WeeklyDigest";
 import AlertsSettings from "./pages/AlertsSettings";
+import ComplianceRegister from "./pages/ComplianceRegister";
+import DisruptionMap from "./pages/DisruptionMap";
 import NotFound from "./pages/NotFound";
 import { RegionProvider } from "@/contexts/RegionContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
@@ -43,6 +45,8 @@ const App = () => (
               <Route path="/review" element={<ReviewQueue />} />
               <Route path="/digest" element={<WeeklyDigest />} />
               <Route path="/alerts" element={<AlertsSettings />} />
+              <Route path="/compliance" element={<ComplianceRegister />} />
+              <Route path="/map" element={<DisruptionMap />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />

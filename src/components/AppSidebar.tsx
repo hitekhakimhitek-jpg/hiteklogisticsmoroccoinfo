@@ -14,6 +14,8 @@ import {
   Monitor,
   Sparkles,
   Bell,
+  ScrollText,
+  Globe2,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { useState } from "react";
@@ -24,6 +26,8 @@ const navItems = [
   { title: "Review Queue", url: "/review", icon: Sparkles },
   { title: "Weekly Digest", url: "/digest", icon: FileBarChart },
   { title: "Alerts", url: "/alerts", icon: Bell },
+  { title: "Compliance Register", url: "/compliance", icon: ScrollText },
+  { title: "Disruption Map", url: "/map", icon: Globe2 },
   { title: "Regulatory Changes", url: "/regulatory", icon: Scale },
   { title: "Finance Regulation", url: "/finance-regulation", icon: Landmark },
   { title: "IT News", url: "/it-news", icon: Monitor },
