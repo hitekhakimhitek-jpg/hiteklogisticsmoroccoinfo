@@ -14,10 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      alert_settings: {
+        Row: {
+          critical_webhook_url: string | null
+          id: string
+          recipients_commercial: string | null
+          recipients_compliance: string | null
+          recipients_finance: string | null
+          recipients_it: string | null
+          recipients_operations: string | null
+          updated_at: string
+          weekly_digest_enabled: boolean
+        }
+        Insert: {
+          critical_webhook_url?: string | null
+          id?: string
+          recipients_commercial?: string | null
+          recipients_compliance?: string | null
+          recipients_finance?: string | null
+          recipients_it?: string | null
+          recipients_operations?: string | null
+          updated_at?: string
+          weekly_digest_enabled?: boolean
+        }
+        Update: {
+          critical_webhook_url?: string | null
+          id?: string
+          recipients_commercial?: string | null
+          recipients_compliance?: string | null
+          recipients_finance?: string | null
+          recipients_it?: string | null
+          recipients_operations?: string | null
+          updated_at?: string
+          weekly_digest_enabled?: boolean
+        }
+        Relationships: []
+      }
       intelligence_items: {
         Row: {
           action_required: string
           affected_tags: string[]
+          alerted_at: string | null
           created_at: string
           department: Database["public"]["Enums"]["intel_department"]
           headline: string
@@ -40,6 +77,7 @@ export type Database = {
         Insert: {
           action_required?: string
           affected_tags?: string[]
+          alerted_at?: string | null
           created_at?: string
           department?: Database["public"]["Enums"]["intel_department"]
           headline: string
@@ -62,6 +100,7 @@ export type Database = {
         Update: {
           action_required?: string
           affected_tags?: string[]
+          alerted_at?: string | null
           created_at?: string
           department?: Database["public"]["Enums"]["intel_department"]
           headline?: string
@@ -218,6 +257,42 @@ export type Database = {
           source_url?: string | null
           suggested_action?: string | null
           summary?: string
+          week_number?: number
+          year?: number
+        }
+        Relationships: []
+      }
+      weekly_digests: {
+        Row: {
+          act_now_count: number
+          department: Database["public"]["Enums"]["intel_department"] | null
+          generated_at: string
+          id: string
+          item_count: number
+          summary_md: string
+          this_week_count: number
+          week_number: number
+          year: number
+        }
+        Insert: {
+          act_now_count?: number
+          department?: Database["public"]["Enums"]["intel_department"] | null
+          generated_at?: string
+          id?: string
+          item_count?: number
+          summary_md: string
+          this_week_count?: number
+          week_number: number
+          year: number
+        }
+        Update: {
+          act_now_count?: number
+          department?: Database["public"]["Enums"]["intel_department"] | null
+          generated_at?: string
+          id?: string
+          item_count?: number
+          summary_md?: string
+          this_week_count?: number
           week_number?: number
           year?: number
         }
