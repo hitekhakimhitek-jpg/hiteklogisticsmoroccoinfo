@@ -50,6 +50,133 @@ export type Database = {
         }
         Relationships: []
       }
+      compliance_register: {
+        Row: {
+          created_at: string
+          deadline: string | null
+          department: Database["public"]["Enums"]["intel_department"] | null
+          effective_date: string | null
+          evidence_url: string | null
+          id: string
+          jurisdiction: string | null
+          linked_intel_id: string | null
+          notes: string | null
+          owner_label: string | null
+          regulation_ref: string | null
+          source_url: string | null
+          status: Database["public"]["Enums"]["compliance_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deadline?: string | null
+          department?: Database["public"]["Enums"]["intel_department"] | null
+          effective_date?: string | null
+          evidence_url?: string | null
+          id?: string
+          jurisdiction?: string | null
+          linked_intel_id?: string | null
+          notes?: string | null
+          owner_label?: string | null
+          regulation_ref?: string | null
+          source_url?: string | null
+          status?: Database["public"]["Enums"]["compliance_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deadline?: string | null
+          department?: Database["public"]["Enums"]["intel_department"] | null
+          effective_date?: string | null
+          evidence_url?: string | null
+          id?: string
+          jurisdiction?: string | null
+          linked_intel_id?: string | null
+          notes?: string | null
+          owner_label?: string | null
+          regulation_ref?: string | null
+          source_url?: string | null
+          status?: Database["public"]["Enums"]["compliance_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compliance_register_linked_intel_id_fkey"
+            columns: ["linked_intel_id"]
+            isOneToOne: false
+            referencedRelation: "intelligence_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      disruption_events: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          description: string | null
+          disruption_type: Database["public"]["Enums"]["disruption_type"]
+          ended_at: string | null
+          id: string
+          is_active: boolean
+          latitude: number
+          linked_intel_id: string | null
+          location_name: string
+          longitude: number
+          severity: Database["public"]["Enums"]["intel_severity"]
+          source_url: string | null
+          started_at: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          description?: string | null
+          disruption_type?: Database["public"]["Enums"]["disruption_type"]
+          ended_at?: string | null
+          id?: string
+          is_active?: boolean
+          latitude: number
+          linked_intel_id?: string | null
+          location_name: string
+          longitude: number
+          severity?: Database["public"]["Enums"]["intel_severity"]
+          source_url?: string | null
+          started_at?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          description?: string | null
+          disruption_type?: Database["public"]["Enums"]["disruption_type"]
+          ended_at?: string | null
+          id?: string
+          is_active?: boolean
+          latitude?: number
+          linked_intel_id?: string | null
+          location_name?: string
+          longitude?: number
+          severity?: Database["public"]["Enums"]["intel_severity"]
+          source_url?: string | null
+          started_at?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disruption_events_linked_intel_id_fkey"
+            columns: ["linked_intel_id"]
+            isOneToOne: false
+            referencedRelation: "intelligence_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       intelligence_items: {
         Row: {
           action_required: string
@@ -345,6 +472,21 @@ export type Database = {
       cleanup_old_entries: { Args: never; Returns: undefined }
     }
     Enums: {
+      compliance_status:
+        | "monitoring"
+        | "in_progress"
+        | "compliant"
+        | "non_compliant"
+        | "not_applicable"
+      disruption_type:
+        | "port"
+        | "strike"
+        | "weather"
+        | "geopolitical"
+        | "customs"
+        | "infrastructure"
+        | "cyber"
+        | "other"
       intel_department:
         | "operations"
         | "compliance"
@@ -501,6 +643,23 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      compliance_status: [
+        "monitoring",
+        "in_progress",
+        "compliant",
+        "non_compliant",
+        "not_applicable",
+      ],
+      disruption_type: [
+        "port",
+        "strike",
+        "weather",
+        "geopolitical",
+        "customs",
+        "infrastructure",
+        "cyber",
+        "other",
+      ],
       intel_department: [
         "operations",
         "compliance",
