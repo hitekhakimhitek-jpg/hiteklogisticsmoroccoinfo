@@ -222,6 +222,7 @@ serve(async (req) => {
       JSON.stringify({ success: true, created, failed, considered: todo.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   } catch (e) {
     console.error("enrich-intel error:", e);
     return new Response(
