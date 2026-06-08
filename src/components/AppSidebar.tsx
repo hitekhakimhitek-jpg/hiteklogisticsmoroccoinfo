@@ -12,6 +12,7 @@ import {
   Scale,
   Landmark,
   Monitor,
+  Sparkles,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { useState } from "react";
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Review Queue", url: "/review", icon: Sparkles },
   { title: "Regulatory Changes", url: "/regulatory", icon: Scale },
   { title: "Finance Regulation", url: "/finance-regulation", icon: Landmark },
   { title: "IT News", url: "/it-news", icon: Monitor },
