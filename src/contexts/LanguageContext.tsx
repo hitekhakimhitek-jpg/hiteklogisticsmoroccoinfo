@@ -17,6 +17,9 @@ const STORAGE_KEY = "hitek_lang";
 const EXACT: Record<string, string> = {
   // Sidebar / nav
   Dashboard: "Tableau de bord",
+  "Review Queue": "File de révision",
+  "Weekly Digest": "Synthèse hebdomadaire",
+  Alerts: "Alertes",
   "Regulatory Changes": "Changements réglementaires",
   "Finance Regulation": "Réglementation financière",
   "IT News": "Actualités IT",
@@ -28,6 +31,79 @@ const EXACT: Record<string, string> = {
 
   // Dashboard chrome
   "Freight intelligence overview": "Vue d'ensemble des renseignements fret",
+  "Intelligence feed": "Flux de renseignement",
+  "What's red across the company right now.":
+    "Ce qui est rouge dans toute l'entreprise en ce moment.",
+  "Act now": "Agir maintenant",
+  "This week": "Cette semaine",
+  Awareness: "Veille",
+  "Today": "Aujourd'hui",
+  "This month": "Ce mois-ci",
+  Horizon: "Horizon",
+  All: "Tous",
+  Operations: "Opérations",
+  Compliance: "Conformité",
+  Finance: "Finance",
+  Commercial: "Commercial",
+  IT: "IT",
+  "AI draft — review": "Brouillon IA — à réviser",
+  Acknowledge: "Reconnaître",
+  "Mark actioned": "Marquer traité",
+  Archive: "Archiver",
+  "Add item": "Ajouter un élément",
+  "Re-enrich": "Ré-enrichir",
+  "AI assist": "Assistance IA",
+  Impact: "Impact",
+  Action: "Action",
+  "Source URL (optional — for AI assist)":
+    "URL source (optionnel — pour l'assistance IA)",
+  Headline: "Titre",
+  "Summary / pasted text": "Résumé / texte collé",
+  "Action required": "Action requise",
+  Department: "Département",
+  Severity: "Gravité",
+  "Time to impact": "Délai d'impact",
+  "Affected tags (comma-separated)":
+    "Tags concernés (séparés par des virgules)",
+  Owner: "Responsable",
+  "Source name": "Nom de la source",
+  "Save item": "Enregistrer",
+  "New intelligence item": "Nouvel élément de renseignement",
+  "No intelligence items yet": "Aucun élément de renseignement",
+  "Intelligence items are generated automatically each day at 8 AM Morocco time. Use Add item to enter one manually with AI assist.":
+    "Les éléments de renseignement sont générés automatiquement chaque jour à 8 h heure du Maroc. Utilisez Ajouter un élément pour en saisir un manuellement avec l'assistance IA.",
+  "Review queue": "File de révision",
+  "AI-drafted intelligence items awaiting human review. Acknowledge to clear the draft badge, or archive to drop it.":
+    "Éléments de renseignement rédigés par l'IA en attente de révision humaine. Reconnaissez pour retirer le badge brouillon, ou archivez pour supprimer.",
+  "Nothing to review — you're all caught up.":
+    "Rien à réviser — vous êtes à jour.",
+  "Sorted by severity, then most recent. Showing":
+    "Trié par gravité, puis par récence. Affichage de",
+  items: "éléments",
+
+  // Weekly Digest
+  "Weekly digest": "Synthèse hebdomadaire",
+  "Auto-generated every Monday at 8 AM Morocco time. Per-department summaries of the week's intelligence.":
+    "Générée automatiquement chaque lundi à 8 h heure du Maroc. Synthèses hebdomadaires par département.",
+  "Regenerate now": "Régénérer maintenant",
+  "Company-wide": "Toute l'entreprise",
+  "No digest yet for this view. The first one will be generated next Monday — or click Regenerate now.":
+    "Aucune synthèse pour cette vue. La première sera générée lundi prochain — ou cliquez sur Régénérer maintenant.",
+
+  // Alerts settings
+  "Alerts & recipients": "Alertes & destinataires",
+  "Configure who gets notified when critical (Act now) intelligence appears. Webhook is Slack-compatible.":
+    "Configurez qui est notifié lorsqu'un renseignement critique (Agir maintenant) apparaît. Webhook compatible Slack.",
+  "Critical alert webhook URL (Slack / Teams / custom)":
+    "URL du webhook d'alerte critique (Slack / Teams / personnalisé)",
+  "When a new Act-now item is created, a message is posted here automatically.":
+    "Lorsqu'un élément Agir maintenant est créé, un message est publié ici automatiquement.",
+  "Department recipients": "Destinataires par département",
+  "Labels shown in alert messages and on items. Email sending requires email infrastructure (set up separately).":
+    "Libellés affichés dans les messages d'alerte et sur les éléments. L'envoi d'e-mails nécessite une infrastructure e-mail (à configurer séparément).",
+  "Generate weekly digest every Monday at 8 AM":
+    "Générer la synthèse hebdomadaire chaque lundi à 8 h",
+
   "Top News": "Actualités principales",
   "The updates that matter most today":
     "Les mises à jour qui comptent aujourd'hui",
