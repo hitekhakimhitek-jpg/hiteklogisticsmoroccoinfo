@@ -164,7 +164,6 @@ const EXACT: Record<string, string> = {
   Regulation: "Réglementation",
   Weather: "Météo",
   Trade: "Commerce",
-  Compliance: "Conformité",
   General: "Général",
 
   // Time
