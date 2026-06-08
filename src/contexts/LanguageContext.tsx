@@ -49,7 +49,6 @@ const EXACT: Record<string, string> = {
   "AI draft — review": "Brouillon IA — à réviser",
   Acknowledge: "Reconnaître",
   "Mark actioned": "Marquer traité",
-  Archive: "Archiver",
   "Add item": "Ajouter un élément",
   "Re-enrich": "Ré-enrichir",
   "AI assist": "Assistance IA",
