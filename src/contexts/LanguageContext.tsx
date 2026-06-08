@@ -35,8 +35,6 @@ const EXACT: Record<string, string> = {
   "Non-compliant": "Non conforme",
   "N/A": "N/A",
   "All statuses": "Tous les statuts",
-  Deadline: "Échéance",
-  Status: "Statut",
   Reference: "Référence",
   Title: "Titre",
   "Source URL": "URL de la source",
