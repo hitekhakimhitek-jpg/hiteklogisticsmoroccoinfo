@@ -846,6 +846,26 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       }
     }
 
+    // Chain enrichment: turn the new raw entries into Intelligence Items
+    try {
+      const enrichResp = await fetch(`${SUPABASE_URL}/functions/v1/enrich-intel`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({ limit: Math.min(data.length || 30, 60) }),
+      });
+      if (enrichResp.ok) {
+        const r = await enrichResp.json();
+        console.log(`enrich-intel: created ${r.created}, failed ${r.failed}`);
+      } else {
+        console.error("enrich-intel call failed:", enrichResp.status, await enrichResp.text());
+      }
+    } catch (enrichErr) {
+      console.error("Failed to trigger enrich-intel:", enrichErr);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

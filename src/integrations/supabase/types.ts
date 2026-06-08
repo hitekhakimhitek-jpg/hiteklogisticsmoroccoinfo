@@ -14,6 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
+      intelligence_items: {
+        Row: {
+          action_required: string
+          affected_tags: string[]
+          created_at: string
+          department: Database["public"]["Enums"]["intel_department"]
+          headline: string
+          id: string
+          impact: string
+          is_ai_draft: boolean
+          language: string
+          last_reviewed_at: string | null
+          owner: string | null
+          severity: Database["public"]["Enums"]["intel_severity"]
+          source_entry_id: string | null
+          source_name: string
+          source_url: string | null
+          status: Database["public"]["Enums"]["intel_status"]
+          summary: string
+          time_to_impact: Database["public"]["Enums"]["intel_horizon"]
+          time_to_impact_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          action_required?: string
+          affected_tags?: string[]
+          created_at?: string
+          department?: Database["public"]["Enums"]["intel_department"]
+          headline: string
+          id?: string
+          impact?: string
+          is_ai_draft?: boolean
+          language?: string
+          last_reviewed_at?: string | null
+          owner?: string | null
+          severity?: Database["public"]["Enums"]["intel_severity"]
+          source_entry_id?: string | null
+          source_name?: string
+          source_url?: string | null
+          status?: Database["public"]["Enums"]["intel_status"]
+          summary: string
+          time_to_impact?: Database["public"]["Enums"]["intel_horizon"]
+          time_to_impact_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action_required?: string
+          affected_tags?: string[]
+          created_at?: string
+          department?: Database["public"]["Enums"]["intel_department"]
+          headline?: string
+          id?: string
+          impact?: string
+          is_ai_draft?: boolean
+          language?: string
+          last_reviewed_at?: string | null
+          owner?: string | null
+          severity?: Database["public"]["Enums"]["intel_severity"]
+          source_entry_id?: string | null
+          source_name?: string
+          source_url?: string | null
+          status?: Database["public"]["Enums"]["intel_status"]
+          summary?: string
+          time_to_impact?: Database["public"]["Enums"]["intel_horizon"]
+          time_to_impact_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intelligence_items_source_entry_id_fkey"
+            columns: ["source_entry_id"]
+            isOneToOne: false
+            referencedRelation: "news_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       monthly_summaries: {
         Row: {
           compliance_tracker: Json
@@ -193,6 +270,15 @@ export type Database = {
       cleanup_old_entries: { Args: never; Returns: undefined }
     }
     Enums: {
+      intel_department:
+        | "operations"
+        | "compliance"
+        | "finance"
+        | "commercial"
+        | "it"
+      intel_horizon: "today" | "this_week" | "this_month" | "horizon"
+      intel_severity: "act_now" | "this_week" | "awareness"
+      intel_status: "new" | "acknowledged" | "actioned" | "archived"
       news_category:
         | "regulation"
         | "weather"
@@ -340,6 +426,16 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      intel_department: [
+        "operations",
+        "compliance",
+        "finance",
+        "commercial",
+        "it",
+      ],
+      intel_horizon: ["today", "this_week", "this_month", "horizon"],
+      intel_severity: ["act_now", "this_week", "awareness"],
+      intel_status: ["new", "acknowledged", "actioned", "archived"],
       news_category: [
         "regulation",
         "weather",
