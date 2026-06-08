@@ -1,16 +1,14 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Sparkles, RefreshCw } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { useLastUpdated } from "@/hooks/useFreightData";
 import { FreshnessIndicator } from "@/components/dashboard/FreshnessIndicator";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { toast } from "@/components/ui/sonner";
 import {
   useIntelligenceItems,
   useIntelCounts,
-  triggerEnrichBatch,
   DEPARTMENT_LABELS,
   type IntelDepartment,
   type IntelSeverity,
@@ -43,19 +41,6 @@ const Dashboard = () => {
   }, [department]);
 
   const { data: items, isLoading } = useIntelligenceItems({ department, severity });
-
-  const [enriching, setEnriching] = useState(false);
-  const runEnrich = async () => {
-    setEnriching(true);
-    try {
-      const r = await triggerEnrichBatch(30);
-      toast.success(`Enriched ${r.created} new items${r.failed ? ` (${r.failed} failed)` : ""}`);
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setEnriching(false);
-    }
-  };
 
   const hasData = !!items && items.length > 0;
 
@@ -111,20 +96,6 @@ const Dashboard = () => {
               Review queue ({counts.review_pending})
             </Button>
           ) : null}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={runEnrich}
-            disabled={enriching}
-            className="h-9"
-          >
-            {enriching ? (
-              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4 mr-1" />
-            )}
-            Re-enrich
-          </Button>
           <AddItemDialog />
           <button
             onClick={toggleLang}
@@ -199,7 +170,7 @@ const Dashboard = () => {
           <Sparkles className="w-10 h-10 text-muted-foreground mx-auto" />
           <h2 className="text-lg font-semibold">No intelligence items yet</h2>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            Click <strong>Re-enrich</strong> to convert your scraped news into actionable intelligence items, or use <strong>Add item</strong> to enter one manually with AI assist.
+            Intelligence items are generated automatically each day at 8 AM Morocco time. Use <strong>Add item</strong> to enter one manually with AI assist.
           </p>
         </div>
       ) : (
