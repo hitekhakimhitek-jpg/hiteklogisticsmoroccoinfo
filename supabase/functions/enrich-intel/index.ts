@@ -218,6 +218,22 @@ serve(async (req) => {
       }
     }
 
+    // Fire critical alerts for any new act_now items
+    if (created > 0) {
+      try {
+        await fetch(`${SUPABASE_URL}/functions/v1/send-critical-alert`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+          body: "{}",
+        });
+      } catch (e) {
+        console.error("send-critical-alert chain failed:", (e as Error).message);
+      }
+    }
+
     return new Response(
       JSON.stringify({ success: true, created, failed, considered: todo.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

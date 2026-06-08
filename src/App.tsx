@@ -14,6 +14,8 @@ import ITNews from "./pages/ITNews";
 import ChatAssistant from "./pages/ChatAssistant";
 import SettingsPage from "./pages/SettingsPage";
 import ReviewQueue from "./pages/ReviewQueue";
+import WeeklyDigest from "./pages/WeeklyDigest";
+import AlertsSettings from "./pages/AlertsSettings";
 import NotFound from "./pages/NotFound";
 import { RegionProvider } from "@/contexts/RegionContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
@@ -39,6 +41,8 @@ const App = () => (
               <Route path="/archive" element={<ArchivePage />} />
               <Route path="/chat" element={<ChatAssistant />} />
               <Route path="/review" element={<ReviewQueue />} />
+              <Route path="/digest" element={<WeeklyDigest />} />
+              <Route path="/alerts" element={<AlertsSettings />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
