@@ -1,399 +1,439 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, Popup, useMapEvents, Marker } from "react-leaflet";
+import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Globe2, Plus, Trash2, ExternalLink } from "lucide-react";
+import { Globe2, Plus, Trash2, X, RefreshCw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useAuth } from "@/contexts/AuthContext";
+import { cn } from "@/lib/utils";
 
-type DisruptionType =
-  | "port"
-  | "strike"
-  | "weather"
-  | "geopolitical"
-  | "customs"
-  | "infrastructure"
-  | "cyber"
-  | "other";
-type Severity = "act_now" | "this_week" | "awareness";
+type Severity = "low" | "medium" | "high" | "critical";
+type Category =
+  | "geopolitical" | "conflict" | "strike_labor" | "port_congestion"
+  | "weather" | "customs_regulatory" | "accident" | "other";
 
-type DisruptionEvent = {
+type Disruption = {
   id: string;
   title: string;
-  description: string | null;
-  disruption_type: DisruptionType;
-  severity: Severity;
-  location_name: string;
-  country_code: string | null;
+  summary: string | null;
   latitude: number;
   longitude: number;
-  started_at: string;
-  ended_at: string | null;
-  is_active: boolean;
-  source_url: string | null;
+  location_name: string | null;
+  category: Category;
+  severity: Severity;
+  sources: Array<{ label: string; url: string }>;
+  origin: "scraped" | "manual";
+  event_date: string;
+  created_at: string;
 };
 
-const TYPE_LABEL: Record<DisruptionType, string> = {
-  port: "Port",
-  strike: "Strike",
-  weather: "Weather",
+const CATEGORY_LABEL: Record<Category, string> = {
   geopolitical: "Geopolitical",
-  customs: "Customs",
-  infrastructure: "Infrastructure",
-  cyber: "Cyber",
+  conflict: "Conflict",
+  strike_labor: "Strike / Labor",
+  port_congestion: "Port congestion",
+  weather: "Weather",
+  customs_regulatory: "Customs / Regulatory",
+  accident: "Accident",
   other: "Other",
 };
 
 const SEV_COLOR: Record<Severity, string> = {
-  act_now: "#ef4444",
-  this_week: "#f59e0b",
-  awareness: "#3b82f6",
+  low: "#3b82f6",
+  medium: "#f59e0b",
+  high: "#f97316",
+  critical: "#ef4444",
 };
 const SEV_RADIUS: Record<Severity, number> = {
-  act_now: 14,
-  this_week: 11,
-  awareness: 8,
+  low: 7, medium: 10, high: 13, critical: 16,
 };
 
-const EMPTY = {
-  title: "",
-  description: "",
-  disruption_type: "port" as DisruptionType,
-  severity: "this_week" as Severity,
-  location_name: "",
-  country_code: "",
-  latitude: "",
-  longitude: "",
-  source_url: "",
-  is_active: true,
-};
+// Fix the default Leaflet marker icon (Vite asset issue)
+const draftIcon = new L.Icon({
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41],
+});
+
+type DraftPin = { lat: number; lng: number };
+
+function ClickHandler({ enabled, onPick }: { enabled: boolean; onPick: (p: DraftPin) => void }) {
+  useMapEvents({
+    click(e) { if (enabled) onPick({ lat: e.latlng.lat, lng: e.latlng.lng }); },
+  });
+  return null;
+}
+
+async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers: { "Accept-Language": "en" } }
+    );
+    if (!r.ok) return "";
+    const j = await r.json();
+    return j.display_name || "";
+  } catch { return ""; }
+}
 
 export default function DisruptionMap() {
-  const [events, setEvents] = useState<DisruptionEvent[]>([]);
+  const { isAdmin } = useAuth();
+  const [items, setItems] = useState<Disruption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showInactive, setShowInactive] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<typeof EMPTY>(EMPTY);
+  const [syncing, setSyncing] = useState(false);
+
+  const [catFilter, setCatFilter] = useState<Category | "all">("all");
+  const [sevFilter, setSevFilter] = useState<Severity | "all">("all");
+
+  // Placement mode + form
+  const [placeMode, setPlaceMode] = useState(false);
+  const [draft, setDraft] = useState<DraftPin | null>(null);
+  const [form, setForm] = useState({
+    title: "",
+    summary: "",
+    location_name: "",
+    category: "other" as Category,
+    severity: "medium" as Severity,
+    event_date: new Date().toISOString().slice(0, 16),
+    sources: [{ label: "", url: "" }] as Array<{ label: string; url: string }>,
+  });
+  const [saving, setSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase
-      .from("disruption_events")
+      .from("disruptions" as any)
       .select("*")
-      .order("started_at", { ascending: false });
+      .order("event_date", { ascending: false });
     if (error) toast.error(error.message);
-    setEvents((data || []) as DisruptionEvent[]);
+    setItems(((data || []) as any[]).map((d) => ({
+      ...d,
+      sources: Array.isArray(d.sources) ? d.sources : [],
+    })) as Disruption[]);
     setLoading(false);
   };
 
   useEffect(() => {
     load();
+    const channel = supabase
+      .channel("disruptions-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "disruptions" }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const visible = useMemo(
-    () => events.filter((e) => showInactive || e.is_active),
-    [events, showInactive]
+    () => items.filter((d) =>
+      (catFilter === "all" || d.category === catFilter) &&
+      (sevFilter === "all" || d.severity === sevFilter)
+    ),
+    [items, catFilter, sevFilter]
   );
 
-  const save = async () => {
-    const lat = parseFloat(draft.latitude);
-    const lng = parseFloat(draft.longitude);
-    if (!draft.title.trim() || !draft.location_name.trim() || isNaN(lat) || isNaN(lng)) {
-      toast.error("Title, location, and valid lat/lng are required");
-      return;
-    }
-    const { error } = await supabase.from("disruption_events").insert({
-      title: draft.title,
-      description: draft.description || null,
-      disruption_type: draft.disruption_type,
-      severity: draft.severity,
-      location_name: draft.location_name,
-      country_code: draft.country_code || null,
-      latitude: lat,
-      longitude: lng,
-      source_url: draft.source_url || null,
-      is_active: true,
-    });
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success("Disruption added");
-    setOpen(false);
-    setDraft(EMPTY);
-    load();
+  const startPlacement = () => {
+    if (!isAdmin) { toast.error("Sign in as the Hitek admin to add disruptions."); return; }
+    setPlaceMode(true);
+    setDraft(null);
+    toast.info("Click on the map to place the disruption.");
   };
 
-  const toggleActive = async (id: string, is_active: boolean) => {
-    const { error } = await supabase
-      .from("disruption_events")
-      .update({ is_active, ended_at: is_active ? null : new Date().toISOString() })
-      .eq("id", id);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    load();
+  const cancelDraft = () => { setDraft(null); setPlaceMode(false); };
+
+  const onPickPoint = async (p: DraftPin) => {
+    setDraft(p);
+    setForm((f) => ({ ...f, location_name: f.location_name || "Locating…" }));
+    const name = await reverseGeocode(p.lat, p.lng);
+    setForm((f) => ({ ...f, location_name: name || `${p.lat.toFixed(3)}, ${p.lng.toFixed(3)}` }));
+  };
+
+  const save = async () => {
+    if (!draft) return;
+    if (!form.title.trim()) { toast.error("Title is required"); return; }
+    setSaving(true);
+    const cleanSources = form.sources.filter((s) => s.url.trim()).map((s) => ({
+      label: s.label.trim() || "Source", url: s.url.trim(),
+    }));
+    const { error } = await supabase.from("disruptions" as any).insert({
+      title: form.title.trim(),
+      summary: form.summary.trim() || null,
+      latitude: draft.lat,
+      longitude: draft.lng,
+      location_name: form.location_name.trim() || null,
+      category: form.category,
+      severity: form.severity,
+      sources: cleanSources,
+      origin: "manual",
+      event_date: new Date(form.event_date).toISOString(),
+    });
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Disruption added");
+    setDraft(null);
+    setPlaceMode(false);
+    setForm({
+      title: "", summary: "", location_name: "",
+      category: "other", severity: "medium",
+      event_date: new Date().toISOString().slice(0, 16),
+      sources: [{ label: "", url: "" }],
+    });
   };
 
   const remove = async (id: string) => {
     if (!confirm("Delete this disruption?")) return;
-    const { error } = await supabase.from("disruption_events").delete().eq("id", id);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    setEvents((es) => es.filter((e) => e.id !== id));
+    const { error } = await supabase.from("disruptions" as any).delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+  };
+
+  const runSync = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-disruptions", { body: { limit: 30 } });
+      if (error) throw error;
+      toast.success(`Sync done — ${data?.created ?? 0} new · ${data?.merged ?? 0} merged · ${data?.skipped ?? 0} skipped`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally { setSyncing(false); }
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 max-w-7xl mx-auto space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Globe2 className="w-6 h-6 text-primary" />
-            Disruption Map
+            <Globe2 className="w-6 h-6 text-primary" /> Disruption Map
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Active geographic disruptions affecting trade lanes and operations.
+            Scraped + manually placed disruptions affecting global trade lanes.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={showInactive}
-              onChange={(e) => setShowInactive(e.target.checked)}
-            />
-            Show resolved
-          </label>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={runSync} disabled={syncing}>
+            {syncing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+            Re-sync news
+          </Button>
+          {isAdmin && (
+            placeMode ? (
+              <Button variant="secondary" size="sm" onClick={cancelDraft}>
+                <X className="w-4 h-4 mr-1" /> Cancel placement
+              </Button>
+            ) : (
+              <Button size="sm" onClick={startPlacement}>
                 <Plus className="w-4 h-4 mr-1" /> Add disruption
               </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Add disruption</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3">
-                <Input
-                  placeholder="Title (e.g. Tanger Med congestion)"
-                  value={draft.title}
-                  onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                />
-                <Textarea
-                  placeholder="Description / impact"
-                  value={draft.description}
-                  onChange={(e) =>
-                    setDraft({ ...draft, description: e.target.value })
-                  }
-                />
-                <div className="grid grid-cols-2 gap-3">
-                  <Select
-                    value={draft.disruption_type}
-                    onValueChange={(v) =>
-                      setDraft({ ...draft, disruption_type: v as DisruptionType })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(Object.keys(TYPE_LABEL) as DisruptionType[]).map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {TYPE_LABEL[t]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={draft.severity}
-                    onValueChange={(v) =>
-                      setDraft({ ...draft, severity: v as Severity })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="act_now">Act now</SelectItem>
-                      <SelectItem value="this_week">This week</SelectItem>
-                      <SelectItem value="awareness">Awareness</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    placeholder="Location name"
-                    value={draft.location_name}
-                    onChange={(e) =>
-                      setDraft({ ...draft, location_name: e.target.value })
-                    }
-                  />
-                  <Input
-                    placeholder="Country code (e.g. MA)"
-                    value={draft.country_code}
-                    onChange={(e) =>
-                      setDraft({ ...draft, country_code: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    placeholder="Latitude"
-                    value={draft.latitude}
-                    onChange={(e) => setDraft({ ...draft, latitude: e.target.value })}
-                  />
-                  <Input
-                    placeholder="Longitude"
-                    value={draft.longitude}
-                    onChange={(e) => setDraft({ ...draft, longitude: e.target.value })}
-                  />
-                </div>
-                <Input
-                  placeholder="Source URL"
-                  value={draft.source_url}
-                  onChange={(e) => setDraft({ ...draft, source_url: e.target.value })}
-                />
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={save}>Save</Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+            )
+          )}
         </div>
       </div>
 
-      <div className="rounded-xl border border-border overflow-hidden bg-card">
-        <div className="h-[480px] w-full">
-          <MapContainer
-            center={[20, 0]}
-            zoom={2}
-            style={{ height: "100%", width: "100%" }}
-            scrollWheelZoom
-          >
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2">
+        <Select value={catFilter} onValueChange={(v) => setCatFilter(v as any)}>
+          <SelectTrigger className="w-48 h-9"><SelectValue placeholder="Category" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {(Object.keys(CATEGORY_LABEL) as Category[]).map((c) => (
+              <SelectItem key={c} value={c}>{CATEGORY_LABEL[c]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={sevFilter} onValueChange={(v) => setSevFilter(v as any)}>
+          <SelectTrigger className="w-40 h-9"><SelectValue placeholder="Severity" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All severities</SelectItem>
+            <SelectItem value="critical">Critical</SelectItem>
+            <SelectItem value="high">High</SelectItem>
+            <SelectItem value="medium">Medium</SelectItem>
+            <SelectItem value="low">Low</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+          {(["critical","high","medium","low"] as Severity[]).map((s) => (
+            <span key={s} className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ background: SEV_COLOR[s] }} /> {s}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {placeMode && (
+        <div className="rounded-md border border-primary/40 bg-primary/5 text-sm px-3 py-2 text-primary">
+          Placement mode — click anywhere on the map to drop a pin.
+        </div>
+      )}
+
+      <div className={cn("rounded-xl border border-border overflow-hidden bg-card", placeMode && "cursor-crosshair")}>
+        <div className="h-[520px] w-full">
+          <MapContainer center={[20, 0]} zoom={2} style={{ height: "100%", width: "100%" }} scrollWheelZoom>
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {visible.map((e) => (
+            <ClickHandler enabled={placeMode} onPick={onPickPoint} />
+            {visible.map((d) => (
               <CircleMarker
-                key={e.id}
-                center={[Number(e.latitude), Number(e.longitude)]}
-                radius={SEV_RADIUS[e.severity]}
+                key={d.id}
+                center={[Number(d.latitude), Number(d.longitude)]}
+                radius={SEV_RADIUS[d.severity]}
                 pathOptions={{
-                  color: SEV_COLOR[e.severity],
-                  fillColor: SEV_COLOR[e.severity],
-                  fillOpacity: e.is_active ? 0.55 : 0.2,
+                  color: SEV_COLOR[d.severity],
+                  fillColor: SEV_COLOR[d.severity],
+                  fillOpacity: 0.6,
                   weight: 2,
                 }}
               >
                 <Popup>
-                  <div className="text-sm space-y-1 min-w-[200px]">
-                    <div className="font-semibold">{e.title}</div>
+                  <div className="text-sm space-y-1 min-w-[220px] max-w-[260px]">
+                    <div className="font-semibold">{d.title}</div>
                     <div className="text-xs text-muted-foreground">
-                      {e.location_name} · {TYPE_LABEL[e.disruption_type]}
+                      {d.location_name} · {format(new Date(d.event_date), "MMM d, yyyy")}
                     </div>
-                    {e.description && <p className="text-xs">{e.description}</p>}
-                    <div className="text-xs">
-                      Since {format(new Date(e.started_at), "MMM d")}
+                    <div className="flex gap-1 flex-wrap">
+                      <Badge variant="outline" className="text-[10px]">{CATEGORY_LABEL[d.category]}</Badge>
+                      <Badge className="text-[10px]" style={{ background: SEV_COLOR[d.severity], color: "white" }}>
+                        {d.severity}
+                      </Badge>
+                      <Badge variant="secondary" className="text-[10px]">{d.origin}</Badge>
                     </div>
-                    {e.source_url && (
-                      <a
-                        href={e.source_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-primary text-xs underline"
-                      >
-                        Source
-                      </a>
+                    {d.summary && <p className="text-xs">{d.summary}</p>}
+                    {d.sources.length > 0 && (
+                      <div className="text-xs space-y-0.5 pt-1">
+                        <div className="font-medium">Sources:</div>
+                        {d.sources.map((s, i) => (
+                          <a key={i} href={s.url} target="_blank" rel="noreferrer" className="block text-primary underline truncate">
+                            {s.label || s.url}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    {isAdmin && (
+                      <button onClick={() => remove(d.id)} className="text-xs text-destructive hover:underline pt-1">
+                        Delete
+                      </button>
                     )}
                   </div>
                 </Popup>
               </CircleMarker>
             ))}
+            {draft && (
+              <Marker
+                position={[draft.lat, draft.lng]}
+                draggable
+                icon={draftIcon}
+                eventHandlers={{
+                  dragend: (e) => {
+                    const { lat, lng } = (e.target as any).getLatLng();
+                    onPickPoint({ lat, lng });
+                  },
+                }}
+              />
+            )}
           </MapContainer>
         </div>
       </div>
 
-      <div className="space-y-2">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-          {visible.length} {showInactive ? "events" : "active events"}
-        </h2>
-        {loading ? (
-          <div className="text-sm text-muted-foreground">Loading…</div>
-        ) : visible.length === 0 ? (
-          <div className="text-sm text-muted-foreground">
-            No disruptions logged yet.
+      {/* Form panel when a draft pin is placed */}
+      {draft && isAdmin && (
+        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">New disruption at {draft.lat.toFixed(3)}, {draft.lng.toFixed(3)}</h2>
+            <Button variant="ghost" size="sm" onClick={cancelDraft}><X className="w-4 h-4" /></Button>
           </div>
-        ) : (
-          <ul className="divide-y divide-border rounded-xl border border-border bg-card">
-            {visible.map((e) => (
-              <li key={e.id} className="p-3 flex items-center gap-3 flex-wrap">
-                <span
-                  className="w-3 h-3 rounded-full shrink-0"
-                  style={{ background: SEV_COLOR[e.severity] }}
-                />
-                <div className="flex-1 min-w-[200px]">
-                  <div className="font-medium text-sm">{e.title}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {e.location_name} · {TYPE_LABEL[e.disruption_type]} ·{" "}
-                    {format(new Date(e.started_at), "MMM d, yyyy")}
-                  </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <Label>Title *</Label>
+              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Summary</Label>
+              <Textarea rows={2} value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Location name</Label>
+              <Input value={form.location_name} onChange={(e) => setForm({ ...form, location_name: e.target.value })} />
+            </div>
+            <div>
+              <Label>Category</Label>
+              <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v as Category })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(CATEGORY_LABEL) as Category[]).map((c) => (
+                    <SelectItem key={c} value={c}>{CATEGORY_LABEL[c]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Severity</Label>
+              <Select value={form.severity} onValueChange={(v) => setForm({ ...form, severity: v as Severity })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="critical">Critical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Event date</Label>
+              <Input type="datetime-local" value={form.event_date} onChange={(e) => setForm({ ...form, event_date: e.target.value })} />
+            </div>
+            <div className="sm:col-span-2 space-y-2">
+              <Label>Sources</Label>
+              {form.sources.map((s, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input
+                    placeholder="Label"
+                    value={s.label}
+                    onChange={(e) => {
+                      const arr = [...form.sources]; arr[i] = { ...arr[i], label: e.target.value };
+                      setForm({ ...form, sources: arr });
+                    }}
+                  />
+                  <Input
+                    placeholder="https://…"
+                    value={s.url}
+                    onChange={(e) => {
+                      const arr = [...form.sources]; arr[i] = { ...arr[i], url: e.target.value };
+                      setForm({ ...form, sources: arr });
+                    }}
+                  />
+                  {form.sources.length > 1 && (
+                    <Button variant="ghost" size="icon" onClick={() => {
+                      const arr = form.sources.filter((_, j) => j !== i);
+                      setForm({ ...form, sources: arr });
+                    }}><Trash2 className="w-4 h-4" /></Button>
+                  )}
                 </div>
-                <Badge variant={e.is_active ? "default" : "outline"}>
-                  {e.is_active ? "Active" : "Resolved"}
-                </Badge>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => toggleActive(e.id, !e.is_active)}
-                >
-                  {e.is_active ? "Mark resolved" : "Reopen"}
-                </Button>
-                {e.source_url && (
-                  <a
-                    href={e.source_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-1.5 hover:bg-muted rounded"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                )}
-                <button
-                  onClick={() => remove(e.id)}
-                  className="p-1.5 hover:bg-destructive/10 text-destructive rounded"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+              ))}
+              <Button variant="outline" size="sm" onClick={() =>
+                setForm({ ...form, sources: [...form.sources, { label: "", url: "" }] })
+              }><Plus className="w-4 h-4 mr-1" /> Add source</Button>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={cancelDraft}>Cancel</Button>
+            <Button onClick={save} disabled={saving}>
+              {saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} Save
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="text-sm text-muted-foreground">
+        Showing {visible.length} of {items.length} disruptions
+        {loading && <span className="ml-2"><Loader2 className="inline w-3 h-3 animate-spin" /></span>}
       </div>
     </div>
   );
