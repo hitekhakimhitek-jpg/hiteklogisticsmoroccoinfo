@@ -49,10 +49,10 @@ const CATEGORY_LABEL: Record<Category, string> = {
 };
 
 const SEV_COLOR: Record<Severity, string> = {
-  low: "#3b82f6",
-  medium: "#f59e0b",
-  high: "#f97316",
-  critical: "#ef4444",
+  low: "#22c55e",      // green
+  medium: "#eab308",   // yellow
+  high: "#f97316",     // orange
+  critical: "#ef4444", // red
 };
 const SEV_RADIUS: Record<Severity, number> = {
   low: 7, medium: 10, high: 13, critical: 16,
@@ -259,7 +259,6 @@ export default function DisruptionMap() {
                       <Badge className="text-[10px]" style={{ background: SEV_COLOR[d.severity], color: "white" }}>
                         {d.severity}
                       </Badge>
-                      <Badge variant="secondary" className="text-[10px]">{d.origin}</Badge>
                     </div>
                     {d.summary && <p className="text-xs">{d.summary}</p>}
                     {d.sources.length > 0 && (
