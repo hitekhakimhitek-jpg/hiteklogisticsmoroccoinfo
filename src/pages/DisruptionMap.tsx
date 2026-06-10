@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MapContainer, TileLayer, CircleMarker, Popup, useMapEvents, Marker } from "react-leaflet";
+import { MapContainer, TileLayer, Popup, useMapEvents, Marker } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -441,6 +441,140 @@ export default function DisruptionMap() {
         Showing {visible.length} of {items.length} disruptions
         {loading && <span className="ml-2"><Loader2 className="inline w-3 h-3 animate-spin" /></span>}
       </div>
+
+      {/* Admin: editable list of every pin */}
+      {isAdmin && (
+        <div className="rounded-xl border border-border bg-card">
+          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Manage all pins ({items.length})</h2>
+          </div>
+          <div className="divide-y divide-border max-h-[420px] overflow-auto">
+            {items.map((d) => (
+              <div key={d.id} className="px-4 py-3 flex items-start gap-3">
+                <span
+                  className="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0"
+                  style={{ background: SEV_COLOR[d.severity] }}
+                  aria-hidden
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{d.title}</div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {d.location_name || `${d.latitude.toFixed(2)}, ${d.longitude.toFixed(2)}`} ·{" "}
+                    {CATEGORY_LABEL[d.category]} · {d.severity} ·{" "}
+                    {format(new Date(d.event_date), "MMM d, yyyy")}
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setEditing({ ...d })}>
+                  <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => remove(d.id)}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1 text-destructive" />
+                </Button>
+              </div>
+            ))}
+            {items.length === 0 && (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">No pins yet.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit dialog */}
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit disruption</DialogTitle>
+          </DialogHeader>
+          {editing && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <Label>Title *</Label>
+                <Input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <Label>Summary</Label>
+                <Textarea rows={3} value={editing.summary || ""} onChange={(e) => setEditing({ ...editing, summary: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <Label>Location name</Label>
+                <Input value={editing.location_name || ""} onChange={(e) => setEditing({ ...editing, location_name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Latitude</Label>
+                <Input type="number" step="0.0001" value={editing.latitude}
+                  onChange={(e) => setEditing({ ...editing, latitude: Number(e.target.value) })} />
+              </div>
+              <div>
+                <Label>Longitude</Label>
+                <Input type="number" step="0.0001" value={editing.longitude}
+                  onChange={(e) => setEditing({ ...editing, longitude: Number(e.target.value) })} />
+              </div>
+              <div>
+                <Label>Category</Label>
+                <Select value={editing.category} onValueChange={(v) => setEditing({ ...editing, category: v as Category })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(CATEGORY_LABEL) as Category[]).map((c) => (
+                      <SelectItem key={c} value={c}>{CATEGORY_LABEL[c]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Severity</Label>
+                <Select value={editing.severity} onValueChange={(v) => setEditing({ ...editing, severity: v as Severity })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="sm:col-span-2">
+                <Label>Event date</Label>
+                <Input
+                  type="datetime-local"
+                  value={new Date(editing.event_date).toISOString().slice(0, 16)}
+                  onChange={(e) => setEditing({ ...editing, event_date: new Date(e.target.value).toISOString() })}
+                />
+              </div>
+              <div className="sm:col-span-2 space-y-2">
+                <Label>Sources</Label>
+                {(editing.sources || []).map((s, i) => (
+                  <div key={i} className="flex gap-2">
+                    <Input placeholder="Label" value={s.label}
+                      onChange={(e) => {
+                        const arr = [...editing.sources]; arr[i] = { ...arr[i], label: e.target.value };
+                        setEditing({ ...editing, sources: arr });
+                      }} />
+                    <Input placeholder="https://…" value={s.url}
+                      onChange={(e) => {
+                        const arr = [...editing.sources]; arr[i] = { ...arr[i], url: e.target.value };
+                        setEditing({ ...editing, sources: arr });
+                      }} />
+                    <Button variant="ghost" size="icon" onClick={() => {
+                      const arr = editing.sources.filter((_, j) => j !== i);
+                      setEditing({ ...editing, sources: arr });
+                    }}><Trash2 className="w-4 h-4" /></Button>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm"
+                  onClick={() => setEditing({ ...editing, sources: [...(editing.sources || []), { label: "", url: "" }] })}>
+                  <Plus className="w-4 h-4 mr-1" /> Add source
+                </Button>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
+            <Button onClick={saveEdit} disabled={editSaving}>
+              {editSaving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
