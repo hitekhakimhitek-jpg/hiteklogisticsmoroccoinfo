@@ -3,11 +3,9 @@ import {
   DEPARTMENT_LABELS,
   SEVERITY_LABELS,
   HORIZON_LABELS,
-  useUpdateIntelStatus,
 } from "@/hooks/useIntelligenceItems";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Check, Archive, CheckCheck, ExternalLink, Sparkles, Clock, User } from "lucide-react";
+import { ExternalLink, Clock, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 
@@ -30,7 +28,6 @@ const SEVERITY_STYLES = {
 } as const;
 
 export function IntelCard({ item }: { item: IntelligenceItem }) {
-  const mut = useUpdateIntelStatus();
   const sev = SEVERITY_STYLES[item.severity];
 
   return (
@@ -54,12 +51,6 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
           <Clock className="w-3 h-3 mr-1" />
           {HORIZON_LABELS[item.time_to_impact]}
         </Badge>
-        {item.is_ai_draft && item.status === "new" && (
-          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-            <Sparkles className="w-3 h-3 mr-1" />
-            AI draft — review
-          </Badge>
-        )}
         <span className="ml-auto text-muted-foreground">
           {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
         </span>
@@ -126,44 +117,6 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
             </span>
           </>
         )}
-        <div className="ml-auto flex items-center gap-1">
-          {item.status !== "acknowledged" && item.status !== "actioned" && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 px-2"
-              onClick={() => mut.mutate({ id: item.id, status: "acknowledged" })}
-              disabled={mut.isPending}
-            >
-              <Check className="w-3.5 h-3.5 mr-1" />
-              Acknowledge
-            </Button>
-          )}
-          {item.status !== "actioned" && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 px-2"
-              onClick={() => mut.mutate({ id: item.id, status: "actioned" })}
-              disabled={mut.isPending}
-            >
-              <CheckCheck className="w-3.5 h-3.5 mr-1" />
-              Mark actioned
-            </Button>
-          )}
-          {item.status !== "archived" && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 px-2"
-              onClick={() => mut.mutate({ id: item.id, status: "archived" })}
-              disabled={mut.isPending}
-            >
-              <Archive className="w-3.5 h-3.5 mr-1" />
-              Archive
-            </Button>
-          )}
-        </div>
       </div>
     </article>
   );

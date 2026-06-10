@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { MapContainer, TileLayer, CircleMarker, Popup, useMapEvents, Marker } from "react-leaflet";
 import L from "leaflet";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Globe2, Plus, Trash2, X, RefreshCw, Loader2 } from "lucide-react";
+import { Globe2, Plus, Trash2, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
@@ -91,10 +91,6 @@ export default function DisruptionMap() {
   const { isAdmin } = useAuth();
   const [items, setItems] = useState<Disruption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-
-  const [catFilter, setCatFilter] = useState<Category | "all">("all");
-  const [sevFilter, setSevFilter] = useState<Severity | "all">("all");
 
   // Placement mode + form
   const [placeMode, setPlaceMode] = useState(false);
@@ -133,13 +129,7 @@ export default function DisruptionMap() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const visible = useMemo(
-    () => items.filter((d) =>
-      (catFilter === "all" || d.category === catFilter) &&
-      (sevFilter === "all" || d.severity === sevFilter)
-    ),
-    [items, catFilter, sevFilter]
-  );
+  const visible = items;
 
   const startPlacement = () => {
     if (!isAdmin) { toast.error("Sign in as the Hitek admin to add disruptions."); return; }
@@ -195,17 +185,6 @@ export default function DisruptionMap() {
     if (error) { toast.error(error.message); return; }
   };
 
-  const runSync = async () => {
-    setSyncing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("sync-disruptions", { body: { limit: 30 } });
-      if (error) throw error;
-      toast.success(`Sync done — ${data?.created ?? 0} new · ${data?.merged ?? 0} merged · ${data?.skipped ?? 0} skipped`);
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally { setSyncing(false); }
-  };
-
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -214,14 +193,10 @@ export default function DisruptionMap() {
             <Globe2 className="w-6 h-6 text-primary" /> Disruption Map
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Scraped + manually placed disruptions affecting global trade lanes.
+            Disruptions affecting global trade lanes. Updated daily.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={runSync} disabled={syncing}>
-            {syncing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
-            Re-sync news
-          </Button>
           {isAdmin && (
             placeMode ? (
               <Button variant="secondary" size="sm" onClick={cancelDraft}>
@@ -236,27 +211,8 @@ export default function DisruptionMap() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Legend */}
       <div className="flex flex-wrap gap-2">
-        <Select value={catFilter} onValueChange={(v) => setCatFilter(v as any)}>
-          <SelectTrigger className="w-48 h-9"><SelectValue placeholder="Category" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {(Object.keys(CATEGORY_LABEL) as Category[]).map((c) => (
-              <SelectItem key={c} value={c}>{CATEGORY_LABEL[c]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={sevFilter} onValueChange={(v) => setSevFilter(v as any)}>
-          <SelectTrigger className="w-40 h-9"><SelectValue placeholder="Severity" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All severities</SelectItem>
-            <SelectItem value="critical">Critical</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-          </SelectContent>
-        </Select>
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
           {(["critical","high","medium","low"] as Severity[]).map((s) => (
             <span key={s} className="flex items-center gap-1">
@@ -276,8 +232,8 @@ export default function DisruptionMap() {
         <div className="h-[520px] w-full">
           <MapContainer center={[20, 0]} zoom={2} style={{ height: "100%", width: "100%" }} scrollWheelZoom>
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; OpenStreetMap, &copy; CARTO'
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
             />
             <ClickHandler enabled={placeMode} onPick={onPickPoint} />
             {visible.map((d) => (
