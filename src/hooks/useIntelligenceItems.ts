@@ -256,6 +256,51 @@ export const SEVERITY_LABELS: Record<IntelSeverity, string> = {
   awareness: "Awareness",
 };
 
+export const SEVERITY_LABELS_BY_LANG: Record<"en" | "fr", Record<IntelSeverity, string>> = {
+  en: {
+    act_now: "Critical",
+    this_week: "This week",
+    awareness: "To be aware of",
+  },
+  fr: {
+    act_now: "Agir maintenant",
+    this_week: "Cette semaine",
+    awareness: "Prendre connaissance de",
+  },
+};
+
+export const DEPARTMENT_LABELS_BY_LANG: Record<"en" | "fr", Record<IntelDepartment, string>> = {
+  en: {
+    operations: "Operations",
+    compliance: "Compliance",
+    finance: "Finance",
+    commercial: "Commercial",
+    it: "IT",
+  },
+  fr: {
+    operations: "Opérations",
+    compliance: "Conformité",
+    finance: "Finance",
+    commercial: "Commercial",
+    it: "IT",
+  },
+};
+
+export const HORIZON_LABELS_BY_LANG: Record<"en" | "fr", Record<IntelHorizon, string>> = {
+  en: {
+    today: "Today",
+    this_week: "This week",
+    this_month: "This month",
+    horizon: "Horizon",
+  },
+  fr: {
+    today: "Aujourd'hui",
+    this_week: "Cette semaine",
+    this_month: "Ce mois-ci",
+    horizon: "Horizon",
+  },
+};
+
 export const HORIZON_LABELS: Record<IntelHorizon, string> = {
   today: "Today",
   this_week: "This week",
