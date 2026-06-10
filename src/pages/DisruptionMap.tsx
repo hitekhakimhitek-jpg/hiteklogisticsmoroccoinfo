@@ -205,6 +205,29 @@ export default function DisruptionMap() {
     if (error) { toast.error(error.message); return; }
   };
 
+  const saveEdit = async () => {
+    if (!editing) return;
+    setEditSaving(true);
+    const cleanSources = (editing.sources || []).filter((s) => s.url.trim()).map((s) => ({
+      label: s.label.trim() || "Source", url: s.url.trim(),
+    }));
+    const { error } = await supabase.from("disruptions" as any).update({
+      title: editing.title.trim(),
+      summary: editing.summary?.trim() || null,
+      latitude: Number(editing.latitude),
+      longitude: Number(editing.longitude),
+      location_name: editing.location_name?.trim() || null,
+      category: editing.category,
+      severity: editing.severity,
+      sources: cleanSources,
+      event_date: new Date(editing.event_date).toISOString(),
+    }).eq("id", editing.id);
+    setEditSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Disruption updated");
+    setEditing(null);
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -256,50 +279,58 @@ export default function DisruptionMap() {
               url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
             />
             <ClickHandler enabled={placeMode} onPick={onPickPoint} />
-            {visible.map((d) => (
-              <CircleMarker
-                key={d.id}
-                center={[Number(d.latitude), Number(d.longitude)]}
-                radius={SEV_RADIUS[d.severity]}
-                pathOptions={{
-                  color: SEV_COLOR[d.severity],
-                  fillColor: SEV_COLOR[d.severity],
-                  fillOpacity: 0.6,
-                  weight: 2,
-                }}
-              >
-                <Popup>
-                  <div className="text-sm space-y-1 min-w-[220px] max-w-[260px]">
-                    <div className="font-semibold">{d.title}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {d.location_name} · {format(new Date(d.event_date), "MMM d, yyyy")}
-                    </div>
-                    <div className="flex gap-1 flex-wrap">
-                      <Badge variant="outline" className="text-[10px]">{CATEGORY_LABEL[d.category]}</Badge>
-                      <Badge className="text-[10px]" style={{ background: SEV_COLOR[d.severity], color: "white" }}>
-                        {d.severity}
-                      </Badge>
-                    </div>
-                    {d.summary && <p className="text-xs">{d.summary}</p>}
-                    {d.sources.length > 0 && (
-                      <div className="text-xs space-y-0.5 pt-1">
-                        <div className="font-medium">Sources:</div>
-                        {d.sources.map((s, i) => (
-                          <a key={i} href={s.url} target="_blank" rel="noreferrer" className="block text-primary underline truncate">
-                            {s.label || s.url}
-                          </a>
-                        ))}
+            <MarkerClusterGroup
+              chunkedLoading
+              spiderfyOnMaxZoom
+              showCoverageOnHover={false}
+              zoomToBoundsOnClick
+              spiderfyDistanceMultiplier={2}
+              maxClusterRadius={35}
+            >
+              {visible.map((d) => (
+                <Marker
+                  key={d.id}
+                  position={[Number(d.latitude), Number(d.longitude)]}
+                  icon={pinIcon(d.severity)}
+                >
+                  <Popup>
+                    <div className="text-sm space-y-1 min-w-[220px] max-w-[260px]">
+                      <div className="font-semibold">{d.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {d.location_name} · {format(new Date(d.event_date), "MMM d, yyyy")}
                       </div>
-                    )}
-                    {isAdmin && (
-                      <button onClick={() => remove(d.id)} className="text-xs text-destructive hover:underline pt-1">
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                </Popup>
-              </CircleMarker>
-            ))}
+                      <div className="flex gap-1 flex-wrap">
+                        <Badge variant="outline" className="text-[10px]">{CATEGORY_LABEL[d.category]}</Badge>
+                        <Badge className="text-[10px]" style={{ background: SEV_COLOR[d.severity], color: "white" }}>
+                          {d.severity}
+                        </Badge>
+                      </div>
+                      {d.summary && <p className="text-xs">{d.summary}</p>}
+                      {d.sources.length > 0 && (
+                        <div className="text-xs space-y-0.5 pt-1">
+                          <div className="font-medium">Sources:</div>
+                          {d.sources.map((s, i) => (
+                            <a key={i} href={s.url} target="_blank" rel="noreferrer" className="block text-primary underline truncate">
+                              {s.label || s.url}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                      {isAdmin && (
+                        <div className="flex gap-3 pt-1">
+                          <button onClick={() => setEditing({ ...d })} className="text-xs text-primary hover:underline">
+                            Edit
+                          </button>
+                          <button onClick={() => remove(d.id)} className="text-xs text-destructive hover:underline">
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+            </MarkerClusterGroup>
             {draft && (
               <Marker
                 position={[draft.lat, draft.lng]}
