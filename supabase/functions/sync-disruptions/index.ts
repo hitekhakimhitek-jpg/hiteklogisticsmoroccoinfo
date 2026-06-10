@@ -43,6 +43,7 @@ type Extracted = {
   category: string;
   severity: string;
   is_disruption: boolean;
+  specificity: "specific" | "regional" | "none";
   approx_lat?: number | null;
   approx_lng?: number | null;
 };
@@ -50,13 +51,21 @@ type Extracted = {
 async function extractLocation(article: { headline: string; summary: string | null; impact?: string | null }): Promise<Extracted | null> {
   const prompt = `You analyze freight & logistics news to plot disruptions on a world map.
 
-Given this article, return STRICT JSON only (no prose):
+RULES for choosing the place:
+- Pick the place where the disruption ACTUALLY HAPPENS or ORIGINATES, not the destination or the unrelated party mentioned.
+- If the actor's nationality is the cause (e.g. "Chinese ro-ro carriers exit Middle East"), the place is the actor's country (China), not the area they're leaving — UNLESS the article makes clear the impact is felt in a specific port/strait/country.
+- If the article is about an organisation (WTO, EU Commission, IMO) with no concrete country named, set specificity = "none".
+- If the article only names a broad region (EU, Middle East, Asia, Sub-Saharan Africa, Latin America), set specificity = "regional".
+- If the article names a specific country, city, port, strait, canal, or border, set specificity = "specific".
+
+Return STRICT JSON only (no prose):
 {
-  "is_disruption": boolean,         // true if it mentions ANY concrete geographic place (country, city, port, strait, region) relevant to trade/transport
-  "location_name": string,          // single most relevant place: strait, port, city, country, or region. e.g. "Strait of Hormuz", "Antwerp, Belgium", "Tanger Med, Morocco". Leave empty string if no concrete place.
+  "is_disruption": boolean,            // true if it describes a real trade/transport disruption
+  "specificity": "specific" | "regional" | "none",
+  "location_name": string,             // the chosen place name (port/city/country/strait). Empty string if specificity = "none".
   "category": "geopolitical" | "conflict" | "strike_labor" | "port_congestion" | "weather" | "customs_regulatory" | "accident" | "other",
   "severity": "low" | "medium" | "high" | "critical",
-  "approx_lat": number | null,      // your best-guess latitude for the place (decimal degrees), used only if geocoder fails
+  "approx_lat": number | null,         // best-guess latitude in decimal degrees (only used if geocoder fails)
   "approx_lng": number | null
 }
 
@@ -86,6 +95,9 @@ Impact: ${article.impact ?? ""}`;
     const parsed = JSON.parse(txt) as Extracted;
     if (!ALLOWED_CATEGORIES.includes(parsed.category)) parsed.category = "other";
     if (!ALLOWED_SEVERITY.includes(parsed.severity)) parsed.severity = "medium";
+    if (parsed.specificity !== "specific" && parsed.specificity !== "regional") {
+      parsed.specificity = "none";
+    }
     return parsed;
   } catch (e) {
     console.error("Bad JSON from LLM:", txt);
@@ -179,6 +191,14 @@ serve(async (req) => {
         const ext = await extractLocation({ headline: entry.headline, summary: entry.summary, impact: (entry as any).impact });
         if (!ext || !ext.is_disruption || !ext.location_name) { skipped++; continue; }
 
+        // Prefer intel item's own severity (mapped). Fall back to LLM-inferred.
+        const sev = INTEL_SEV_MAP[(entry as any).severity] || ext.severity;
+        const cat = INTEL_CAT_MAP[(entry as any).department] || ext.category;
+
+        // Skip non-specific places unless the item is critical (then a regional pin is OK).
+        if (ext.specificity === "none") { skipped++; continue; }
+        if (ext.specificity === "regional" && sev !== "critical") { skipped++; continue; }
+
         let coords = await geocode(ext.location_name);
         if (!coords && ext.approx_lat != null && ext.approx_lng != null) {
           coords = { lat: ext.approx_lat, lng: ext.approx_lng };
@@ -192,10 +212,6 @@ serve(async (req) => {
         );
 
         const sourceItem = { label: entry.source_name || "Source", url: entry.source_url };
-
-        // Prefer intel item's own severity (mapped). Fall back to LLM-inferred category.
-        const sev = INTEL_SEV_MAP[(entry as any).severity] || ext.severity;
-        const cat = INTEL_CAT_MAP[(entry as any).department] || ext.category;
 
         if (dupe) {
           const sources = Array.isArray(dupe.sources) ? dupe.sources : [];
