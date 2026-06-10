@@ -74,7 +74,7 @@ const WeeklyDigest = () => {
         </div>
       ) : !filtered || filtered.length === 0 ? (
         <div className="bg-card border border-border rounded-lg p-12 text-center text-muted-foreground">
-          No digest yet for this view. The first one will be generated next Monday — or click <strong>Regenerate now</strong>.
+          No digest yet for this view. The first one will be generated next Monday at 8 AM Morocco time.
         </div>
       ) : (
         <div className="space-y-4">
