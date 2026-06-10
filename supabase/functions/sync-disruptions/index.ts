@@ -23,6 +23,21 @@ const ALLOWED_CATEGORIES = [
 ];
 const ALLOWED_SEVERITY = ["low", "medium", "high", "critical"];
 
+// Map intelligence_items severity → disruptions severity
+const INTEL_SEV_MAP: Record<string, string> = {
+  act_now: "critical",
+  this_week: "high",
+  awareness: "medium",
+};
+// Map intelligence_items department → disruptions category
+const INTEL_CAT_MAP: Record<string, string> = {
+  operations: "port_congestion",
+  compliance: "customs_regulatory",
+  finance: "other",
+  commercial: "other",
+  it: "other",
+};
+
 type Extracted = {
   location_name: string;
   category: string;
@@ -32,12 +47,12 @@ type Extracted = {
   approx_lng?: number | null;
 };
 
-async function extractLocation(article: { headline: string; summary: string | null }): Promise<Extracted | null> {
+async function extractLocation(article: { headline: string; summary: string | null; impact?: string | null }): Promise<Extracted | null> {
   const prompt = `You analyze freight & logistics news to plot disruptions on a world map.
 
 Given this article, return STRICT JSON only (no prose):
 {
-  "is_disruption": boolean,         // true ONLY if it describes a real geographic disruption to trade/transport (port closure, strike, conflict, weather, customs blockage, accident, etc.)
+  "is_disruption": boolean,         // true if it mentions ANY concrete geographic place (country, city, port, strait, region) relevant to trade/transport
   "location_name": string,          // single most relevant place: strait, port, city, country, or region. e.g. "Strait of Hormuz", "Antwerp, Belgium", "Tanger Med, Morocco". Leave empty string if no concrete place.
   "category": "geopolitical" | "conflict" | "strike_labor" | "port_congestion" | "weather" | "customs_regulatory" | "accident" | "other",
   "severity": "low" | "medium" | "high" | "critical",
@@ -46,7 +61,8 @@ Given this article, return STRICT JSON only (no prose):
 }
 
 Headline: ${article.headline}
-Summary: ${article.summary ?? ""}`;
+Summary: ${article.summary ?? ""}
+Impact: ${article.impact ?? ""}`;
 
   const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -124,11 +140,14 @@ serve(async (req) => {
       if (typeof body.limit === "number") limit = Math.min(100, Math.max(1, body.limit));
     } catch { /* */ }
 
-    // Pull recent news entries not yet linked to a disruption
+    // Pull recent intelligence items (last 14 days, non-archived) — same source as the dashboard.
+    const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
     const { data: entries, error } = await supabase
-      .from("news_entries")
-      .select("id, headline, summary, source_url, source_name, published_date, fetched_date")
-      .order("fetched_date", { ascending: false })
+      .from("intelligence_items")
+      .select("id, headline, summary, impact, source_url, source_name, department, severity, created_at")
+      .gte("created_at", twoWeeksAgo)
+      .neq("status", "archived")
+      .order("created_at", { ascending: false })
       .limit(limit);
     if (error) throw error;
 
@@ -157,7 +176,7 @@ serve(async (req) => {
     for (const entry of entries || []) {
       if (existingIds.has(entry.id)) { skipped++; continue; }
       try {
-        const ext = await extractLocation({ headline: entry.headline, summary: entry.summary });
+        const ext = await extractLocation({ headline: entry.headline, summary: entry.summary, impact: (entry as any).impact });
         if (!ext || !ext.is_disruption || !ext.location_name) { skipped++; continue; }
 
         let coords = await geocode(ext.location_name);
@@ -174,6 +193,10 @@ serve(async (req) => {
 
         const sourceItem = { label: entry.source_name || "Source", url: entry.source_url };
 
+        // Prefer intel item's own severity (mapped). Fall back to LLM-inferred category.
+        const sev = INTEL_SEV_MAP[(entry as any).severity] || ext.severity;
+        const cat = INTEL_CAT_MAP[(entry as any).department] || ext.category;
+
         if (dupe) {
           const sources = Array.isArray(dupe.sources) ? dupe.sources : [];
           if (!sources.find((s: any) => s.url === entry.source_url)) sources.push(sourceItem);
@@ -189,11 +212,11 @@ serve(async (req) => {
             latitude: coords.lat,
             longitude: coords.lng,
             location_name: ext.location_name,
-            category: ext.category,
-            severity: ext.severity,
+            category: cat,
+            severity: sev,
             sources: [sourceItem],
             origin: "scraped",
-            event_date: entry.published_date ? new Date(entry.published_date).toISOString() : new Date().toISOString(),
+            event_date: (entry as any).created_at ? new Date((entry as any).created_at).toISOString() : new Date().toISOString(),
             source_entry_id: entry.id,
           });
           if (insErr) { console.error("insert err", insErr); failed++; }
