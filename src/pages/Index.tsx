@@ -3,7 +3,6 @@ import { Loader2, Sparkles } from "lucide-react";
 import { useLastUpdated } from "@/hooks/useFreightData";
 import { FreshnessIndicator } from "@/components/dashboard/FreshnessIndicator";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   useIntelligenceItems,
