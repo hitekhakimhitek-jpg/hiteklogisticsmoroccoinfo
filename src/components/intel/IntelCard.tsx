@@ -1,13 +1,16 @@
 import {
   IntelligenceItem,
-  DEPARTMENT_LABELS,
-  SEVERITY_LABELS,
-  HORIZON_LABELS,
+  DEPARTMENT_LABELS_BY_LANG,
+  SEVERITY_LABELS_BY_LANG,
+  HORIZON_LABELS_BY_LANG,
 } from "@/hooks/useIntelligenceItems";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Clock, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow as formatDistanceToNowFn } from "date-fns";
+import { fr as frLocale } from "date-fns/locale";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const SEVERITY_STYLES = {
   act_now: {
@@ -29,6 +32,10 @@ const SEVERITY_STYLES = {
 
 export function IntelCard({ item }: { item: IntelligenceItem }) {
   const sev = SEVERITY_STYLES[item.severity];
+  const { lang } = useLanguage();
+  const SEV = SEVERITY_LABELS_BY_LANG[lang];
+  const DEPT = DEPARTMENT_LABELS_BY_LANG[lang];
+  const HORIZON = HORIZON_LABELS_BY_LANG[lang];
 
   return (
     <article
@@ -42,17 +49,20 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
       <div className="flex items-center gap-2 flex-wrap text-xs">
         <span className={cn("inline-block w-2 h-2 rounded-full", sev.dot)} aria-hidden />
         <Badge variant="outline" className={cn("font-semibold", sev.badge)}>
-          {SEVERITY_LABELS[item.severity]}
+          {SEV[item.severity]}
         </Badge>
         <Badge variant="outline" className="font-medium">
-          {DEPARTMENT_LABELS[item.department]}
+          {DEPT[item.department]}
         </Badge>
         <Badge variant="outline" className="text-muted-foreground">
           <Clock className="w-3 h-3 mr-1" />
-          {HORIZON_LABELS[item.time_to_impact]}
+          {HORIZON[item.time_to_impact]}
         </Badge>
         <span className="ml-auto text-muted-foreground">
-          {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
+          {formatDistanceToNowFn(new Date(item.created_at), {
+            addSuffix: true,
+            locale: lang === "fr" ? frLocale : undefined,
+          })}
         </span>
       </div>
 
@@ -81,12 +91,12 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
       <div className="space-y-2 pt-1">
         {item.impact && (
           <div className="text-sm">
-            <span className="font-semibold text-foreground">Impact: </span>
+            <span className="font-semibold text-foreground">{lang === "fr" ? "Impact\u00A0: " : "Impact: "}</span>
             <span className="text-muted-foreground">{item.impact}</span>
           </div>
         )}
         <div className="text-sm">
-          <span className="font-semibold text-foreground">Action: </span>
+          <span className="font-semibold text-foreground">{lang === "fr" ? "Action\u00A0: " : "Action: "}</span>
           <span className="text-muted-foreground">{item.action_required}</span>
         </div>
       </div>
