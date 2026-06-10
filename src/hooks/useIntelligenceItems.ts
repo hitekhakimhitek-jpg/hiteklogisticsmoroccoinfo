@@ -251,9 +251,9 @@ export const DEPARTMENT_LABELS: Record<IntelDepartment, string> = {
 };
 
 export const SEVERITY_LABELS: Record<IntelSeverity, string> = {
-  act_now: "Act now",
+  act_now: "Critical",
   this_week: "This week",
-  awareness: "Awareness",
+  awareness: "To be aware of",
 };
 
 export const SEVERITY_LABELS_BY_LANG: Record<"en" | "fr", Record<IntelSeverity, string>> = {
