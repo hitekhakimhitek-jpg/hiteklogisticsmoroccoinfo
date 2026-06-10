@@ -13,7 +13,6 @@ import FinanceRegulation from "./pages/FinanceRegulation";
 import ITNews from "./pages/ITNews";
 import ChatAssistant from "./pages/ChatAssistant";
 import SettingsPage from "./pages/SettingsPage";
-import ReviewQueue from "./pages/ReviewQueue";
 import WeeklyDigest from "./pages/WeeklyDigest";
 import AlertsSettings from "./pages/AlertsSettings";
 import ComplianceRegister from "./pages/ComplianceRegister";
@@ -42,7 +41,6 @@ const App = () => (
               <Route path="/monthly" element={<MonthlySummary />} />
               <Route path="/archive" element={<ArchivePage />} />
               <Route path="/chat" element={<ChatAssistant />} />
-              <Route path="/review" element={<ReviewQueue />} />
               <Route path="/digest" element={<WeeklyDigest />} />
               <Route path="/alerts" element={<AlertsSettings />} />
               <Route path="/compliance" element={<ComplianceRegister />} />

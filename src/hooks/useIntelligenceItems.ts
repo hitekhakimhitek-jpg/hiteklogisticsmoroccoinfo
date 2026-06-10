@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { translateDeep } from "@/lib/translateEntries";
 
 export type IntelDepartment = "operations" | "compliance" | "finance" | "commercial" | "it";
 export type IntelSeverity = "act_now" | "this_week" | "awareness";
@@ -45,8 +47,9 @@ const SEVERITY_ORDER: Record<IntelSeverity, number> = {
 };
 
 export function useIntelligenceItems(filters: IntelFilters = {}) {
+  const { lang } = useLanguage();
   return useQuery({
-    queryKey: ["intel_items", filters],
+    queryKey: ["intel_items", filters, lang],
     queryFn: async () => {
       let q = supabase.from("intelligence_items").select("*");
       if (filters.department && filters.department !== "all") {
@@ -73,11 +76,41 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
       if (error) throw error;
       const rows = (data || []) as IntelligenceItem[];
       // Sort by severity then recency client-side
-      return [...rows].sort((a, b) => {
+      const sorted = [...rows].sort((a, b) => {
         const s = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
         if (s !== 0) return s;
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
+      if (lang === "fr" && sorted.length > 0) {
+        try {
+          // Translate only the user-facing text fields, preserve everything else.
+          const payload = sorted.map((r) => ({
+            id: r.id,
+            headline: r.headline,
+            summary: r.summary,
+            impact: r.impact,
+            action_required: r.action_required,
+          }));
+          const translated = await translateDeep(payload, "fr");
+          const byId = new Map(translated.map((t: any) => [t.id, t]));
+          return sorted.map((r) => {
+            const t = byId.get(r.id) as any;
+            return t
+              ? {
+                  ...r,
+                  headline: t.headline ?? r.headline,
+                  summary: t.summary ?? r.summary,
+                  impact: t.impact ?? r.impact,
+                  action_required: t.action_required ?? r.action_required,
+                }
+              : r;
+          });
+        } catch (e) {
+          console.error("intel translate failed", e);
+          return sorted;
+        }
+      }
+      return sorted;
     },
     refetchInterval: 60_000,
   });
