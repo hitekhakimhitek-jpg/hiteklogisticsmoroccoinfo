@@ -25,20 +25,32 @@ function isoWeek(d: Date): { year: number; week: number } {
   return { year: date.getUTCFullYear(), week };
 }
 
-async function summarize(LOVABLE_API_KEY: string, deptLabel: string, items: any[]): Promise<string> {
-  if (items.length === 0) {
-    return `_No ${deptLabel} items this week._`;
+async function summarize(
+  LOVABLE_API_KEY: string,
+  deptLabel: string,
+  items: any[],
+  fallbackItems: any[] = []
+): Promise<string> {
+  const hasDept = items.length > 0;
+  const source = hasDept ? items : fallbackItems;
+  if (source.length === 0) {
+    return `- Quiet week — no notable items logged across the dashboard.`;
   }
-  const briefs = items
+  const briefs = source
     .slice(0, 25)
     .map(
       (i) =>
-        `- [${i.severity}] ${i.headline}\n  Impact: ${i.impact}\n  Action: ${i.action_required}`
+        `- [${i.severity}] (${i.department}) ${i.headline}\n  Impact: ${i.impact}\n  Action: ${i.action_required}`
     )
     .join("\n");
-  const prompt = `You write the weekly digest for the ${deptLabel} team at a Morocco freight forwarder. Summarize the week's intelligence in 4-6 plain bullet points: what changed, what to watch, what to do. Be concise. Use markdown bullets only. No headings, no preamble.
+  const prompt = hasDept
+    ? `You write the weekly digest for the ${deptLabel} team at a Morocco freight forwarder. Summarize the week's intelligence in 4-6 plain bullet points: what changed, what to watch, what to do. Be concise. Use markdown bullets only. No headings, no preamble.
 
 THIS WEEK'S ITEMS:
+${briefs}`
+    : `You write the weekly digest for the ${deptLabel} team at a Morocco freight forwarder. There were NO ${deptLabel}-tagged items this week, but write a useful 2-4 bullet recap of what the ${deptLabel} team should still note from the broader week (cross-impacts, things to monitor, regulatory or market context relevant to ${deptLabel}). Markdown bullets only. No headings, no preamble. Begin with one bullet stating that no direct ${deptLabel} alerts were logged this week.
+
+THIS WEEK'S BROADER ITEMS (other departments):
 ${briefs}`;
   const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -82,7 +94,7 @@ serve(async (req) => {
     // Per-department digests
     for (const dept of DEPTS) {
       const deptItems = all.filter((i: any) => i.department === dept);
-      const md = await summarize(LOVABLE_API_KEY, DEPT_LABEL[dept], deptItems);
+      const md = await summarize(LOVABLE_API_KEY, DEPT_LABEL[dept], deptItems, all);
       const row = {
         year,
         week_number: week,
@@ -99,7 +111,7 @@ serve(async (req) => {
     }
 
     // Global digest
-    const globalMd = await summarize(LOVABLE_API_KEY, "company-wide", all);
+    const globalMd = await summarize(LOVABLE_API_KEY, "Global", all);
     await supabase.from("weekly_digests").delete().is("department", null).eq("year", year).eq("week_number", week);
     await supabase.from("weekly_digests").insert({
       year,
