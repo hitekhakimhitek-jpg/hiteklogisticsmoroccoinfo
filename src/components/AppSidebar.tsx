@@ -1,5 +1,6 @@
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard,
   FileBarChart,
@@ -18,7 +19,7 @@ import logoImg from "@/assets/logo.png";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+const baseNavItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Weekly Digest", url: "/digest", icon: FileBarChart },
   { title: "Disruption Map", url: "/map", icon: Globe2 },
@@ -29,12 +30,15 @@ const navItems = [
   { title: "Monthly Summary", url: "/monthly", icon: CalendarDays },
   { title: "Chat Assistant", url: "/chat", icon: MessageSquare },
   { title: "Archive", url: "/archive", icon: Archive },
-  { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const { isAdmin } = useAuth();
+  const navItems = isAdmin
+    ? [...baseNavItems, { title: "Settings", url: "/settings", icon: Settings }]
+    : baseNavItems;
 
   return (
     <aside
