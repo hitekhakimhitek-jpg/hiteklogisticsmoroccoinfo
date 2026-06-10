@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { Loader2, Sparkles } from "lucide-react";
 import { useLastUpdated } from "@/hooks/useFreightData";
 import { FreshnessIndicator } from "@/components/dashboard/FreshnessIndicator";
@@ -27,7 +26,6 @@ const DEPT_FILTERS: { value: IntelDepartment | "all"; label: string }[] = [
 
 const Dashboard = () => {
   const { lang, toggle: toggleLang } = useLanguage();
-  const navigate = useNavigate();
   const { data: lastUpdated } = useLastUpdated();
   const { data: counts } = useIntelCounts();
 
@@ -85,17 +83,6 @@ const Dashboard = () => {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {counts?.review_pending ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => navigate("/review")}
-              className="h-9"
-            >
-              <Sparkles className="w-4 h-4 mr-1" />
-              Review queue ({counts.review_pending})
-            </Button>
-          ) : null}
           <AddItemDialog />
           <button
             onClick={toggleLang}

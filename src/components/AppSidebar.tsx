@@ -12,7 +12,6 @@ import {
   Scale,
   Landmark,
   Monitor,
-  Sparkles,
   Bell,
   ScrollText,
   Globe2,
@@ -23,7 +22,6 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Review Queue", url: "/review", icon: Sparkles },
   { title: "Weekly Digest", url: "/digest", icon: FileBarChart },
   { title: "Alerts", url: "/alerts", icon: Bell },
   { title: "Compliance Register", url: "/compliance", icon: ScrollText },
