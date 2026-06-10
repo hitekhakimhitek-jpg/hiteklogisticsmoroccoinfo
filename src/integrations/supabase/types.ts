@@ -521,6 +521,7 @@ export type Database = {
     }
     Functions: {
       cleanup_old_entries: { Args: never; Returns: undefined }
+      is_hitek_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       compliance_status:
