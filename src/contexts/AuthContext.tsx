@@ -54,7 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const user = session?.user ?? null;
-  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
+  const email = user?.email?.toLowerCase() ?? "";
+  const isAdmin = email === ADMIN_EMAIL || email.endsWith("@hitek.ma");
 
   return (
     <Ctx.Provider value={{ user, session, loading, isAdmin, signIn, signOut }}>
