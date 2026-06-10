@@ -20,6 +20,8 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { translateDeep } from "@/lib/translateEntries";
 
 type Severity = "low" | "medium" | "high" | "critical";
 type Category =
@@ -105,6 +107,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 
 export default function DisruptionMap() {
   const { isAdmin } = useAuth();
+  const { lang } = useLanguage();
   const [items, setItems] = useState<Disruption[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -133,10 +136,31 @@ export default function DisruptionMap() {
       .select("*")
       .order("event_date", { ascending: false });
     if (error) toast.error(error.message);
-    setItems(((data || []) as any[]).map((d) => ({
+    let rows = ((data || []) as any[]).map((d) => ({
       ...d,
       sources: Array.isArray(d.sources) ? d.sources : [],
-    })) as Disruption[]);
+    })) as Disruption[];
+    if (lang === "fr" && rows.length > 0) {
+      try {
+        const payload = rows.map((r) => ({
+          id: r.id,
+          title: r.title,
+          summary: r.summary,
+          location_name: r.location_name,
+        }));
+        const translated = await translateDeep(payload, "fr");
+        const byId = new Map(translated.map((t: any) => [t.id, t]));
+        rows = rows.map((r) => {
+          const t = byId.get(r.id) as any;
+          return t
+            ? { ...r, title: t.title ?? r.title, summary: t.summary ?? r.summary, location_name: t.location_name ?? r.location_name }
+            : r;
+        });
+      } catch (e) {
+        console.error("disruption translate failed", e);
+      }
+    }
+    setItems(rows);
     setLoading(false);
   };
 
@@ -147,7 +171,7 @@ export default function DisruptionMap() {
       .on("postgres_changes", { event: "*", schema: "public", table: "disruptions" }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [lang]);
 
   const visible = items;
 
