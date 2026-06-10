@@ -263,7 +263,7 @@ export const SEVERITY_LABELS_BY_LANG: Record<"en" | "fr", Record<IntelSeverity, 
     awareness: "To be aware of",
   },
   fr: {
-    act_now: "Agir maintenant",
+    act_now: "Critique",
     this_week: "Cette semaine",
     awareness: "Prendre connaissance de",
   },
