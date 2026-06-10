@@ -177,6 +177,57 @@ export type Database = {
           },
         ]
       }
+      disruptions: {
+        Row: {
+          category: string
+          created_at: string
+          event_date: string
+          id: string
+          latitude: number
+          location_name: string | null
+          longitude: number
+          origin: string
+          severity: string
+          source_entry_id: string | null
+          sources: Json
+          summary: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          event_date?: string
+          id?: string
+          latitude: number
+          location_name?: string | null
+          longitude: number
+          origin?: string
+          severity?: string
+          source_entry_id?: string | null
+          sources?: Json
+          summary?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          event_date?: string
+          id?: string
+          latitude?: number
+          location_name?: string | null
+          longitude?: number
+          origin?: string
+          severity?: string
+          source_entry_id?: string | null
+          sources?: Json
+          summary?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       intelligence_items: {
         Row: {
           action_required: string

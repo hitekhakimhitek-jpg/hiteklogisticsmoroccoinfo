@@ -1,8 +1,11 @@
 import { useState, useMemo, useEffect } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, LogIn, LogOut } from "lucide-react";
 import { useLastUpdated } from "@/hooks/useFreightData";
 import { FreshnessIndicator } from "@/components/dashboard/FreshnessIndicator";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   useIntelligenceItems,
@@ -25,6 +28,7 @@ const DEPT_FILTERS: { value: IntelDepartment | "all"; label: string }[] = [
 
 const Dashboard = () => {
   const { lang, toggle: toggleLang } = useLanguage();
+  const { user, isAdmin, signOut } = useAuth();
   const { data: lastUpdated } = useLastUpdated();
   const { data: counts } = useIntelCounts();
 
@@ -82,7 +86,16 @@ const Dashboard = () => {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <AddItemDialog />
+          {isAdmin && <AddItemDialog />}
+          {user ? (
+            <Button variant="outline" size="sm" className="h-9" onClick={() => signOut()}>
+              <LogOut className="w-4 h-4 mr-1" /> {user.email}
+            </Button>
+          ) : (
+            <Button asChild variant="outline" size="sm" className="h-9">
+              <Link to="/auth"><LogIn className="w-4 h-4 mr-1" /> Login</Link>
+            </Button>
+          )}
           <button
             onClick={toggleLang}
             className="h-9 px-3 text-sm rounded-md border border-border bg-card text-card-foreground hover:bg-accent transition-colors font-medium"

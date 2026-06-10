@@ -14,18 +14,19 @@ import ITNews from "./pages/ITNews";
 import ChatAssistant from "./pages/ChatAssistant";
 import SettingsPage from "./pages/SettingsPage";
 import WeeklyDigest from "./pages/WeeklyDigest";
-import AlertsSettings from "./pages/AlertsSettings";
-import ComplianceRegister from "./pages/ComplianceRegister";
 import DisruptionMap from "./pages/DisruptionMap";
+import AuthPage from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import { RegionProvider } from "@/contexts/RegionContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <LanguageProvider>
+    <AuthProvider>
     <RegionProvider>
       <TooltipProvider>
         <Toaster />
@@ -42,16 +43,16 @@ const App = () => (
               <Route path="/archive" element={<ArchivePage />} />
               <Route path="/chat" element={<ChatAssistant />} />
               <Route path="/digest" element={<WeeklyDigest />} />
-              <Route path="/alerts" element={<AlertsSettings />} />
-              <Route path="/compliance" element={<ComplianceRegister />} />
               <Route path="/map" element={<DisruptionMap />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
+            <Route path="/auth" element={<AuthPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
     </RegionProvider>
+    </AuthProvider>
     </LanguageProvider>
   </QueryClientProvider>
 );

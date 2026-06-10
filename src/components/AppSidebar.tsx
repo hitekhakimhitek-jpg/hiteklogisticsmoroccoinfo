@@ -12,8 +12,6 @@ import {
   Scale,
   Landmark,
   Monitor,
-  Bell,
-  ScrollText,
   Globe2,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
@@ -23,8 +21,6 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Weekly Digest", url: "/digest", icon: FileBarChart },
-  { title: "Alerts", url: "/alerts", icon: Bell },
-  { title: "Compliance Register", url: "/compliance", icon: ScrollText },
   { title: "Disruption Map", url: "/map", icon: Globe2 },
   { title: "Regulatory Changes", url: "/regulatory", icon: Scale },
   { title: "Finance Regulation", url: "/finance-regulation", icon: Landmark },
