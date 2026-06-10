@@ -94,7 +94,7 @@ serve(async (req) => {
     // Per-department digests
     for (const dept of DEPTS) {
       const deptItems = all.filter((i: any) => i.department === dept);
-      const md = await summarize(LOVABLE_API_KEY, DEPT_LABEL[dept], deptItems);
+      const md = await summarize(LOVABLE_API_KEY, DEPT_LABEL[dept], deptItems, all);
       const row = {
         year,
         week_number: week,
@@ -111,7 +111,7 @@ serve(async (req) => {
     }
 
     // Global digest
-    const globalMd = await summarize(LOVABLE_API_KEY, "company-wide", all);
+    const globalMd = await summarize(LOVABLE_API_KEY, "Global", all);
     await supabase.from("weekly_digests").delete().is("department", null).eq("year", year).eq("week_number", week);
     await supabase.from("weekly_digests").insert({
       year,
