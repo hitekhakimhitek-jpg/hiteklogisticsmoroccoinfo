@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { Loader2, LogIn, ArrowLeft } from "lucide-react";
 
 const ALLOWED_DOMAIN = "hitek.ma";
+// Always send users to the live site — the preview URL is gated by Lovable and breaks the email link.
+const SITE_URL = "https://hiteklogisticsmoroccoinfo.lovable.app/";
 
 export default function AuthPage() {
   const nav = useNavigate();
@@ -28,7 +30,7 @@ export default function AuthPage() {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email: normalized,
-        options: { shouldCreateUser: true, emailRedirectTo: `${window.location.origin}/` },
+        options: { shouldCreateUser: true, emailRedirectTo: SITE_URL },
       });
       if (error) throw error;
       setEmail(normalized);
