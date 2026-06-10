@@ -232,8 +232,8 @@ export default function DisruptionMap() {
         <div className="h-[520px] w-full">
           <MapContainer center={[20, 0]} zoom={2} style={{ height: "100%", width: "100%" }} scrollWheelZoom>
             <TileLayer
-              attribution='&copy; OpenStreetMap, &copy; CARTO'
-              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+              attribution='Tiles &copy; Esri'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
             />
             <ClickHandler enabled={placeMode} onPick={onPickPoint} />
             {visible.map((d) => (
