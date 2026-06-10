@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom";
 import { AppSidebar } from "@/components/AppSidebar";
 import { MobileHeader } from "@/components/MobileHeader";
+import { TopBar } from "@/components/TopBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Layout() {
@@ -12,6 +13,7 @@ export default function Layout() {
         <>
           <MobileHeader />
           <main className="flex-1 overflow-auto pt-14">
+            <TopBar />
             <Outlet />
           </main>
         </>
@@ -19,6 +21,7 @@ export default function Layout() {
         <>
           <AppSidebar />
           <main className="flex-1 overflow-auto">
+            <TopBar />
             <Outlet />
           </main>
         </>
