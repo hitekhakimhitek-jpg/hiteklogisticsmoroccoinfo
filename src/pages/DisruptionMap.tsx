@@ -1,17 +1,21 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MapContainer, TileLayer, CircleMarker, Popup, useMapEvents, Marker } from "react-leaflet";
+import { MapContainer, TileLayer, Popup, useMapEvents, Marker } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Globe2, Plus, Trash2, X, Loader2 } from "lucide-react";
+import { Globe2, Plus, Trash2, X, Loader2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
@@ -57,6 +61,18 @@ const SEV_COLOR: Record<Severity, string> = {
 const SEV_RADIUS: Record<Severity, number> = {
   low: 7, medium: 10, high: 13, critical: 16,
 };
+
+function pinIcon(sev: Severity) {
+  const size = SEV_RADIUS[sev] * 2;
+  const color = SEV_COLOR[sev];
+  return L.divIcon({
+    className: "",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 0 0 1px ${color};opacity:0.85;"></div>`,
+  });
+}
 
 // Fix the default Leaflet marker icon (Vite asset issue)
 const draftIcon = new L.Icon({
@@ -105,6 +121,10 @@ export default function DisruptionMap() {
     sources: [{ label: "", url: "" }] as Array<{ label: string; url: string }>,
   });
   const [saving, setSaving] = useState(false);
+
+  // Edit dialog
+  const [editing, setEditing] = useState<Disruption | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -185,6 +205,29 @@ export default function DisruptionMap() {
     if (error) { toast.error(error.message); return; }
   };
 
+  const saveEdit = async () => {
+    if (!editing) return;
+    setEditSaving(true);
+    const cleanSources = (editing.sources || []).filter((s) => s.url.trim()).map((s) => ({
+      label: s.label.trim() || "Source", url: s.url.trim(),
+    }));
+    const { error } = await supabase.from("disruptions" as any).update({
+      title: editing.title.trim(),
+      summary: editing.summary?.trim() || null,
+      latitude: Number(editing.latitude),
+      longitude: Number(editing.longitude),
+      location_name: editing.location_name?.trim() || null,
+      category: editing.category,
+      severity: editing.severity,
+      sources: cleanSources,
+      event_date: new Date(editing.event_date).toISOString(),
+    }).eq("id", editing.id);
+    setEditSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Disruption updated");
+    setEditing(null);
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -236,50 +279,58 @@ export default function DisruptionMap() {
               url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
             />
             <ClickHandler enabled={placeMode} onPick={onPickPoint} />
-            {visible.map((d) => (
-              <CircleMarker
-                key={d.id}
-                center={[Number(d.latitude), Number(d.longitude)]}
-                radius={SEV_RADIUS[d.severity]}
-                pathOptions={{
-                  color: SEV_COLOR[d.severity],
-                  fillColor: SEV_COLOR[d.severity],
-                  fillOpacity: 0.6,
-                  weight: 2,
-                }}
-              >
-                <Popup>
-                  <div className="text-sm space-y-1 min-w-[220px] max-w-[260px]">
-                    <div className="font-semibold">{d.title}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {d.location_name} · {format(new Date(d.event_date), "MMM d, yyyy")}
-                    </div>
-                    <div className="flex gap-1 flex-wrap">
-                      <Badge variant="outline" className="text-[10px]">{CATEGORY_LABEL[d.category]}</Badge>
-                      <Badge className="text-[10px]" style={{ background: SEV_COLOR[d.severity], color: "white" }}>
-                        {d.severity}
-                      </Badge>
-                    </div>
-                    {d.summary && <p className="text-xs">{d.summary}</p>}
-                    {d.sources.length > 0 && (
-                      <div className="text-xs space-y-0.5 pt-1">
-                        <div className="font-medium">Sources:</div>
-                        {d.sources.map((s, i) => (
-                          <a key={i} href={s.url} target="_blank" rel="noreferrer" className="block text-primary underline truncate">
-                            {s.label || s.url}
-                          </a>
-                        ))}
+            <MarkerClusterGroup
+              chunkedLoading
+              spiderfyOnMaxZoom
+              showCoverageOnHover={false}
+              zoomToBoundsOnClick
+              spiderfyDistanceMultiplier={2}
+              maxClusterRadius={35}
+            >
+              {visible.map((d) => (
+                <Marker
+                  key={d.id}
+                  position={[Number(d.latitude), Number(d.longitude)]}
+                  icon={pinIcon(d.severity)}
+                >
+                  <Popup>
+                    <div className="text-sm space-y-1 min-w-[220px] max-w-[260px]">
+                      <div className="font-semibold">{d.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {d.location_name} · {format(new Date(d.event_date), "MMM d, yyyy")}
                       </div>
-                    )}
-                    {isAdmin && (
-                      <button onClick={() => remove(d.id)} className="text-xs text-destructive hover:underline pt-1">
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                </Popup>
-              </CircleMarker>
-            ))}
+                      <div className="flex gap-1 flex-wrap">
+                        <Badge variant="outline" className="text-[10px]">{CATEGORY_LABEL[d.category]}</Badge>
+                        <Badge className="text-[10px]" style={{ background: SEV_COLOR[d.severity], color: "white" }}>
+                          {d.severity}
+                        </Badge>
+                      </div>
+                      {d.summary && <p className="text-xs">{d.summary}</p>}
+                      {d.sources.length > 0 && (
+                        <div className="text-xs space-y-0.5 pt-1">
+                          <div className="font-medium">Sources:</div>
+                          {d.sources.map((s, i) => (
+                            <a key={i} href={s.url} target="_blank" rel="noreferrer" className="block text-primary underline truncate">
+                              {s.label || s.url}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                      {isAdmin && (
+                        <div className="flex gap-3 pt-1">
+                          <button onClick={() => setEditing({ ...d })} className="text-xs text-primary hover:underline">
+                            Edit
+                          </button>
+                          <button onClick={() => remove(d.id)} className="text-xs text-destructive hover:underline">
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+            </MarkerClusterGroup>
             {draft && (
               <Marker
                 position={[draft.lat, draft.lng]}
@@ -390,6 +441,140 @@ export default function DisruptionMap() {
         Showing {visible.length} of {items.length} disruptions
         {loading && <span className="ml-2"><Loader2 className="inline w-3 h-3 animate-spin" /></span>}
       </div>
+
+      {/* Admin: editable list of every pin */}
+      {isAdmin && (
+        <div className="rounded-xl border border-border bg-card">
+          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Manage all pins ({items.length})</h2>
+          </div>
+          <div className="divide-y divide-border max-h-[420px] overflow-auto">
+            {items.map((d) => (
+              <div key={d.id} className="px-4 py-3 flex items-start gap-3">
+                <span
+                  className="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0"
+                  style={{ background: SEV_COLOR[d.severity] }}
+                  aria-hidden
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{d.title}</div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {d.location_name || `${d.latitude.toFixed(2)}, ${d.longitude.toFixed(2)}`} ·{" "}
+                    {CATEGORY_LABEL[d.category]} · {d.severity} ·{" "}
+                    {format(new Date(d.event_date), "MMM d, yyyy")}
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setEditing({ ...d })}>
+                  <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => remove(d.id)}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1 text-destructive" />
+                </Button>
+              </div>
+            ))}
+            {items.length === 0 && (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">No pins yet.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit dialog */}
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit disruption</DialogTitle>
+          </DialogHeader>
+          {editing && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <Label>Title *</Label>
+                <Input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <Label>Summary</Label>
+                <Textarea rows={3} value={editing.summary || ""} onChange={(e) => setEditing({ ...editing, summary: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <Label>Location name</Label>
+                <Input value={editing.location_name || ""} onChange={(e) => setEditing({ ...editing, location_name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Latitude</Label>
+                <Input type="number" step="0.0001" value={editing.latitude}
+                  onChange={(e) => setEditing({ ...editing, latitude: Number(e.target.value) })} />
+              </div>
+              <div>
+                <Label>Longitude</Label>
+                <Input type="number" step="0.0001" value={editing.longitude}
+                  onChange={(e) => setEditing({ ...editing, longitude: Number(e.target.value) })} />
+              </div>
+              <div>
+                <Label>Category</Label>
+                <Select value={editing.category} onValueChange={(v) => setEditing({ ...editing, category: v as Category })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(CATEGORY_LABEL) as Category[]).map((c) => (
+                      <SelectItem key={c} value={c}>{CATEGORY_LABEL[c]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Severity</Label>
+                <Select value={editing.severity} onValueChange={(v) => setEditing({ ...editing, severity: v as Severity })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="sm:col-span-2">
+                <Label>Event date</Label>
+                <Input
+                  type="datetime-local"
+                  value={new Date(editing.event_date).toISOString().slice(0, 16)}
+                  onChange={(e) => setEditing({ ...editing, event_date: new Date(e.target.value).toISOString() })}
+                />
+              </div>
+              <div className="sm:col-span-2 space-y-2">
+                <Label>Sources</Label>
+                {(editing.sources || []).map((s, i) => (
+                  <div key={i} className="flex gap-2">
+                    <Input placeholder="Label" value={s.label}
+                      onChange={(e) => {
+                        const arr = [...editing.sources]; arr[i] = { ...arr[i], label: e.target.value };
+                        setEditing({ ...editing, sources: arr });
+                      }} />
+                    <Input placeholder="https://…" value={s.url}
+                      onChange={(e) => {
+                        const arr = [...editing.sources]; arr[i] = { ...arr[i], url: e.target.value };
+                        setEditing({ ...editing, sources: arr });
+                      }} />
+                    <Button variant="ghost" size="icon" onClick={() => {
+                      const arr = editing.sources.filter((_, j) => j !== i);
+                      setEditing({ ...editing, sources: arr });
+                    }}><Trash2 className="w-4 h-4" /></Button>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm"
+                  onClick={() => setEditing({ ...editing, sources: [...(editing.sources || []), { label: "", url: "" }] })}>
+                  <Plus className="w-4 h-4 mr-1" /> Add source
+                </Button>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
+            <Button onClick={saveEdit} disabled={editSaving}>
+              {editSaving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
