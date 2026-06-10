@@ -7,6 +7,7 @@ export interface AppSettings {
   autoFetchNews: boolean;
   autoGenerateReports: boolean;
   newsSourcesEnabled: string[];
+  customSources: string[];
   notifyOnCritical: boolean;
 }
 
@@ -31,6 +32,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     "UNCTAD", "World Bank", "World Bank LPI", "ITC Trade Map", "ITC",
     "Voice of the Independent",
   ],
+  customSources: [],
   notifyOnCritical: true,
 };
 

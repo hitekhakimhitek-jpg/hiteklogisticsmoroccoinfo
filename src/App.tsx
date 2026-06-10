@@ -17,9 +17,16 @@ import WeeklyDigest from "./pages/WeeklyDigest";
 import DisruptionMap from "./pages/DisruptionMap";
 import AuthPage from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import { Navigate } from "react-router-dom";
 import { RegionProvider } from "@/contexts/RegionContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+
+function AdminOnly({ children }: { children: JSX.Element }) {
+  const { isAdmin, loading } = useAuth();
+  if (loading) return null;
+  return isAdmin ? children : <Navigate to="/auth" replace />;
+}
 
 const queryClient = new QueryClient();
 
@@ -44,7 +51,7 @@ const App = () => (
               <Route path="/chat" element={<ChatAssistant />} />
               <Route path="/digest" element={<WeeklyDigest />} />
               <Route path="/map" element={<DisruptionMap />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/settings" element={<AdminOnly><SettingsPage /></AdminOnly>} />
             </Route>
             <Route path="/auth" element={<AuthPage />} />
             <Route path="*" element={<NotFound />} />

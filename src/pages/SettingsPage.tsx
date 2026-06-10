@@ -3,6 +3,10 @@ import { useSettings } from "@/hooks/useSettings";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import SettingsLoader from "@/components/SettingsLoader";
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Plus, X } from "lucide-react";
 
 const ALL_PRIORITIES = ["critical", "important", "informational"] as const;
 const ALL_SOURCES = [
@@ -36,6 +40,29 @@ const SettingsPage = () => {
     const current = pending.newsSourcesEnabled;
     updatePending({
       newsSourcesEnabled: current.includes(s) ? current.filter((x) => x !== s) : [...current, s],
+    });
+  };
+
+  const [newSource, setNewSource] = useState("");
+  const addCustomSource = () => {
+    const name = newSource.trim();
+    if (!name) return;
+    const existing = [...ALL_SOURCES, ...(pending.customSources || [])];
+    if (existing.some((s) => s.toLowerCase() === name.toLowerCase())) {
+      toast.error("That source is already in the list.");
+      return;
+    }
+    updatePending({
+      customSources: [...(pending.customSources || []), name],
+      newsSourcesEnabled: [...pending.newsSourcesEnabled, name],
+    });
+    setNewSource("");
+    toast.success(`Added ${name}`);
+  };
+  const removeCustomSource = (name: string) => {
+    updatePending({
+      customSources: (pending.customSources || []).filter((s) => s !== name),
+      newsSourcesEnabled: pending.newsSourcesEnabled.filter((s) => s !== name),
     });
   };
 
@@ -120,7 +147,36 @@ const SettingsPage = () => {
 
         {/* Data Sources */}
         <Section icon={Rss} title="Data Sources">
-          <p className="text-sm text-muted-foreground mb-3">Enable/disable intelligence sources.</p>
+          <p className="text-sm text-muted-foreground mb-3">Enable/disable intelligence sources, or add your own.</p>
+
+          <div className="flex gap-2 mb-4">
+            <Input
+              placeholder="Add a new source (e.g. ShippingWatch)"
+              value={newSource}
+              onChange={(e) => setNewSource(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomSource(); } }}
+            />
+            <Button onClick={addCustomSource} size="sm">
+              <Plus className="w-4 h-4 mr-1" /> Add source
+            </Button>
+          </div>
+
+          {(pending.customSources || []).length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Your custom sources</p>
+              <div className="flex flex-wrap gap-2">
+                {pending.customSources.map((s) => (
+                  <span key={s} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full bg-secondary/10 border border-secondary/30 text-card-foreground">
+                    {s}
+                    <button onClick={() => removeCustomSource(s)} className="hover:text-destructive">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {ALL_SOURCES.map((source) => {
               const active = pending.newsSourcesEnabled.includes(source);
