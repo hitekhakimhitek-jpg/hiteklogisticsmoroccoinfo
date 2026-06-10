@@ -62,6 +62,18 @@ const SEV_RADIUS: Record<Severity, number> = {
   low: 7, medium: 10, high: 13, critical: 16,
 };
 
+function pinIcon(sev: Severity) {
+  const size = SEV_RADIUS[sev] * 2;
+  const color = SEV_COLOR[sev];
+  return L.divIcon({
+    className: "",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 0 0 1px ${color};opacity:0.85;"></div>`,
+  });
+}
+
 // Fix the default Leaflet marker icon (Vite asset issue)
 const draftIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -109,6 +121,10 @@ export default function DisruptionMap() {
     sources: [{ label: "", url: "" }] as Array<{ label: string; url: string }>,
   });
   const [saving, setSaving] = useState(false);
+
+  // Edit dialog
+  const [editing, setEditing] = useState<Disruption | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
