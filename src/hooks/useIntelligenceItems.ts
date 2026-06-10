@@ -52,6 +52,9 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
     queryKey: ["intel_items", filters, lang],
     queryFn: async () => {
       let q = supabase.from("intelligence_items").select("*");
+      // Auto-archive: only show items from the last 14 days
+      const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      q = q.gte("created_at", twoWeeksAgo);
       if (filters.department && filters.department !== "all") {
         q = q.eq("department", filters.department);
       }
