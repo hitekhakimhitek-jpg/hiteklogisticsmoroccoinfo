@@ -52,11 +52,14 @@ async function extractLocation(article: { headline: string; summary: string | nu
   const prompt = `You analyze freight & logistics news to plot disruptions on a world map.
 
 RULES for choosing the place:
-- Pick the place where the disruption ACTUALLY HAPPENS or ORIGINATES, not the destination or the unrelated party mentioned.
-- If the actor's nationality is the cause (e.g. "Chinese ro-ro carriers exit Middle East"), the place is the actor's country (China), not the area they're leaving — UNLESS the article makes clear the impact is felt in a specific port/strait/country.
-- If the article is about an organisation (WTO, EU Commission, IMO) with no concrete country named, set specificity = "none".
-- If the article only names a broad region (EU, Middle East, Asia, Sub-Saharan Africa, Latin America), set specificity = "regional".
-- If the article names a specific country, city, port, strait, canal, or border, set specificity = "specific".
+- If a specific country appears IN THE HEADLINE (e.g. "Morocco", "China", "Belgium"), that country is almost always the right place — pin it there, even if other regions are mentioned in the summary.
+- "Morocco as Strategic Pivot" → place is Morocco. "Chinese ro-ro carriers exit Middle East" → place is China. "Belgium airport strike" → place is Belgium (Brussels).
+- Pick the place where the disruption ACTUALLY HAPPENS or ORIGINATES, not the destination, the routing path, or an unrelated party.
+- If the actor's nationality is the cause, the place is the actor's country, not the region they affect — unless the article clearly names a specific port/strait where the impact occurs.
+- If the article is about an organisation (WTO, EU Commission, IMO) with no concrete country named anywhere, set specificity = "none".
+- If the article only names a broad region (EU, Middle East, Asia, Sub-Saharan Africa, Latin America) and NO specific country, set specificity = "regional".
+- If the article names a specific country, city, port, strait, canal, or border, set specificity = "specific" and use that exact place. Prefer the most precise one (port > city > country).
+- Never default to France, the US, or Morocco unless they are actually named in the article.
 
 Return STRICT JSON only (no prose):
 {
