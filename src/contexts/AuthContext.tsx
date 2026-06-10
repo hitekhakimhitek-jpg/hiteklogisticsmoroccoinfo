@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
 
 const ADMIN_EMAIL = "info@hitek.ma";
+const SITE_URL = "https://hiteklogisticsmoroccoinfo.lovable.app/";
 
 type AuthCtx = {
   user: User | null;
@@ -38,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { error: suErr } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}/` },
+          options: { emailRedirectTo: SITE_URL },
         });
         if (suErr) throw suErr;
         const { error: siErr } = await supabase.auth.signInWithPassword({ email, password });
