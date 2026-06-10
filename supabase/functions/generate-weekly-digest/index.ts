@@ -104,9 +104,14 @@ serve(async (req) => {
         act_now_count: deptItems.filter((i: any) => i.severity === "act_now").length,
         this_week_count: deptItems.filter((i: any) => i.severity === "this_week").length,
       };
-      await supabase.from("weekly_digests").upsert(row, {
-        onConflict: "year,week_number,department",
-      });
+      await supabase
+        .from("weekly_digests")
+        .delete()
+        .eq("year", year)
+        .eq("week_number", week)
+        .eq("department", dept);
+      const { error: insErr } = await supabase.from("weekly_digests").insert(row);
+      if (insErr) console.error(`insert ${dept} failed:`, insErr.message);
       generated.push({ department: dept, items: deptItems.length });
     }
 
