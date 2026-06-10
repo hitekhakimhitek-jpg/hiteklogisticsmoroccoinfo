@@ -1,36 +1,38 @@
 import { useState, useMemo, useEffect } from "react";
-import { Loader2, Sparkles, LogIn, LogOut } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { useLastUpdated } from "@/hooks/useFreightData";
 import { FreshnessIndicator } from "@/components/dashboard/FreshnessIndicator";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   useIntelligenceItems,
   useIntelCounts,
-  DEPARTMENT_LABELS,
+  DEPARTMENT_LABELS_BY_LANG,
+  SEVERITY_LABELS_BY_LANG,
   type IntelDepartment,
   type IntelSeverity,
 } from "@/hooks/useIntelligenceItems";
 import { IntelCard } from "@/components/intel/IntelCard";
 import { AddItemDialog } from "@/components/intel/AddItemDialog";
 
-const DEPT_FILTERS: { value: IntelDepartment | "all"; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "operations", label: "Operations" },
-  { value: "compliance", label: "Compliance" },
-  { value: "finance", label: "Finance" },
-  { value: "commercial", label: "Commercial" },
-  { value: "it", label: "IT" },
+const DEPT_VALUES: (IntelDepartment | "all")[] = [
+  "all",
+  "operations",
+  "compliance",
+  "finance",
+  "commercial",
+  "it",
 ];
 
 const Dashboard = () => {
-  const { lang, toggle: toggleLang } = useLanguage();
-  const { user, isAdmin, signOut } = useAuth();
+  const { lang } = useLanguage();
+  const { isAdmin } = useAuth();
   const { data: lastUpdated } = useLastUpdated();
   const { data: counts } = useIntelCounts();
+  const SEV = SEVERITY_LABELS_BY_LANG[lang];
+  const DEPT = DEPARTMENT_LABELS_BY_LANG[lang];
+  const allLabel = lang === "fr" ? "Tous" : "All";
 
   const [department, setDepartment] = useState<IntelDepartment | "all">(() => {
     return (localStorage.getItem("hitek_default_dept") as IntelDepartment | "all") || "all";
@@ -49,27 +51,27 @@ const Dashboard = () => {
     () => [
       {
         key: "act_now" as const,
-        label: "Act now",
+        label: SEV.act_now,
         count: counts?.act_now ?? 0,
         cls: "border-red-500/40 bg-red-500/5 text-red-600 dark:text-red-300",
         dot: "bg-red-500",
       },
       {
         key: "this_week" as const,
-        label: "This week",
+        label: SEV.this_week,
         count: counts?.this_week ?? 0,
         cls: "border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-300",
         dot: "bg-amber-500",
       },
       {
         key: "awareness" as const,
-        label: "Awareness",
+        label: SEV.awareness,
         count: counts?.awareness ?? 0,
         cls: "border-slate-400/40 bg-slate-400/5 text-slate-600 dark:text-slate-300",
         dot: "bg-slate-400",
       },
     ],
-    [counts]
+    [counts, SEV]
   );
 
   return (
@@ -77,9 +79,13 @@ const Dashboard = () => {
       {/* Top bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Intelligence feed</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            {lang === "fr" ? "Flux de renseignement" : "Intelligence feed"}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            What's red across the company right now.
+            {lang === "fr"
+              ? "Ce qui est important dans toute l'entreprise en ce moment."
+              : "What's important across the company right now."}
           </p>
           <div className="mt-1">
             <FreshnessIndicator lastUpdated={lastUpdated} />
@@ -87,21 +93,6 @@ const Dashboard = () => {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isAdmin && <AddItemDialog />}
-          {user ? (
-            <Button variant="outline" size="sm" className="h-9" onClick={() => signOut()}>
-              <LogOut className="w-4 h-4 mr-1" /> {user.email}
-            </Button>
-          ) : (
-            <Button asChild variant="outline" size="sm" className="h-9">
-              <Link to="/auth"><LogIn className="w-4 h-4 mr-1" /> Login</Link>
-            </Button>
-          )}
-          <button
-            onClick={toggleLang}
-            className="h-9 px-3 text-sm rounded-md border border-border bg-card text-card-foreground hover:bg-accent transition-colors font-medium"
-          >
-            {lang === "en" ? "Français" : "English"}
-          </button>
         </div>
       </div>
 
@@ -128,16 +119,17 @@ const Dashboard = () => {
 
       {/* Department pills */}
       <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1">
-        {DEPT_FILTERS.map((d) => {
-          const active = department === d.value;
+        {DEPT_VALUES.map((v) => {
+          const active = department === v;
           const count =
-            d.value === "all"
+            v === "all"
               ? Object.values(counts?.by_dept ?? {}).reduce((a, b) => a + b, 0)
-              : counts?.by_dept?.[d.value] ?? 0;
+              : counts?.by_dept?.[v] ?? 0;
+          const label = v === "all" ? allLabel : DEPT[v];
           return (
             <button
-              key={d.value}
-              onClick={() => setDepartment(d.value)}
+              key={v}
+              onClick={() => setDepartment(v)}
               className={cn(
                 "px-3 py-1.5 rounded-full text-sm font-medium transition-colors border",
                 active
@@ -145,7 +137,7 @@ const Dashboard = () => {
                   : "bg-card text-card-foreground border-border hover:bg-accent"
               )}
             >
-              {d.label}
+              {label}
               <span
                 className={cn(
                   "ml-1.5 text-xs opacity-70",
@@ -167,9 +159,13 @@ const Dashboard = () => {
       ) : !hasData ? (
         <div className="bg-card rounded-lg border border-border card-elevated p-12 text-center space-y-3">
           <Sparkles className="w-10 h-10 text-muted-foreground mx-auto" />
-          <h2 className="text-lg font-semibold">No intelligence items yet</h2>
+          <h2 className="text-lg font-semibold">
+            {lang === "fr" ? "Aucun élément de renseignement" : "No intelligence items yet"}
+          </h2>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            Intelligence items are generated automatically each day at 8 AM Morocco time. Use <strong>Add item</strong> to enter one manually with AI assist.
+            {lang === "fr"
+              ? "Les éléments de renseignement sont générés automatiquement chaque jour à 8 h heure du Maroc."
+              : "Intelligence items are generated automatically each day at 8 AM Morocco time."}
           </p>
         </div>
       ) : (
@@ -181,7 +177,9 @@ const Dashboard = () => {
       )}
 
       <p className="text-xs text-muted-foreground text-center pt-4">
-        Sorted by severity, then most recent. Showing {items?.length ?? 0} items.
+        {lang === "fr"
+          ? `Trié par gravité, puis par récence. ${items?.length ?? 0} élément(s) affiché(s).`
+          : `Sorted by severity, then most recent. Showing ${items?.length ?? 0} items.`}
       </p>
     </div>
   );
