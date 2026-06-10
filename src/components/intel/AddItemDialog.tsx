@@ -12,9 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Sparkles, Loader2 } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import {
-  aiAssist,
   useCreateIntel,
   DEPARTMENT_LABELS,
   SEVERITY_LABELS,
@@ -27,7 +26,6 @@ import { toast } from "@/components/ui/sonner";
 
 export function AddItemDialog() {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState({
     headline: "",
     summary: "",
@@ -42,40 +40,6 @@ export function AddItemDialog() {
     owner: "",
   });
   const createIntel = useCreateIntel();
-
-  const runAssist = async () => {
-    if (!draft.headline && !draft.source_url && !draft.summary) {
-      toast.error("Paste a headline, URL, or summary first.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const result = await aiAssist({
-        headline: draft.headline,
-        summary: draft.summary,
-        text: draft.summary,
-        source_url: draft.source_url,
-        source_name: draft.source_name,
-      });
-      setDraft((d) => ({
-        ...d,
-        headline: result.headline || d.headline,
-        summary: result.summary || d.summary,
-        impact: result.impact || "",
-        action_required: result.action_required || "Monitor only.",
-        department: (result.department as IntelDepartment) || d.department,
-        severity: (result.severity as IntelSeverity) || d.severity,
-        time_to_impact: (result.time_to_impact as IntelHorizon) || d.time_to_impact,
-        affected_tags: (result.affected_tags || []).join(", "),
-        owner: (result.owner as string) || d.owner,
-      }));
-      toast.success("AI fields filled — review and save.");
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSave = async () => {
     try {
@@ -120,24 +84,14 @@ export function AddItemDialog() {
           <DialogTitle>New intelligence item</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
-            <div>
-              <Label htmlFor="src-url">Source URL (optional — for AI assist)</Label>
-              <Input
-                id="src-url"
-                value={draft.source_url}
-                onChange={(e) => setDraft((d) => ({ ...d, source_url: e.target.value }))}
-                placeholder="https://..."
-              />
-            </div>
-            <Button onClick={runAssist} disabled={loading} variant="secondary">
-              {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-1" />
-              ) : (
-                <Sparkles className="w-4 h-4 mr-1" />
-              )}
-              AI assist
-            </Button>
+          <div>
+            <Label htmlFor="src-url">Source URL (optional)</Label>
+            <Input
+              id="src-url"
+              value={draft.source_url}
+              onChange={(e) => setDraft((d) => ({ ...d, source_url: e.target.value }))}
+              placeholder="https://..."
+            />
           </div>
           <div>
             <Label htmlFor="headline">Headline</Label>
