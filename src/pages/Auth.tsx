@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +67,10 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+      <div className="w-full max-w-sm space-y-3">
+      <Link to="/" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+        <ArrowLeft className="w-3 h-3" /> Back to dashboard
+      </Link>
       {step === "email" ? (
         <form onSubmit={sendCode} className="w-full max-w-sm bg-card border border-border rounded-xl p-6 space-y-4 shadow">
           <div>
@@ -129,6 +133,7 @@ export default function AuthPage() {
           </button>
         </form>
       )}
+      </div>
     </div>
   );
 }
