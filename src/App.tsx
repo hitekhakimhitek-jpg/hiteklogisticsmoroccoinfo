@@ -11,7 +11,6 @@ import ArchivePage from "./pages/ArchivePage";
 import RegulatoryChanges from "./pages/RegulatoryChanges";
 import FinanceRegulation from "./pages/FinanceRegulation";
 import ITNews from "./pages/ITNews";
-import ChatAssistant from "./pages/ChatAssistant";
 import SettingsPage from "./pages/SettingsPage";
 import WeeklyDigest from "./pages/WeeklyDigest";
 import DisruptionMap from "./pages/DisruptionMap";
@@ -48,7 +47,6 @@ const App = () => (
               <Route path="/weekly" element={<WeeklyReport />} />
               <Route path="/monthly" element={<MonthlySummary />} />
               <Route path="/archive" element={<ArchivePage />} />
-              <Route path="/chat" element={<ChatAssistant />} />
               <Route path="/digest" element={<WeeklyDigest />} />
               <Route path="/map" element={<DisruptionMap />} />
               <Route path="/settings" element={<AdminOnly><SettingsPage /></AdminOnly>} />
