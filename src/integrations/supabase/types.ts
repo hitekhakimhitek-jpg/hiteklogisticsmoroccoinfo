@@ -235,6 +235,7 @@ export type Database = {
           alerted_at: string | null
           created_at: string
           department: Database["public"]["Enums"]["intel_department"]
+          effective_date: string | null
           headline: string
           id: string
           impact: string
@@ -242,6 +243,7 @@ export type Database = {
           language: string
           last_reviewed_at: string | null
           owner: string | null
+          publication_date: string | null
           severity: Database["public"]["Enums"]["intel_severity"]
           source_entry_id: string | null
           source_name: string
@@ -251,6 +253,8 @@ export type Database = {
           time_to_impact: Database["public"]["Enums"]["intel_horizon"]
           time_to_impact_date: string | null
           updated_at: string
+          updated_date: string | null
+          verification_status: string
         }
         Insert: {
           action_required?: string
@@ -258,6 +262,7 @@ export type Database = {
           alerted_at?: string | null
           created_at?: string
           department?: Database["public"]["Enums"]["intel_department"]
+          effective_date?: string | null
           headline: string
           id?: string
           impact?: string
@@ -265,6 +270,7 @@ export type Database = {
           language?: string
           last_reviewed_at?: string | null
           owner?: string | null
+          publication_date?: string | null
           severity?: Database["public"]["Enums"]["intel_severity"]
           source_entry_id?: string | null
           source_name?: string
@@ -274,6 +280,8 @@ export type Database = {
           time_to_impact?: Database["public"]["Enums"]["intel_horizon"]
           time_to_impact_date?: string | null
           updated_at?: string
+          updated_date?: string | null
+          verification_status?: string
         }
         Update: {
           action_required?: string
@@ -281,6 +289,7 @@ export type Database = {
           alerted_at?: string | null
           created_at?: string
           department?: Database["public"]["Enums"]["intel_department"]
+          effective_date?: string | null
           headline?: string
           id?: string
           impact?: string
@@ -288,6 +297,7 @@ export type Database = {
           language?: string
           last_reviewed_at?: string | null
           owner?: string | null
+          publication_date?: string | null
           severity?: Database["public"]["Enums"]["intel_severity"]
           source_entry_id?: string | null
           source_name?: string
@@ -297,6 +307,8 @@ export type Database = {
           time_to_impact?: Database["public"]["Enums"]["intel_horizon"]
           time_to_impact_date?: string | null
           updated_at?: string
+          updated_date?: string | null
+          verification_status?: string
         }
         Relationships: [
           {
@@ -362,6 +374,7 @@ export type Database = {
           classification_notes: string | null
           content_type: string | null
           display_regions: string[]
+          effective_date: string | null
           fetched_date: string
           finance_score: number | null
           full_content: string | null
@@ -372,6 +385,7 @@ export type Database = {
           it_score: number | null
           month: number
           priority: Database["public"]["Enums"]["news_priority"]
+          publication_date: string | null
           published_date: string
           region: Database["public"]["Enums"]["news_region"]
           region_confidence: number | null
@@ -379,6 +393,8 @@ export type Database = {
           source_url: string | null
           suggested_action: string | null
           summary: string
+          updated_date: string | null
+          verification_status: string
           week_number: number
           year: number
         }
@@ -390,6 +406,7 @@ export type Database = {
           classification_notes?: string | null
           content_type?: string | null
           display_regions?: string[]
+          effective_date?: string | null
           fetched_date?: string
           finance_score?: number | null
           full_content?: string | null
@@ -400,6 +417,7 @@ export type Database = {
           it_score?: number | null
           month?: number
           priority?: Database["public"]["Enums"]["news_priority"]
+          publication_date?: string | null
           published_date?: string
           region?: Database["public"]["Enums"]["news_region"]
           region_confidence?: number | null
@@ -407,6 +425,8 @@ export type Database = {
           source_url?: string | null
           suggested_action?: string | null
           summary: string
+          updated_date?: string | null
+          verification_status?: string
           week_number?: number
           year?: number
         }
@@ -418,6 +438,7 @@ export type Database = {
           classification_notes?: string | null
           content_type?: string | null
           display_regions?: string[]
+          effective_date?: string | null
           fetched_date?: string
           finance_score?: number | null
           full_content?: string | null
@@ -428,6 +449,7 @@ export type Database = {
           it_score?: number | null
           month?: number
           priority?: Database["public"]["Enums"]["news_priority"]
+          publication_date?: string | null
           published_date?: string
           region?: Database["public"]["Enums"]["news_region"]
           region_confidence?: number | null
@@ -435,6 +457,8 @@ export type Database = {
           source_url?: string | null
           suggested_action?: string | null
           summary?: string
+          updated_date?: string | null
+          verification_status?: string
           week_number?: number
           year?: number
         }
