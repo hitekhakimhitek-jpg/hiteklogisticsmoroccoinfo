@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
-import { Menu, X, LayoutDashboard, FileBarChart, CalendarDays, Archive, MessageSquare, Settings, Scale, Landmark, Monitor } from "lucide-react";
+import { Menu, X, LayoutDashboard, FileBarChart, CalendarDays, Archive, Settings, Scale, Landmark, Monitor } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
@@ -13,7 +13,6 @@ const navItems = [
   { title: "IT News", url: "/it-news", icon: Monitor },
   { title: "Weekly Report", url: "/weekly", icon: FileBarChart },
   { title: "Monthly Summary", url: "/monthly", icon: CalendarDays },
-  { title: "Chat Assistant", url: "/chat", icon: MessageSquare },
   { title: "Archive", url: "/archive", icon: Archive },
   { title: "Settings", url: "/settings", icon: Settings },
 ];

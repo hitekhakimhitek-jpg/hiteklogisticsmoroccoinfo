@@ -6,7 +6,6 @@ import {
   FileBarChart,
   CalendarDays,
   Archive,
-  MessageSquare,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -28,7 +27,6 @@ const baseNavItems = [
   { title: "IT News", url: "/it-news", icon: Monitor },
   { title: "Weekly Report", url: "/weekly", icon: FileBarChart },
   { title: "Monthly Summary", url: "/monthly", icon: CalendarDays },
-  { title: "Chat Assistant", url: "/chat", icon: MessageSquare },
   { title: "Archive", url: "/archive", icon: Archive },
 ];
 
