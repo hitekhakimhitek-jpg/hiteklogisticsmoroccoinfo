@@ -36,6 +36,42 @@ const CONTENT_TYPES = [
 ];
 const PRIORITIES = ["critical", "important", "informational"];
 
+// Try to extract an ISO publication date from Firecrawl metadata or article markdown.
+// Returns YYYY-MM-DD or null. NEVER fall back to "today" — the dashboard requires
+// the real source date.
+function extractPublicationDate(metadata: any, markdown?: string): string | null {
+  const candidates: any[] = [
+    metadata?.publishedDate,
+    metadata?.datePublished,
+    metadata?.published_time,
+    metadata?.["article:published_time"],
+    metadata?.["og:article:published_time"],
+    metadata?.["og:published_time"],
+    metadata?.pubdate,
+    metadata?.date,
+  ];
+  for (const c of candidates) {
+    if (!c || typeof c !== "string") continue;
+    const d = new Date(c);
+    if (!isNaN(d.getTime()) && d.getFullYear() > 2000 && d.getTime() <= Date.now() + 86400000) {
+      return d.toISOString().split("T")[0];
+    }
+  }
+  // Look for a JSON-LD-style date in the first 2KB of markdown
+  if (typeof markdown === "string" && markdown.length > 0) {
+    const m = markdown.substring(0, 2000).match(
+      /\b(20\d{2}-\d{2}-\d{2})\b|\b(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+20\d{2})\b/i,
+    );
+    if (m) {
+      const d = new Date(m[0]);
+      if (!isNaN(d.getTime()) && d.getTime() <= Date.now() + 86400000) {
+        return d.toISOString().split("T")[0];
+      }
+    }
+  }
+  return null;
+}
+
 // Map source names → search queries. Only queries whose source name is in the enabled list will run.
 const SOURCE_QUERIES: Record<string, string[]> = {
   // TIER 1 — Freight & logistics
@@ -227,7 +263,8 @@ async function firecrawlScrapeUrl(
     const title: string = metadata.title || markdown.split("\n").find((l: string) => l.startsWith("# "))?.replace(/^#\s*/, "") || "";
     const description: string = metadata.description || markdown.substring(0, 240).replace(/\n/g, " ");
     if (!title) return null;
-    return { title, url, description, markdown: markdown.substring(0, 1500) };
+    const publishedDate = extractPublicationDate(metadata, markdown);
+    return { title, url, description, markdown: markdown.substring(0, 1500), publishedDate } as any;
   } catch (e) {
     console.error(`/scrape exception for ${url}:`, e);
     return null;
@@ -323,6 +360,7 @@ serve(async (req) => {
       description: string;
       source: string;
       markdown?: string;
+      publishedDate?: string | null;
     }> = [];
 
     const searchPromises = searchQueries.map(async (query) => {
@@ -355,6 +393,7 @@ serve(async (req) => {
           description: item.description || item.excerpt || "",
           source: extractSourceName(item.url || ""),
           markdown: item.markdown?.substring(0, 1000) || "",
+          publishedDate: extractPublicationDate(item.metadata || {}, item.markdown || ""),
         }));
       } catch (e) {
         console.error(`Search failed for query: ${query.substring(0, 50)}...`, e);
@@ -399,6 +438,7 @@ serve(async (req) => {
               description: art.description,
               source: src.name,
               markdown: art.markdown,
+              publishedDate: (art as any).publishedDate ?? null,
             });
             directScrapeStats[src.name].scraped += 1;
           }
@@ -723,6 +763,11 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       const impactScore = Math.max(0, Math.min(100, Math.round(Number(entry.impact_score) || 0)));
       const regionConfidence = Math.max(0, Math.min(1, Number(entry.region_confidence) || 0));
 
+      // Use the REAL source publication date when available; never fall back to today.
+      const sourcePubDate: string | null =
+        (originalArticle as any).publishedDate || null;
+      const verificationStatus = sourcePubDate ? "verified" : "date_not_verified";
+
       return {
         headline: entry.headline || originalArticle.title,
         summary: entry.summary || originalArticle.description,
@@ -734,7 +779,9 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         impact_assessment: entry.impact_assessment || null,
         action_required: entry.action_required || false,
         suggested_action: entry.suggested_action || null,
-        published_date: today,
+        published_date: sourcePubDate ?? today, // legacy column — keep filled
+        publication_date: sourcePubDate,        // real source date or null
+        verification_status: verificationStatus,
         week_number: weekNumber,
         month: now.getMonth() + 1,
         year: now.getFullYear(),

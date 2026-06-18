@@ -166,7 +166,7 @@ serve(async (req) => {
 
     const { data: candidates, error: fetchErr } = await supabase
       .from("news_entries")
-      .select("id, headline, summary, full_content, source_name, source_url, region, category")
+      .select("id, headline, summary, full_content, source_name, source_url, region, category, publication_date, updated_date, effective_date, verification_status")
       .order("fetched_date", { ascending: false })
       .limit(limit + taken.size);
     if (fetchErr) throw new Error(fetchErr.message);
@@ -205,6 +205,10 @@ serve(async (req) => {
           status: "new",
           is_ai_draft: true,
           source_entry_id: entry.id,
+          publication_date: (entry as any).publication_date ?? null,
+          updated_date: (entry as any).updated_date ?? null,
+          effective_date: (entry as any).effective_date ?? null,
+          verification_status: (entry as any).verification_status ?? "needs_review",
         });
         if (insErr) {
           failed++;

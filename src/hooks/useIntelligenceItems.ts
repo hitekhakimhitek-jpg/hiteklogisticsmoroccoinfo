@@ -29,7 +29,23 @@ export type IntelligenceItem = {
   created_at: string;
   updated_at: string;
   last_reviewed_at: string | null;
+  publication_date: string | null;
+  updated_date: string | null;
+  effective_date: string | null;
+  verification_status: VerificationStatus;
 };
+
+export type VerificationStatus =
+  | "verified"
+  | "partially_verified"
+  | "date_not_verified"
+  | "source_mismatch"
+  | "outdated"
+  | "broken_link"
+  | "duplicate"
+  | "needs_review";
+
+export const VERIFIED_STATUSES: VerificationStatus[] = ["verified", "partially_verified"];
 
 export type IntelFilters = {
   department?: IntelDepartment | "all";
@@ -52,9 +68,9 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
     queryKey: ["intel_items", filters, lang],
     queryFn: async () => {
       let q = supabase.from("intelligence_items").select("*");
-      // Auto-archive: only show items from the last 14 days
-      const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-      q = q.gte("created_at", twoWeeksAgo);
+      // Rolling 30-day window for the main feed. Older items live in Archives.
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      q = q.gte("created_at", thirtyDaysAgo);
       if (filters.department && filters.department !== "all") {
         q = q.eq("department", filters.department);
       }
