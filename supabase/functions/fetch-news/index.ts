@@ -36,6 +36,42 @@ const CONTENT_TYPES = [
 ];
 const PRIORITIES = ["critical", "important", "informational"];
 
+// Try to extract an ISO publication date from Firecrawl metadata or article markdown.
+// Returns YYYY-MM-DD or null. NEVER fall back to "today" — the dashboard requires
+// the real source date.
+function extractPublicationDate(metadata: any, markdown?: string): string | null {
+  const candidates: any[] = [
+    metadata?.publishedDate,
+    metadata?.datePublished,
+    metadata?.published_time,
+    metadata?.["article:published_time"],
+    metadata?.["og:article:published_time"],
+    metadata?.["og:published_time"],
+    metadata?.pubdate,
+    metadata?.date,
+  ];
+  for (const c of candidates) {
+    if (!c || typeof c !== "string") continue;
+    const d = new Date(c);
+    if (!isNaN(d.getTime()) && d.getFullYear() > 2000 && d.getTime() <= Date.now() + 86400000) {
+      return d.toISOString().split("T")[0];
+    }
+  }
+  // Look for a JSON-LD-style date in the first 2KB of markdown
+  if (typeof markdown === "string" && markdown.length > 0) {
+    const m = markdown.substring(0, 2000).match(
+      /\b(20\d{2}-\d{2}-\d{2})\b|\b(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+20\d{2})\b/i,
+    );
+    if (m) {
+      const d = new Date(m[0]);
+      if (!isNaN(d.getTime()) && d.getTime() <= Date.now() + 86400000) {
+        return d.toISOString().split("T")[0];
+      }
+    }
+  }
+  return null;
+}
+
 // Map source names → search queries. Only queries whose source name is in the enabled list will run.
 const SOURCE_QUERIES: Record<string, string[]> = {
   // TIER 1 — Freight & logistics
@@ -227,7 +263,8 @@ async function firecrawlScrapeUrl(
     const title: string = metadata.title || markdown.split("\n").find((l: string) => l.startsWith("# "))?.replace(/^#\s*/, "") || "";
     const description: string = metadata.description || markdown.substring(0, 240).replace(/\n/g, " ");
     if (!title) return null;
-    return { title, url, description, markdown: markdown.substring(0, 1500) };
+    const publishedDate = extractPublicationDate(metadata, markdown);
+    return { title, url, description, markdown: markdown.substring(0, 1500), publishedDate } as any;
   } catch (e) {
     console.error(`/scrape exception for ${url}:`, e);
     return null;
