@@ -360,6 +360,7 @@ serve(async (req) => {
       description: string;
       source: string;
       markdown?: string;
+      publishedDate?: string | null;
     }> = [];
 
     const searchPromises = searchQueries.map(async (query) => {
@@ -392,6 +393,7 @@ serve(async (req) => {
           description: item.description || item.excerpt || "",
           source: extractSourceName(item.url || ""),
           markdown: item.markdown?.substring(0, 1000) || "",
+          publishedDate: extractPublicationDate(item.metadata || {}, item.markdown || ""),
         }));
       } catch (e) {
         console.error(`Search failed for query: ${query.substring(0, 50)}...`, e);
@@ -436,6 +438,7 @@ serve(async (req) => {
               description: art.description,
               source: src.name,
               markdown: art.markdown,
+              publishedDate: (art as any).publishedDate ?? null,
             });
             directScrapeStats[src.name].scraped += 1;
           }
