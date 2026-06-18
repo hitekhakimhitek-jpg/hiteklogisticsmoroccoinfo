@@ -763,6 +763,11 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       const impactScore = Math.max(0, Math.min(100, Math.round(Number(entry.impact_score) || 0)));
       const regionConfidence = Math.max(0, Math.min(1, Number(entry.region_confidence) || 0));
 
+      // Use the REAL source publication date when available; never fall back to today.
+      const sourcePubDate: string | null =
+        (originalArticle as any).publishedDate || null;
+      const verificationStatus = sourcePubDate ? "verified" : "date_not_verified";
+
       return {
         headline: entry.headline || originalArticle.title,
         summary: entry.summary || originalArticle.description,
@@ -774,7 +779,9 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         impact_assessment: entry.impact_assessment || null,
         action_required: entry.action_required || false,
         suggested_action: entry.suggested_action || null,
-        published_date: today,
+        published_date: sourcePubDate ?? today, // legacy column — keep filled
+        publication_date: sourcePubDate,        // real source date or null
+        verification_status: verificationStatus,
         week_number: weekNumber,
         month: now.getMonth() + 1,
         year: now.getFullYear(),
