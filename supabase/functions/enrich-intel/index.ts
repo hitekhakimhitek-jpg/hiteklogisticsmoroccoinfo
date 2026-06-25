@@ -154,6 +154,87 @@ serve(async (req) => {
       });
     }
 
+    // ---- Mode: scrape a URL with Firecrawl, AI-draft, and insert ----
+    if (body.mode === "scrape_create") {
+      const url = String(body.url || "").trim();
+      const severityOverride = SEVERITIES.includes(body.severity) ? body.severity : null;
+      if (!url || !/^https?:\/\//i.test(url)) {
+        return new Response(JSON.stringify({ error: "Valid URL required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
+      if (!FIRECRAWL_API_KEY) throw new Error("FIRECRAWL_API_KEY missing");
+
+      const fcResp = await fetch("https://api.firecrawl.dev/v2/scrape", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          url,
+          formats: ["markdown"],
+          onlyMainContent: true,
+        }),
+      });
+      if (!fcResp.ok) {
+        const t = await fcResp.text();
+        throw new Error(`Firecrawl ${fcResp.status}: ${t.slice(0, 200)}`);
+      }
+      const fcData = await fcResp.json();
+      const doc = fcData?.data ?? fcData;
+      const markdown: string = doc?.markdown || "";
+      const meta = doc?.metadata || {};
+      const pageTitle: string = meta?.title || meta?.ogTitle || "";
+      const sourceName: string = meta?.siteName || (() => {
+        try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return "Web"; }
+      })();
+
+      if (!markdown && !pageTitle) throw new Error("Firecrawl returned no content");
+
+      const drafted = await callAI(
+        LOVABLE_API_KEY,
+        buildUserPrompt({
+          headline: pageTitle,
+          summary: "",
+          full_content: markdown,
+          source_name: sourceName,
+          source_url: url,
+        })
+      );
+
+      const finalSeverity = severityOverride ?? drafted.severity;
+
+      const { data: inserted, error: insErr } = await supabase
+        .from("intelligence_items")
+        .insert({
+          headline: drafted.headline || pageTitle || "Untitled",
+          summary: drafted.summary,
+          impact: drafted.impact,
+          action_required: drafted.action_required,
+          department: drafted.department,
+          severity: finalSeverity,
+          time_to_impact: drafted.time_to_impact,
+          affected_tags: drafted.affected_tags,
+          source_name: sourceName,
+          source_url: url,
+          owner: drafted.owner,
+          status: "new",
+          is_ai_draft: false,
+          publication_date: meta?.publishedTime || meta?.publishDate || null,
+          verification_status: "verified",
+        })
+        .select()
+        .single();
+      if (insErr) throw new Error(insErr.message);
+
+      return new Response(JSON.stringify({ success: true, item: inserted }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ---- Mode: batch enrich news_entries that have no intelligence_item ----
     const limit = Math.min(Number(body.limit) || 30, 100);
 
