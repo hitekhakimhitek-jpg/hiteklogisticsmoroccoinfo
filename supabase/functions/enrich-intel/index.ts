@@ -103,6 +103,8 @@ Severity (be strict):
 - this_week: must be handled this week; affects upcoming shipments, near-term costs, or compliance reviews.
 - awareness: horizon scanning, trends, background context. No immediate action.
 
+IMPORTANT RULE: Items classified as department "it" can NEVER be "act_now" (Critical). Only operations, compliance, finance, and commercial may be act_now. If an IT item seems urgent, cap it at "this_week" (Important).
+
 time_to_impact: today | this_week | this_month | horizon.
 
 affected_tags: 1-4 short chips (locations, modes, lanes, doc types), e.g. ["Tanger Med","Road"], ["Europe import","Customs"], ["Ocean","Pricing"], ["AI","Cybersecurity"]. No sentences.
@@ -118,7 +120,10 @@ function jsonOnly(s: string): string {
 
 function coerce(d: any): Drafted {
   const dept = DEPARTMENTS.includes(d?.department) ? d.department : "operations";
-  const sev = SEVERITIES.includes(d?.severity) ? d.severity : "awareness";
+  let sev = SEVERITIES.includes(d?.severity) ? d.severity : "awareness";
+  // Rule: IT items can never be auto-classified as critical (act_now).
+  // Downgrade to "this_week" (Important). Manual user overrides bypass this in scrape_create.
+  if (dept === "it" && sev === "act_now") sev = "this_week";
   const hor = HORIZONS.includes(d?.time_to_impact) ? d.time_to_impact : "horizon";
   const tags = Array.isArray(d?.affected_tags)
     ? d.affected_tags.filter((x: any) => typeof x === "string").slice(0, 6)
