@@ -11,6 +11,33 @@ const DEPARTMENTS = ["operations", "compliance", "finance", "commercial", "it"] 
 const SEVERITIES = ["act_now", "this_week", "awareness"] as const;
 const HORIZONS = ["today", "this_week", "this_month", "horizon"] as const;
 
+function extractPubDate(meta: any, markdown?: string): string | null {
+  const candidates: any[] = [
+    meta?.publishedTime, meta?.publishDate, meta?.publishedDate, meta?.datePublished,
+    meta?.published_time, meta?.["article:published_time"], meta?.["og:article:published_time"],
+    meta?.["og:published_time"], meta?.pubdate, meta?.date,
+  ];
+  for (const c of candidates) {
+    if (!c || typeof c !== "string") continue;
+    const d = new Date(c);
+    if (!isNaN(d.getTime()) && d.getFullYear() > 2000 && d.getTime() <= Date.now() + 86400000) {
+      return d.toISOString().split("T")[0];
+    }
+  }
+  if (typeof markdown === "string" && markdown.length > 0) {
+    const m = markdown.substring(0, 3000).match(
+      /\b(20\d{2}-\d{2}-\d{2})\b|\b(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+20\d{2})\b/i,
+    );
+    if (m) {
+      const d = new Date(m[0]);
+      if (!isNaN(d.getTime()) && d.getTime() <= Date.now() + 86400000) {
+        return d.toISOString().split("T")[0];
+      }
+    }
+  }
+  return null;
+}
+
 type Drafted = {
   headline: string;
   summary: string;
@@ -223,7 +250,7 @@ serve(async (req) => {
           owner: drafted.owner,
           status: "new",
           is_ai_draft: false,
-          publication_date: meta?.publishedTime || meta?.publishDate || null,
+          publication_date: extractPubDate(meta, markdown),
           verification_status: "verified",
         })
         .select()
