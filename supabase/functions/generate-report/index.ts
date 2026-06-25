@@ -153,7 +153,7 @@ Return ONLY valid JSON. No markdown.`;
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const { data: items } = await supabase
         .from("intelligence_items")
-        .select("id, headline, summary, impact, action, department, severity, source_name, source_url, publication_date, country, created_at")
+        .select("id, headline, summary, impact, action_required, department, severity, source_name, source_url, publication_date, created_at")
         .gte("created_at", thirtyDaysAgo)
         .order("severity", { ascending: true })
         .order("created_at", { ascending: false });
