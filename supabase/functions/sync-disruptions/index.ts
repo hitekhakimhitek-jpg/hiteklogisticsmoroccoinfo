@@ -166,6 +166,24 @@ serve(async (req) => {
       .limit(limit);
     if (error) throw error;
 
+    // CLEANUP: remove scraped pins whose source intel item is no longer on the dashboard.
+    // Keep manually-placed pins ("manual" origin) untouched.
+    const liveIds = new Set<string>((entries || []).map((e: any) => e.id));
+    const { data: allScraped } = await supabase
+      .from("disruptions")
+      .select("id, source_entry_id, origin")
+      .eq("origin", "scraped");
+    const orphanIds: string[] = [];
+    for (const d of allScraped || []) {
+      if (!d.source_entry_id || !liveIds.has(d.source_entry_id)) orphanIds.push(d.id);
+    }
+    let removed = 0;
+    if (orphanIds.length > 0) {
+      const { error: delErr } = await supabase.from("disruptions").delete().in("id", orphanIds);
+      if (delErr) console.error("cleanup delete err", delErr);
+      else removed = orphanIds.length;
+    }
+
     const existingIds = new Set<string>();
     {
       const ids = (entries || []).map((e: any) => e.id);
@@ -251,7 +269,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, considered: entries?.length || 0, created, merged, skipped, failed }),
+      JSON.stringify({ success: true, considered: entries?.length || 0, created, merged, skipped, failed, removed }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
