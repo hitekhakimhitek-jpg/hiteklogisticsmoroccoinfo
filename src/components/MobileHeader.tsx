@@ -1,16 +1,13 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
-import { Menu, X, LayoutDashboard, FileBarChart, CalendarDays, Archive, Settings, Scale, Landmark, Monitor } from "lucide-react";
+import { Menu, X, LayoutDashboard, FileBarChart, CalendarDays, Archive, Settings } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Regulatory Changes", url: "/regulatory", icon: Scale },
-  { title: "Finance Regulation", url: "/finance-regulation", icon: Landmark },
-  { title: "IT News", url: "/it-news", icon: Monitor },
   { title: "Weekly Report", url: "/weekly", icon: FileBarChart },
   { title: "Monthly Summary", url: "/monthly", icon: CalendarDays },
   { title: "Archive", url: "/archive", icon: Archive },

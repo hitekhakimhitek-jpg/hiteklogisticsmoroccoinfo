@@ -9,9 +9,6 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Scale,
-  Landmark,
-  Monitor,
   Globe2,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
@@ -22,9 +19,6 @@ const baseNavItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Weekly Digest", url: "/digest", icon: FileBarChart },
   { title: "Disruption Map", url: "/map", icon: Globe2 },
-  { title: "Regulatory Changes", url: "/regulatory", icon: Scale },
-  { title: "Finance Regulation", url: "/finance-regulation", icon: Landmark },
-  { title: "IT News", url: "/it-news", icon: Monitor },
   { title: "Weekly Report", url: "/weekly", icon: FileBarChart },
   { title: "Monthly Summary", url: "/monthly", icon: CalendarDays },
   { title: "Archive", url: "/archive", icon: Archive },
