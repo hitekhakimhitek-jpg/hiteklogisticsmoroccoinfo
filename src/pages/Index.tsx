@@ -21,36 +21,11 @@ import { AddItemDialog } from "@/components/intel/AddItemDialog";
 const DEPT_ORDER: IntelDepartment[] = ["operations", "compliance", "finance", "commercial", "it"];
 const DEPT_VALUES: (IntelDepartment | "all")[] = ["all", ...DEPT_ORDER];
 
-type TimeBucket = "this_week" | "earlier_this_month" | "ongoing" | "older";
-
-const BUCKET_LABELS: Record<"en" | "fr", Record<TimeBucket, string>> = {
-  en: {
-    this_week: "This Week",
-    earlier_this_month: "Earlier This Month",
-    ongoing: "Ongoing Alerts",
-    older: "Archives",
-  },
-  fr: {
-    this_week: "Cette semaine",
-    earlier_this_month: "Plus tôt ce mois-ci",
-    ongoing: "Alertes en cours",
-    older: "Archives",
-  },
-};
+// Severity order — Critical first, then This Week, then To be aware of.
+const SEV_ORDER: IntelSeverity[] = ["act_now", "this_week", "awareness"];
 
 function effectiveDate(item: IntelligenceItem): Date {
   return new Date(item.publication_date ?? item.created_at);
-}
-
-function bucketOf(item: IntelligenceItem): TimeBucket {
-  const now = Date.now();
-  const d = effectiveDate(item).getTime();
-  const ageDays = (now - d) / 86_400_000;
-  // Items still flagged Critical / This week and older than 7d → "ongoing"
-  if (ageDays > 7 && (item.severity === "act_now" || item.severity === "this_week")) return "ongoing";
-  if (ageDays <= 7) return "this_week";
-  if (ageDays <= 30) return "earlier_this_month";
-  return "older";
 }
 
 const Dashboard = () => {
@@ -75,32 +50,29 @@ const Dashboard = () => {
 
   const hasData = !!items && items.length > 0;
 
-  // Group: department (fixed order) → time bucket (fixed order)
+  // Group: severity (Critical → This week → Awareness) → department (Ops → Compliance → Finance → Commercial → IT)
   const grouped = useMemo(() => {
-    const result: Record<IntelDepartment, Record<TimeBucket, IntelligenceItem[]>> = {
-      operations: { this_week: [], earlier_this_month: [], ongoing: [], older: [] },
-      compliance: { this_week: [], earlier_this_month: [], ongoing: [], older: [] },
-      finance: { this_week: [], earlier_this_month: [], ongoing: [], older: [] },
-      commercial: { this_week: [], earlier_this_month: [], ongoing: [], older: [] },
-      it: { this_week: [], earlier_this_month: [], ongoing: [], older: [] },
+    const result: Record<IntelSeverity, Record<IntelDepartment, IntelligenceItem[]>> = {
+      act_now:   { operations: [], compliance: [], finance: [], commercial: [], it: [] },
+      this_week: { operations: [], compliance: [], finance: [], commercial: [], it: [] },
+      awareness: { operations: [], compliance: [], finance: [], commercial: [], it: [] },
     };
     for (const it of items ?? []) {
-      const b = bucketOf(it);
-      result[it.department][b].push(it);
+      if (!result[it.severity]) continue;
+      result[it.severity][it.department].push(it);
     }
-    // Sort each bucket newest → oldest by effective date
-    for (const dept of DEPT_ORDER) {
-      for (const b of Object.keys(result[dept]) as TimeBucket[]) {
-        result[dept][b].sort((a, b) => effectiveDate(b).getTime() - effectiveDate(a).getTime());
+    for (const sev of SEV_ORDER) {
+      for (const dept of DEPT_ORDER) {
+        result[sev][dept].sort((a, b) => effectiveDate(b).getTime() - effectiveDate(a).getTime());
       }
     }
     return result;
   }, [items]);
 
-  const BUCKETS = BUCKET_LABELS[lang];
   const visibleDepts: IntelDepartment[] =
     department === "all" ? DEPT_ORDER : [department as IntelDepartment];
-  const visibleBuckets: TimeBucket[] = ["this_week", "earlier_this_month", "ongoing"];
+  const visibleSeverities: IntelSeverity[] =
+    severity === "all" ? SEV_ORDER : [severity as IntelSeverity];
 
   const sevCards = useMemo(
     () => [
@@ -224,26 +196,28 @@ const Dashboard = () => {
           </p>
         </div>
       ) : (
-        <div className="space-y-8">
-          {visibleDepts.map((dept) => {
-            const deptHasAny = visibleBuckets.some((b) => grouped[dept][b].length > 0);
-            if (!deptHasAny) return null;
+        <div className="space-y-10">
+          {visibleSeverities.map((sev) => {
+            const sevHasAny = visibleDepts.some((d) => grouped[sev][d].length > 0);
+            if (!sevHasAny) return null;
+            const sevMeta = sevCards.find((c) => c.key === sev)!;
             return (
-              <section key={dept} className="space-y-3">
-                <div className="flex items-baseline gap-3 border-b border-border pb-2">
-                  <h2 className="text-xl font-bold text-foreground">{DEPT[dept]}</h2>
+              <section key={sev} className="space-y-4">
+                <div className="flex items-baseline gap-3 border-b-2 border-border pb-2">
+                  <span className={cn("w-2.5 h-2.5 rounded-full", sevMeta.dot)} />
+                  <h2 className="text-2xl font-bold text-foreground">{SEV[sev]}</h2>
                   <span className="text-xs text-muted-foreground">
-                    {visibleBuckets.reduce((n, b) => n + grouped[dept][b].length, 0)}{" "}
+                    {visibleDepts.reduce((n, d) => n + grouped[sev][d].length, 0)}{" "}
                     {lang === "fr" ? "élément(s)" : "item(s)"}
                   </span>
                 </div>
-                {visibleBuckets.map((b) => {
-                  const rows = grouped[dept][b];
+                {visibleDepts.map((dept) => {
+                  const rows = grouped[sev][dept];
                   if (rows.length === 0) return null;
                   return (
-                    <div key={b} className="space-y-2">
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-1">
-                        {BUCKETS[b]}
+                    <div key={dept} className="space-y-2">
+                      <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground pt-1">
+                        {DEPT[dept]}
                       </h3>
                       <div className="space-y-3">
                         {rows.map((item) => (
