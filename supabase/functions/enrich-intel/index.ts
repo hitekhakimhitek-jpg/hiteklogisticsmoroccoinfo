@@ -118,7 +118,10 @@ function jsonOnly(s: string): string {
 
 function coerce(d: any): Drafted {
   const dept = DEPARTMENTS.includes(d?.department) ? d.department : "operations";
-  const sev = SEVERITIES.includes(d?.severity) ? d.severity : "awareness";
+  let sev = SEVERITIES.includes(d?.severity) ? d.severity : "awareness";
+  // Rule: IT items can never be auto-classified as critical (act_now).
+  // Downgrade to "this_week" (Important). Manual user overrides bypass this in scrape_create.
+  if (dept === "it" && sev === "act_now") sev = "this_week";
   const hor = HORIZONS.includes(d?.time_to_impact) ? d.time_to_impact : "horizon";
   const tags = Array.isArray(d?.affected_tags)
     ? d.affected_tags.filter((x: any) => typeof x === "string").slice(0, 6)
