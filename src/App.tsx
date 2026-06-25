@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Layout from "@/components/Layout";
 import Index from "./pages/Index";
-import WeeklyReport from "./pages/WeeklyReport";
 import MonthlySummary from "./pages/MonthlySummary";
 import ArchivePage from "./pages/ArchivePage";
 import RegulatoryChanges from "./pages/RegulatoryChanges";
@@ -44,7 +43,6 @@ const App = () => (
               <Route path="/regulatory" element={<RegulatoryChanges />} />
               <Route path="/finance-regulation" element={<FinanceRegulation />} />
               <Route path="/it-news" element={<ITNews />} />
-              <Route path="/weekly" element={<WeeklyReport />} />
               <Route path="/monthly" element={<MonthlySummary />} />
               <Route path="/archive" element={<ArchivePage />} />
               <Route path="/digest" element={<WeeklyDigest />} />

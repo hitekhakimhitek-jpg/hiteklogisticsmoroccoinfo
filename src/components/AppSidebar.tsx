@@ -19,7 +19,6 @@ const baseNavItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Weekly Digest", url: "/digest", icon: FileBarChart },
   { title: "Disruption Map", url: "/map", icon: Globe2 },
-  { title: "Weekly Report", url: "/weekly", icon: FileBarChart },
   { title: "Monthly Summary", url: "/monthly", icon: CalendarDays },
   { title: "Archive", url: "/archive", icon: Archive },
 ];

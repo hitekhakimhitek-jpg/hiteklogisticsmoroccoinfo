@@ -149,12 +149,15 @@ Return ONLY valid JSON. No markdown.`;
       const month = now.getMonth() + 1;
       const year = now.getFullYear();
 
-      const { data: news } = await supabase
-        .from("news_entries")
-        .select("*")
-        .eq("month", month)
-        .eq("year", year)
-        .order("priority", { ascending: true });
+      // Source from the SAME intelligence_items the dashboard shows (last 30 days, not archived)
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: items } = await supabase
+        .from("intelligence_items")
+        .select("id, headline, summary, impact, action, department, severity, source_name, source_url, publication_date, country, created_at")
+        .gte("created_at", thirtyDaysAgo)
+        .order("severity", { ascending: true })
+        .order("created_at", { ascending: false });
+      const news = items;
 
       if (!news || news.length === 0) {
         return new Response(
@@ -163,14 +166,17 @@ Return ONLY valid JSON. No markdown.`;
         );
       }
 
-      const prompt = `You are a senior freight intelligence analyst producing a monthly executive summary for a Morocco-based freight forwarder. Analyze the following ${news.length} news entries from this month.
+      const prompt = `You are a senior freight intelligence analyst producing a monthly executive summary for a Morocco-based freight forwarder. Analyze the following ${news.length} intelligence items (same items shown on the live dashboard) from the past 30 days.
+
+IMPORTANT: Every fact in your report MUST come from the items below. Do not invent items that are not in the list. The output must read as a faithful summary of what is currently on the dashboard.
 
 CONTENT PRIORITIZATION (apply this hierarchy strictly throughout the report):
-1st: Compliance & Regulatory — customs regulations, ADII circulars, IMO/IATA/WCO changes, legal obligations
-2nd: Direct Operational Impact — port closures, route changes, rate surcharges, weather disruptions
-3rd: Everything Else — market stories, trends, forecasts, benchmarking data
+1st: Critical severity items (act_now)
+2nd: Important severity items (this_week)
+3rd: Awareness items
+Within each severity, follow department order: operations → compliance → finance → commercial → it
 
-News entries:
+Intelligence items:
 ${JSON.stringify(news, null, 2)}
 
 Generate a JSON object with these exact fields:
