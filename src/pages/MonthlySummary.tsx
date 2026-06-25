@@ -104,18 +104,6 @@ const MonthlySummary = () => {
             <p className="text-sm text-muted-foreground">{summary ? `${new Date(0, (summary.month as number) - 1).toLocaleString("en", { month: "long" })} ${summary.year}` : "No summary yet"}</p>
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex items-center gap-2">
-            <button onClick={handleGenerate} disabled={isGenerating}
-              className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/90 transition-colors disabled:opacity-50 font-medium">
-              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              {isGenerating ? "Generating..." : "Generate Summary"}
-            </button>
-          </div>
-          {isGenerating && genStep && (
-            <span className="text-[11px] text-muted-foreground animate-pulse">{genStep}</span>
-          )}
-        </div>
       </div>
 
       {isLoading ? (
