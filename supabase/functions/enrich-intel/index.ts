@@ -1,11 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, requireHitekAdmin, isSafeExternalUrl } from "../_shared/auth.ts";
 
 const DEPARTMENTS = ["operations", "compliance", "finance", "commercial", "it"] as const;
 const SEVERITIES = ["act_now", "this_week", "awareness"] as const;
@@ -197,6 +192,8 @@ If the input has no actionable freight relevance for a Morocco freight forwarder
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const authErr = await requireHitekAdmin(req);
+  if (authErr) return authErr;
 
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -229,7 +226,7 @@ serve(async (req) => {
     if (body.mode === "scrape_create") {
       const url = String(body.url || "").trim();
       const severityOverride = SEVERITIES.includes(body.severity) ? body.severity : null;
-      if (!url || !/^https?:\/\//i.test(url)) {
+      if (!url || url.length > 2048 || !/^https?:\/\//i.test(url) || !isSafeExternalUrl(url)) {
         return new Response(JSON.stringify({ error: "Valid URL required" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
