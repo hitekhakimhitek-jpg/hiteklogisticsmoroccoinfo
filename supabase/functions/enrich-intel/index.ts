@@ -25,14 +25,53 @@ function extractPubDate(meta: any, markdown?: string): string | null {
     }
   }
   if (typeof markdown === "string" && markdown.length > 0) {
-    const m = markdown.substring(0, 3000).match(
-      /\b(20\d{2}-\d{2}-\d{2})\b|\b(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+20\d{2})\b/i,
+    // Search a wider window — Media24, Hespress and many outlets render the date in a sidebar/footer.
+    const haystack = markdown.substring(0, 12000);
+    const FR_MONTHS: Record<string, number> = {
+      janvier:1, "février":2, fevrier:2, mars:3, avril:4, mai:5, juin:6,
+      juillet:7, "août":8, aout:8, septembre:9, octobre:10, novembre:11, "décembre":12, decembre:12,
+    };
+    const EN_MONTHS: Record<string, number> = {
+      january:1, february:2, march:3, april:4, may:5, june:6, july:7,
+      august:8, september:9, october:10, november:11, december:12,
+      jan:1, feb:2, mar:3, apr:4, jun:6, jul:7, aug:8, sep:9, sept:9, oct:10, nov:11, dec:12,
+    };
+    const tryDate = (y: number, m: number, d: number): string | null => {
+      if (!y || !m || !d) return null;
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      if (isNaN(dt.getTime())) return null;
+      if (dt.getTime() > Date.now() + 2 * 86400000) return null;
+      if (y < 2015) return null;
+      return dt.toISOString().split("T")[0];
+    };
+    // 1) ISO YYYY-MM-DD
+    const iso = haystack.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+    if (iso) {
+      const r = tryDate(+iso[1], +iso[2], +iso[3]);
+      if (r) return r;
+    }
+    // 2) "19 juin 2026" / "19 June 2026" / "June 19, 2026"
+    const monthName = haystack.match(
+      /\b(\d{1,2})(?:er)?\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?\s+(20\d{2})\b/i,
+    ) || haystack.match(
+      /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?\s+(\d{1,2}),?\s+(20\d{2})\b/i,
     );
-    if (m) {
-      const d = new Date(m[0]);
-      if (!isNaN(d.getTime()) && d.getTime() <= Date.now() + 86400000) {
-        return d.toISOString().split("T")[0];
+    if (monthName) {
+      const groups = monthName.slice(1).map((s) => s.toLowerCase());
+      let day: number, mon: number, yr: number;
+      if (/^\d+$/.test(groups[0])) {
+        day = +groups[0]; mon = FR_MONTHS[groups[1]] || EN_MONTHS[groups[1]]; yr = +groups[2];
+      } else {
+        mon = EN_MONTHS[groups[0]] || FR_MONTHS[groups[0]]; day = +groups[1]; yr = +groups[2];
       }
+      const r = tryDate(yr, mon, day);
+      if (r) return r;
+    }
+    // 3) Numeric DD/MM/YYYY or DD.MM.YYYY or DD-MM-YYYY (assume day-first; common on FR/AR sites)
+    const num = haystack.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](20\d{2})\b/);
+    if (num) {
+      const r = tryDate(+num[3], +num[2], +num[1]);
+      if (r) return r;
     }
   }
   return null;
