@@ -1,14 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders, requireHitekAdmin } from "../_shared/auth.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+const MAX_ARTICLE_IDS = 50;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const authErr = await requireHitekAdmin(req);
+  if (authErr) return authErr;
 
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -23,7 +22,21 @@ serve(async (req) => {
 
     // Get the article IDs to classify (passed in body, or classify all unclassified)
     const body = await req.json().catch(() => ({}));
-    const articleIds: string[] | undefined = body.article_ids;
+    let articleIds: string[] | undefined = body.article_ids;
+    if (articleIds !== undefined) {
+      if (!Array.isArray(articleIds) || articleIds.some((x) => typeof x !== "string")) {
+        return new Response(JSON.stringify({ error: "article_ids must be string[]" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (articleIds.length > MAX_ARTICLE_IDS) {
+        return new Response(
+          JSON.stringify({ error: `article_ids exceeds max of ${MAX_ARTICLE_IDS}` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     let query = supabase
       .from("news_entries")
