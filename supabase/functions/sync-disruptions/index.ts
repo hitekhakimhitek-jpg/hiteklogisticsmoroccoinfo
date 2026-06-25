@@ -141,6 +141,8 @@ function titleSimilarity(a: string, b: string) {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const authErr = await requireHitekAdmin(req);
+  if (authErr) return authErr;
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
