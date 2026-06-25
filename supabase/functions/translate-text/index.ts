@@ -1,19 +1,55 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { corsHeaders, requireAuthenticated } from "../_shared/auth.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+// Hard limits to prevent AI-gateway credit drain.
+const MAX_TEXTS = 100;
+const MAX_TEXT_LEN = 5_000;
+const MAX_TOTAL_CHARS = 50_000;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  const authErr = await requireAuthenticated(req);
+  if (authErr) return authErr;
   try {
     const { texts, target } = await req.json();
     if (!Array.isArray(texts) || texts.length === 0) {
       return new Response(JSON.stringify({ translations: [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (texts.length > MAX_TEXTS) {
+      return new Response(
+        JSON.stringify({ error: `Too many texts (max ${MAX_TEXTS})` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    let total = 0;
+    for (const t of texts) {
+      if (typeof t !== "string") {
+        return new Response(JSON.stringify({ error: "texts must be strings" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (t.length > MAX_TEXT_LEN) {
+        return new Response(
+          JSON.stringify({ error: `Single text exceeds ${MAX_TEXT_LEN} chars` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      total += t.length;
+    }
+    if (total > MAX_TOTAL_CHARS) {
+      return new Response(
+        JSON.stringify({ error: `Combined text exceeds ${MAX_TOTAL_CHARS} chars` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (target !== "fr" && target !== "en") {
+      return new Response(JSON.stringify({ error: "target must be 'fr' or 'en'" }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
