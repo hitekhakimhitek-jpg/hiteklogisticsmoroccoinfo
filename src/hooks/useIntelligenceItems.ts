@@ -68,9 +68,9 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
     queryKey: ["intel_items", filters, lang],
     queryFn: async () => {
       let q = supabase.from("intelligence_items").select("*");
-      // Rolling 30-day window for the main feed. Older items live in Archives.
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      q = q.gte("created_at", thirtyDaysAgo);
+      // Rolling 14-day window for the main feed. Older items live in Archives.
+      const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      q = q.gte("created_at", fourteenDaysAgo);
       if (filters.department && filters.department !== "all") {
         q = q.eq("department", filters.department);
       }
@@ -268,19 +268,19 @@ export const DEPARTMENT_LABELS: Record<IntelDepartment, string> = {
 
 export const SEVERITY_LABELS: Record<IntelSeverity, string> = {
   act_now: "Critical",
-  this_week: "This week",
+  this_week: "Important",
   awareness: "To be aware of",
 };
 
 export const SEVERITY_LABELS_BY_LANG: Record<"en" | "fr", Record<IntelSeverity, string>> = {
   en: {
     act_now: "Critical",
-    this_week: "This week",
+    this_week: "Important",
     awareness: "To be aware of",
   },
   fr: {
     act_now: "Critique",
-    this_week: "Cette semaine",
+    this_week: "Important",
     awareness: "Prendre connaissance de",
   },
 };
