@@ -79,7 +79,9 @@ serve(async (req) => {
 
     const now = new Date();
     const { year, week } = isoWeek(now);
-    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    // Look back 14 days so the digest covers the same window as the active
+    // dashboard feed (matches the 14-day auto-archive rule).
+    const weekStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
     const { data: items, error } = await supabase
       .from("intelligence_items")
