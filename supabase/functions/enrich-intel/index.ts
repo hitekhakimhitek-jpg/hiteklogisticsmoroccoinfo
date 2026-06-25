@@ -103,6 +103,8 @@ Severity (be strict):
 - this_week: must be handled this week; affects upcoming shipments, near-term costs, or compliance reviews.
 - awareness: horizon scanning, trends, background context. No immediate action.
 
+IMPORTANT RULE: Items classified as department "it" can NEVER be "act_now" (Critical). Only operations, compliance, finance, and commercial may be act_now. If an IT item seems urgent, cap it at "this_week" (Important).
+
 time_to_impact: today | this_week | this_month | horizon.
 
 affected_tags: 1-4 short chips (locations, modes, lanes, doc types), e.g. ["Tanger Med","Road"], ["Europe import","Customs"], ["Ocean","Pricing"], ["AI","Cybersecurity"]. No sentences.
