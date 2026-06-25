@@ -9,205 +9,107 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Loader2 } from "lucide-react";
-import {
-  useCreateIntel,
-  DEPARTMENT_LABELS,
-  SEVERITY_LABELS,
-  HORIZON_LABELS,
-  type IntelDepartment,
-  type IntelSeverity,
-  type IntelHorizon,
-} from "@/hooks/useIntelligenceItems";
+import { Plus, Loader2, Sparkles } from "lucide-react";
+import { SEVERITY_LABELS, type IntelSeverity } from "@/hooks/useIntelligenceItems";
 import { toast } from "@/components/ui/sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export function AddItemDialog() {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState({
-    headline: "",
-    summary: "",
-    impact: "",
-    action_required: "",
-    department: "operations" as IntelDepartment,
-    severity: "awareness" as IntelSeverity,
-    time_to_impact: "horizon" as IntelHorizon,
-    affected_tags: "",
-    source_name: "Manual",
-    source_url: "",
-    owner: "",
-  });
-  const createIntel = useCreateIntel();
+  const [url, setUrl] = useState("");
+  const [severity, setSeverity] = useState<IntelSeverity>("awareness");
+  const [submitting, setSubmitting] = useState(false);
+  const qc = useQueryClient();
+  const { lang } = useLanguage();
+
+  const t = (en: string, fr: string) => (lang === "fr" ? fr : en);
+
+  const reset = () => {
+    setUrl("");
+    setSeverity("awareness");
+  };
 
   const handleSave = async () => {
+    const link = url.trim();
+    if (!/^https?:\/\//i.test(link)) {
+      toast.error(t("Enter a valid URL (https://…)", "Entrez une URL valide (https://…)"));
+      return;
+    }
+    setSubmitting(true);
     try {
-      await createIntel.mutateAsync({
-        ...draft,
-        affected_tags: draft.affected_tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
-        source_url: draft.source_url || null,
-        owner: draft.owner || null,
+      const { data, error } = await supabase.functions.invoke("enrich-intel", {
+        body: { mode: "scrape_create", url: link, severity },
       });
-      toast.success("Intelligence item created.");
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(t("Source added — AI generated the summary.", "Source ajoutée — l'IA a généré le résumé."));
+      await qc.invalidateQueries({ queryKey: ["intelligence_items"] });
+      await qc.invalidateQueries({ queryKey: ["intel_counts"] });
       setOpen(false);
-      setDraft({
-        headline: "",
-        summary: "",
-        impact: "",
-        action_required: "",
-        department: "operations",
-        severity: "awareness",
-        time_to_impact: "horizon",
-        affected_tags: "",
-        source_name: "Manual",
-        source_url: "",
-        owner: "",
-      });
+      reset();
     } catch (e) {
       toast.error((e as Error).message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
       <DialogTrigger asChild>
         <Button size="sm" className="h-9">
-          <Plus className="w-4 h-4 mr-1" /> Add item
+          <Plus className="w-4 h-4 mr-1" /> {t("Add source", "Ajouter une source")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>New intelligence item</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-secondary" />
+            {t("Add a source", "Ajouter une source")}
+          </DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "Paste the article URL and pick a severity. The AI will scrape the page and write the headline, summary, impact and action.",
+              "Collez l'URL de l'article et choisissez une gravité. L'IA va analyser la page et rédiger le titre, le résumé, l'impact et l'action."
+            )}
+          </p>
           <div>
-            <Label htmlFor="src-url">Source URL (optional)</Label>
+            <Label htmlFor="src-url">{t("Source URL", "URL source")}</Label>
             <Input
               id="src-url"
-              value={draft.source_url}
-              onChange={(e) => setDraft((d) => ({ ...d, source_url: e.target.value }))}
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
               placeholder="https://..."
+              autoFocus
             />
           </div>
           <div>
-            <Label htmlFor="headline">Headline</Label>
-            <Input
-              id="headline"
-              value={draft.headline}
-              onChange={(e) => setDraft((d) => ({ ...d, headline: e.target.value }))}
-            />
-          </div>
-          <div>
-            <Label htmlFor="summary">Summary / pasted text</Label>
-            <Textarea
-              id="summary"
-              rows={3}
-              value={draft.summary}
-              onChange={(e) => setDraft((d) => ({ ...d, summary: e.target.value }))}
-            />
-          </div>
-          <div>
-            <Label htmlFor="impact">Impact</Label>
-            <Textarea
-              id="impact"
-              rows={2}
-              value={draft.impact}
-              onChange={(e) => setDraft((d) => ({ ...d, impact: e.target.value }))}
-            />
-          </div>
-          <div>
-            <Label htmlFor="action">Action required</Label>
-            <Textarea
-              id="action"
-              rows={2}
-              value={draft.action_required}
-              onChange={(e) => setDraft((d) => ({ ...d, action_required: e.target.value }))}
-            />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <Label>Department</Label>
-              <Select
-                value={draft.department}
-                onValueChange={(v) => setDraft((d) => ({ ...d, department: v as IntelDepartment }))}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(DEPARTMENT_LABELS).map(([k, l]) => (
-                    <SelectItem key={k} value={k}>{l}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Severity</Label>
-              <Select
-                value={draft.severity}
-                onValueChange={(v) => setDraft((d) => ({ ...d, severity: v as IntelSeverity }))}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(SEVERITY_LABELS).map(([k, l]) => (
-                    <SelectItem key={k} value={k}>{l}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Time to impact</Label>
-              <Select
-                value={draft.time_to_impact}
-                onValueChange={(v) => setDraft((d) => ({ ...d, time_to_impact: v as IntelHorizon }))}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(HORIZON_LABELS).map(([k, l]) => (
-                    <SelectItem key={k} value={k}>{l}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="tags">Affected tags (comma-separated)</Label>
-              <Input
-                id="tags"
-                value={draft.affected_tags}
-                onChange={(e) => setDraft((d) => ({ ...d, affected_tags: e.target.value }))}
-                placeholder="Tanger Med, Road"
-              />
-            </div>
-            <div>
-              <Label htmlFor="owner">Owner</Label>
-              <Input
-                id="owner"
-                value={draft.owner}
-                onChange={(e) => setDraft((d) => ({ ...d, owner: e.target.value }))}
-                placeholder="e.g. Operations lead"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="src-name">Source name</Label>
-              <Input
-                id="src-name"
-                value={draft.source_name}
-                onChange={(e) => setDraft((d) => ({ ...d, source_name: e.target.value }))}
-              />
-            </div>
+            <Label>{t("Severity", "Gravité")}</Label>
+            <Select value={severity} onValueChange={(v) => setSeverity(v as IntelSeverity)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(["act_now", "this_week", "awareness"] as IntelSeverity[]).map((k) => (
+                  <SelectItem key={k} value={k}>{SEVERITY_LABELS[k]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={createIntel.isPending}>
-            {createIntel.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
-            Save item
+          <Button variant="ghost" onClick={() => setOpen(false)} disabled={submitting}>
+            {t("Cancel", "Annuler")}
+          </Button>
+          <Button onClick={handleSave} disabled={submitting || !url.trim()}>
+            {submitting && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+            {submitting
+              ? t("Scraping & drafting…", "Analyse en cours…")
+              : t("Scrape & save", "Analyser et sauvegarder")}
           </Button>
         </DialogFooter>
       </DialogContent>
