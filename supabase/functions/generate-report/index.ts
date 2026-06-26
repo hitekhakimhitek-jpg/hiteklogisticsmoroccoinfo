@@ -143,15 +143,27 @@ Return ONLY valid JSON. No markdown.`;
     }
 
     if (type === "monthly") {
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
+      // Phase 5: PREVIOUS calendar month only (so the report stabilises once the month closes).
+      const prevMonthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));   // 1st of this month
+      const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+      const month = prevMonthStart.getUTCMonth() + 1;
+      const year = prevMonthStart.getUTCFullYear();
+      const startIso = prevMonthStart.toISOString();
+      const endIso = prevMonthEnd.toISOString();
+      const startDate = startIso.slice(0, 10);
+      const endDate = endIso.slice(0, 10);
 
-      // Source from the SAME intelligence_items the dashboard shows (last 30 days, not archived)
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      // Same single source of truth as the dashboard — filtered to the previous calendar month
+      // by event_date (or publication_date fallback for older rows without event_date).
       const { data: items } = await supabase
         .from("intelligence_items")
-        .select("id, headline, summary, impact, action_required, department, severity, source_name, source_url, publication_date, created_at")
-        .gte("created_at", thirtyDaysAgo)
+        .select("id, headline, summary, impact, action_required, department, category, severity, source_name, source_url, publication_date, event_date, country, created_at")
+        .or(
+          `and(event_date.gte.${startDate},event_date.lt.${endDate}),` +
+          `and(event_date.is.null,publication_date.gte.${startDate},publication_date.lt.${endDate}),` +
+          `and(event_date.is.null,publication_date.is.null,created_at.gte.${startIso},created_at.lt.${endIso})`
+        )
+        .neq("status", "archived")
         .order("severity", { ascending: true })
         .order("created_at", { ascending: false });
       const news = items;
@@ -163,15 +175,14 @@ Return ONLY valid JSON. No markdown.`;
         );
       }
 
-      const prompt = `You are a senior freight intelligence analyst producing a monthly executive summary for a Morocco-based freight forwarder. Analyze the following ${news.length} intelligence items (same items shown on the live dashboard) from the past 30 days.
+      const prompt = `You are a senior freight intelligence analyst producing a monthly executive summary for a Morocco-based freight forwarder. Analyze the following ${news.length} intelligence items (same items shown on the live dashboard) covering the previous calendar month (${startDate} → ${endDate}).
 
 IMPORTANT: Every fact in your report MUST come from the items below. Do not invent items that are not in the list. The output must read as a faithful summary of what is currently on the dashboard.
 
-CONTENT PRIORITIZATION (apply this hierarchy strictly throughout the report):
-1st: Critical severity items (act_now)
-2nd: Important severity items (this_week)
-3rd: Awareness items
-Within each severity, follow department order: operations → compliance → finance → commercial → it
+CONTENT GROUPING (apply this strictly throughout the report):
+Group the analysis into three buckets in this exact order: Operational → Financial → Global.
+Within each bucket, lead with Critical (act_now), then Important (this_week), then Awareness.
+The "category" field on each item tells you which bucket it belongs to.
 
 Intelligence items:
 ${JSON.stringify(news, null, 2)}
