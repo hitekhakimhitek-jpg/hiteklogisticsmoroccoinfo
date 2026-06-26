@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { SEO } from "@/components/SEO";
 
 const impactColors: Record<string, string> = {
   Critical: "bg-destructive text-destructive-foreground",
@@ -96,6 +97,10 @@ const MonthlySummary = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto space-y-4 sm:space-y-6">
+      <SEO
+        title="Monthly Summary"
+        description="Month-over-month rollup of Hitek freight intelligence: disruptions, regulations, and critical alerts compared to the prior month."
+      />
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="bg-secondary/10 p-2 rounded-lg"><CalendarDays className="w-5 h-5 text-secondary" /></div>

@@ -4,6 +4,7 @@ import { priorityConfig, categoryLabels, regionLabels, categoryColors } from "@/
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { Scale, ExternalLink, AlertTriangle, Loader2 } from "lucide-react";
+import { SEO } from "@/components/SEO";
 
 const RegulatoryChanges = () => {
   const { data: allEntries, isLoading } = useNewsEntries({});
@@ -29,6 +30,10 @@ const RegulatoryChanges = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-4 sm:space-y-6">
+      <SEO
+        title="Regulatory & Law Changes"
+        description="Laws, decrees, circulars, and binding rule changes affecting Morocco freight forwarding — newest first, linked to official sources."
+      />
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="bg-destructive/10 p-2.5 rounded-lg">

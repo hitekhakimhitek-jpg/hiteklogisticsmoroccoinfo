@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { translateDeep } from "@/lib/translateEntries";
+import { SEO } from "@/components/SEO";
 
 // Phase 5: digests are grouped by category (operational / financial / global).
 // "all" shows the top-level cross-category summary written with department=null.
@@ -62,6 +63,10 @@ const WeeklyDigest = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-8">
+      <SEO
+        title="Weekly Digest"
+        description="Auto-generated Monday recap of Hitek freight intelligence grouped by Operational, Financial, and Global categories."
+      />
       <header className="border-b border-border pb-6">
         <div className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-primary font-semibold mb-3">
           <Sparkles className="w-3.5 h-3.5" /> {lang === "fr" ? "Synthèse hebdomadaire" : "Weekly digest"}

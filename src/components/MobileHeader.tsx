@@ -28,7 +28,10 @@ export function MobileHeader() {
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
-          <button className="p-2 rounded-lg hover:bg-sidebar-accent transition-colors">
+          <button
+            aria-label="Open navigation menu"
+            className="p-2 rounded-lg hover:bg-sidebar-accent transition-colors"
+          >
             <Menu className="w-5 h-5" />
           </button>
         </SheetTrigger>
