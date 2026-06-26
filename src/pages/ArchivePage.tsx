@@ -23,6 +23,7 @@ import {
 } from "@/types/freight";
 import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
+import { SEO } from "@/components/SEO";
 
 const categories: Category[] = ["regulation", "weather", "port", "trade", "compliance", "market", "general"];
 const regions: Region[] = ["morocco", "europe", "asia", "americas", "africa", "middle_east", "global"];
@@ -73,6 +74,10 @@ const ArchivePage = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-4 sm:space-y-5">
+      <SEO
+        title="Archive"
+        description="Searchable rolling archive of past Hitek freight and logistics intelligence items — filter by category, region, and priority."
+      />
       <div className="flex items-center gap-3">
         <div className="bg-secondary/10 p-2 rounded-lg"><ArchiveIcon className="w-5 h-5 text-secondary" /></div>
         <div>

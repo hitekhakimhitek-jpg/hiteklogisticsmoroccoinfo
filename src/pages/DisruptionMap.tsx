@@ -12,6 +12,7 @@ import { Globe2, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { translateDeep } from "@/lib/translateEntries";
+import { SEO } from "@/components/SEO";
 
 // Single source of truth: read intelligence_items directly (same feed as the Dashboard).
 type Severity = "act_now" | "this_week" | "awareness";
@@ -106,6 +107,10 @@ export default function DisruptionMap() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
+      <SEO
+        title="Disruption Map"
+        description="Live geocoded map of freight and logistics disruptions affecting Morocco and global trade lanes, refreshed daily."
+      />
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">

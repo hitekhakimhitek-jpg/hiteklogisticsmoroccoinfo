@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { Landmark, ExternalLink, AlertTriangle, Loader2 } from "lucide-react";
 import { useAppliedSettings } from "@/hooks/useAppliedSettings";
+import { SEO } from "@/components/SEO";
 
 const FINANCE_SCORE_THRESHOLD = 70;
 
@@ -43,6 +44,10 @@ const FinanceRegulation = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-4 sm:space-y-6">
+      <SEO
+        title="Finance & Fiscal Regulation"
+        description="Taxes, duties, customs fees, exchange-rate moves, and budget-law updates relevant to freight finance teams in Morocco."
+      />
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="bg-primary/10 p-2.5 rounded-lg">

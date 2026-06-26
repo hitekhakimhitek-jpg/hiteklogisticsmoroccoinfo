@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { Monitor, ExternalLink, AlertTriangle, Loader2 } from "lucide-react";
 import { useAppliedSettings } from "@/hooks/useAppliedSettings";
+import { SEO } from "@/components/SEO";
 
 const IT_SCORE_THRESHOLD = 70;
 
@@ -37,6 +38,10 @@ const ITNews = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-4 sm:space-y-6">
+      <SEO
+        title="IT News & Cybersecurity"
+        description="Technology, cybersecurity, and IT infrastructure updates relevant to logistics operations — vulnerabilities, patches, cloud, and AI."
+      />
       <div className="flex items-center gap-3">
         <div className="bg-primary/10 p-2.5 rounded-lg">
           <Monitor className="w-5 h-5 text-primary" />

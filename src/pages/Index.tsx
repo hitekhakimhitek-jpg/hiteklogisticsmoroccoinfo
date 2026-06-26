@@ -16,6 +16,7 @@ import {
 } from "@/hooks/useIntelligenceItems";
 import { IntelCard } from "@/components/intel/IntelCard";
 import { AddItemDialog } from "@/components/intel/AddItemDialog";
+import { SEO } from "@/components/SEO";
 
 // Strict canonical order — IT must always be last.
 const DEPT_ORDER: IntelDepartment[] = ["operations", "compliance", "finance", "commercial", "it"];
@@ -103,6 +104,10 @@ const Dashboard = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-5">
+      <SEO
+        title="Intelligence Feed"
+        description="Live freight and logistics intelligence for Morocco: critical, important, and awareness items across Operations, Compliance, Finance, Commercial, and IT."
+      />
       {/* Top bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
