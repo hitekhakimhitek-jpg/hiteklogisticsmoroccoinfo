@@ -7,7 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const APP_ORIGIN = "https://hiteklogisticsmoroccoinfo.lovable.app";
+const APP_ORIGIN = "https://info.hitek.ma";
 const FALLBACK_OG_IMAGE =
   "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/e4f4febe-2844-41d6-871c-6e39aa7cdf47/id-preview-cab0e8e0--6b088dc0-9512-4f8a-9b45-e48f76f8ff1f.lovable.app-1771602249402.png";
 
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     item?.summary ||
     "Freight forwarding intelligence for Morocco and global logistics.";
   const image = item?.og_image_url || FALLBACK_OG_IMAGE;
-  const canonical = `${APP_ORIGIN}/item/${id}`;
+  const canonical = `${APP_ORIGIN}/news/${id}`;
 
   const html = `<!doctype html>
 <html lang="en">
