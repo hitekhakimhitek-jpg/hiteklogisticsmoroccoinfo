@@ -6,7 +6,7 @@ import {
 } from "@/hooks/useIntelligenceItems";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, Clock, User, CalendarDays, ThumbsUp, ThumbsDown } from "lucide-react";
+import { ExternalLink, Clock, User, CalendarDays, ThumbsUp, ThumbsDown, Share2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow as formatDistanceToNowFn, format as formatDate } from "date-fns";
 import { fr as frLocale } from "date-fns/locale";
@@ -18,6 +18,8 @@ import {
   useIsSignedIn,
 } from "@/hooks/useIntelFeedback";
 import { toast } from "@/hooks/use-toast";
+import { useState } from "react";
+import { ShareDialog } from "./ShareDialog";
 
 const SEVERITY_STYLES = {
   act_now: {
@@ -49,6 +51,7 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
   const cast = useCastIntelVote();
   const myVote = mine?.map[item.id] ?? null;
   const c = counts?.[item.id] ?? { useful: 0, not_useful: 0 };
+  const [shareOpen, setShareOpen] = useState(false);
 
   const onVote = (next: "useful" | "not_useful") => {
     if (!signedIn) {
@@ -175,6 +178,16 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
         )}
         <div className="ml-auto flex items-center gap-1">
           <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 gap-1"
+            onClick={() => setShareOpen(true)}
+            aria-label={lang === "fr" ? "Partager" : "Share"}
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{lang === "fr" ? "Partager" : "Share"}</span>
+          </Button>
+          <Button
             variant={myVote === "useful" ? "default" : "ghost"}
             size="sm"
             className="h-7 px-2 gap-1"
@@ -200,6 +213,7 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
           </Button>
         </div>
       </div>
+      <ShareDialog item={item} open={shareOpen} onOpenChange={setShareOpen} />
     </article>
   );
 }

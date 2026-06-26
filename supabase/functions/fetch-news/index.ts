@@ -71,8 +71,19 @@ function extractPublicationDate(metadata: any, markdown?: string): string | null
 const SOURCE_QUERIES: Record<string, string[]> = {
   // TIER 1 — Freight & logistics
   "FreightWaves": ["freight forwarding shipping logistics news today site:freightwaves.com"],
-  "The Loadstar": ["freight shipping logistics news today site:theloadstar.com"],
-  "JOC": ["freight shipping logistics news today site:joc.com"],
+  // PRIMARY SOURCES — broad coverage, deep queries
+  "The Loadstar": [
+    "ocean freight rates carriers shipping site:theloadstar.com",
+    "air cargo freight forwarder logistics site:theloadstar.com",
+    "supply chain disruption port congestion site:theloadstar.com",
+    "Maersk MSC CMA CGM Hapag-Lloyd ONE site:theloadstar.com",
+  ],
+  "JOC": [
+    "ocean container shipping freight rates site:joc.com",
+    "port terminal congestion labor strike site:joc.com",
+    "trans-Pacific Asia Europe trade lane site:joc.com",
+    "customs trucking intermodal logistics site:joc.com",
+  ],
   "Lloyd's List": ["maritime shipping freight news today site:lloydslist.com"],
   "Hellenic Shipping News": ["maritime shipping disruption port congestion today site:hellenicshippingnews.com"],
   "Splash247": ["maritime shipping news today site:splash247.com"],
@@ -181,6 +192,22 @@ const MOROCCO_SOURCE_NAMES = new Set([
   "SGG (Bulletin Officiel)", "Bank Al-Maghrib", "DGI Maroc (Impôts)",
   "La Vie Éco", "Finances News Hebdo",
 ]);
+
+// Primary global freight sources — scraped DIRECTLY on every run (not gated
+// on a region) because they carry the most important global freight
+// forwarding signal.
+const PRIMARY_DIRECT_SOURCES: Array<{ name: string; homepage: string; mapKeywords?: string[] }> = [
+  {
+    name: "The Loadstar",
+    homepage: "https://theloadstar.com",
+    mapKeywords: ["ocean", "air", "freight", "supply-chain", "carrier", "port"],
+  },
+  {
+    name: "JOC",
+    homepage: "https://www.joc.com",
+    mapKeywords: ["container", "ocean", "port", "trucking", "rail"],
+  },
+];
 
 // Fetch with timeout — prevents one hung source from blocking the whole run.
 async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
@@ -420,6 +447,47 @@ serve(async (req) => {
       allArticles.push(...batch);
     }
 
+    // ===== Direct scraping for PRIMARY global sources (Loadstar, JOC) =====
+    // These run on every execution — they carry the most important global
+    // freight-forwarding signal, so we want every run to capture them.
+    {
+      console.log(`Running direct scrape for ${PRIMARY_DIRECT_SOURCES.length} primary global sources...`);
+      const primaryStats: Record<string, { mapped: number; scraped: number }> = {};
+      for (const src of PRIMARY_DIRECT_SOURCES) {
+        primaryStats[src.name] = { mapped: 0, scraped: 0 };
+        try {
+          const keywords = src.mapKeywords && src.mapKeywords.length > 0 ? src.mapKeywords : [undefined as unknown as string];
+          const mapResults = await Promise.all(
+            keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
+          );
+          // Higher budget for primary sources: up to 20 mapped, 10 scraped each.
+          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 20);
+          primaryStats[src.name].mapped = candidateUrls.length;
+          const toScrape = candidateUrls.slice(0, 10);
+          const scraped = await Promise.all(
+            toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
+          );
+          for (const art of scraped) {
+            if (!art) continue;
+            allArticles.push({
+              title: art.title,
+              url: art.url,
+              description: art.description,
+              source: src.name,
+              markdown: art.markdown,
+              publishedDate: (art as any).publishedDate ?? null,
+            });
+            primaryStats[src.name].scraped += 1;
+          }
+        } catch (e) {
+          console.error(`Primary direct scrape failed for ${src.name}:`, e);
+        }
+      }
+      for (const [name, s] of Object.entries(primaryStats)) {
+        console.log(`[primary-direct] ${name}: mapped=${s.mapped}, scraped=${s.scraped}`);
+      }
+    }
+
     // ===== Direct Morocco-source scraping (homepage map + scrape top N) =====
     // This catches time-sensitive items (manifestations, blocages) that
     // /search misses. Runs whenever a Morocco source is in scope.
@@ -555,7 +623,14 @@ serve(async (req) => {
     // Step 2: Use AI to categorize and filter
     console.log("Using AI to categorize and filter articles...");
 
-    const articleSummaries = articlesToProcess.slice(0, 30).map((a, i) =>
+    // Prioritize primary global sources (Loadstar, JOC) at the head of the
+    // batch so they always make the AI classifier's window.
+    const PRIMARY_NAMES = new Set(["The Loadstar", "JOC"]);
+    const primaryFirst = [
+      ...articlesToProcess.filter((a) => PRIMARY_NAMES.has(a.source)),
+      ...articlesToProcess.filter((a) => !PRIMARY_NAMES.has(a.source)),
+    ];
+    const articleSummaries = primaryFirst.slice(0, 50).map((a, i) =>
       `[${i}] TITLE: ${a.title}\nURL: ${a.url}\nSOURCE: ${a.source}\nDESCRIPTION: ${a.description}\nCONTENT PREVIEW: ${a.markdown?.substring(0, 200) || "N/A"}`
     ).join("\n\n---\n\n");
 

@@ -13,6 +13,7 @@ import ITNews from "./pages/ITNews";
 import SettingsPage from "./pages/SettingsPage";
 import WeeklyDigest from "./pages/WeeklyDigest";
 import DisruptionMap from "./pages/DisruptionMap";
+import IntelItemPage from "./pages/IntelItemPage";
 import AuthPage from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import { Navigate } from "react-router-dom";
@@ -47,6 +48,7 @@ const App = () => (
               <Route path="/archive" element={<ArchivePage />} />
               <Route path="/digest" element={<WeeklyDigest />} />
               <Route path="/map" element={<DisruptionMap />} />
+              <Route path="/item/:id" element={<IntelItemPage />} />
               <Route path="/settings" element={<AdminOnly><SettingsPage /></AdminOnly>} />
             </Route>
             <Route path="/auth" element={<AuthPage />} />

@@ -36,6 +36,20 @@ export type IntelligenceItem = {
   // Phase 6
   predicted_relevance: number;
   action_required_bool: boolean | null;
+  // Phase 4 — single source of truth fields
+  event_date: string | null;
+  country: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  transport_modes: string[] | null;
+  port_affected: string | null;
+  airport_affected: string | null;
+  carrier_affected: string | null;
+  lane_affected: string | null;
+  category: string | null;
+  why_it_matters_to_hitek: string | null;
+  affected_lanes_or_customers: string | null;
+  suggested_action: string | null;
 };
 
 export type VerificationStatus =
