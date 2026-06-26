@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.translate-text]
 verify_jwt = false
+
+[functions.og-share]
+verify_jwt = false
