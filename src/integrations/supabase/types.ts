@@ -231,84 +231,132 @@ export type Database = {
       intelligence_items: {
         Row: {
           action_required: string
+          action_required_bool: boolean | null
+          affected_lanes_or_customers: string | null
           affected_tags: string[]
+          airport_affected: string | null
           alerted_at: string | null
+          carrier_affected: string | null
+          category: string | null
+          country: string | null
           created_at: string
           department: Database["public"]["Enums"]["intel_department"]
           effective_date: string | null
+          event_date: string | null
           headline: string
           id: string
           impact: string
           is_ai_draft: boolean
+          lane_affected: string | null
           language: string
           last_reviewed_at: string | null
+          latitude: number | null
+          longitude: number | null
+          month: number | null
           owner: string | null
+          port_affected: string | null
           publication_date: string | null
           severity: Database["public"]["Enums"]["intel_severity"]
           source_entry_id: string | null
           source_name: string
           source_url: string | null
           status: Database["public"]["Enums"]["intel_status"]
+          suggested_action: string | null
           summary: string
           time_to_impact: Database["public"]["Enums"]["intel_horizon"]
           time_to_impact_date: string | null
+          transport_modes: string[] | null
           updated_at: string
           updated_date: string | null
           verification_status: string
+          week_number: number | null
+          why_it_matters_to_hitek: string | null
         }
         Insert: {
           action_required?: string
+          action_required_bool?: boolean | null
+          affected_lanes_or_customers?: string | null
           affected_tags?: string[]
+          airport_affected?: string | null
           alerted_at?: string | null
+          carrier_affected?: string | null
+          category?: string | null
+          country?: string | null
           created_at?: string
           department?: Database["public"]["Enums"]["intel_department"]
           effective_date?: string | null
+          event_date?: string | null
           headline: string
           id?: string
           impact?: string
           is_ai_draft?: boolean
+          lane_affected?: string | null
           language?: string
           last_reviewed_at?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          month?: number | null
           owner?: string | null
+          port_affected?: string | null
           publication_date?: string | null
           severity?: Database["public"]["Enums"]["intel_severity"]
           source_entry_id?: string | null
           source_name?: string
           source_url?: string | null
           status?: Database["public"]["Enums"]["intel_status"]
+          suggested_action?: string | null
           summary: string
           time_to_impact?: Database["public"]["Enums"]["intel_horizon"]
           time_to_impact_date?: string | null
+          transport_modes?: string[] | null
           updated_at?: string
           updated_date?: string | null
           verification_status?: string
+          week_number?: number | null
+          why_it_matters_to_hitek?: string | null
         }
         Update: {
           action_required?: string
+          action_required_bool?: boolean | null
+          affected_lanes_or_customers?: string | null
           affected_tags?: string[]
+          airport_affected?: string | null
           alerted_at?: string | null
+          carrier_affected?: string | null
+          category?: string | null
+          country?: string | null
           created_at?: string
           department?: Database["public"]["Enums"]["intel_department"]
           effective_date?: string | null
+          event_date?: string | null
           headline?: string
           id?: string
           impact?: string
           is_ai_draft?: boolean
+          lane_affected?: string | null
           language?: string
           last_reviewed_at?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          month?: number | null
           owner?: string | null
+          port_affected?: string | null
           publication_date?: string | null
           severity?: Database["public"]["Enums"]["intel_severity"]
           source_entry_id?: string | null
           source_name?: string
           source_url?: string | null
           status?: Database["public"]["Enums"]["intel_status"]
+          suggested_action?: string | null
           summary?: string
           time_to_impact?: Database["public"]["Enums"]["intel_horizon"]
           time_to_impact_date?: string | null
+          transport_modes?: string[] | null
           updated_at?: string
           updated_date?: string | null
           verification_status?: string
+          week_number?: number | null
+          why_it_matters_to_hitek?: string | null
         }
         Relationships: [
           {
