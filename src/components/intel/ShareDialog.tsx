@@ -22,11 +22,15 @@ export function ShareDialog({
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  // Use the OG-share edge endpoint so platforms like WhatsApp, LinkedIn and
-  // Slack render a branded preview (logo + headline + summary) when this link
-  // is shared. Real browsers are redirected to the in-app /item/:id route.
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-  const directLink = `${supabaseUrl}/functions/v1/og-share?id=${item.id}`;
+  // Branded share link on the Hitek custom domain. Humans land on the in-app
+  // /news/:id page (rendered by IntelItemPage). For rich link previews the
+  // hosting layer should rewrite crawler hits on /news/* to the og-share
+  // edge function — see deployment notes.
+  const brandedOrigin =
+    typeof window !== "undefined" && window.location.hostname === "info.hitek.ma"
+      ? "https://info.hitek.ma"
+      : (typeof window !== "undefined" ? window.location.origin : "https://info.hitek.ma");
+  const directLink = `${brandedOrigin}/news/${item.id}`;
 
   const onCopyLink = async () => {
     try {
