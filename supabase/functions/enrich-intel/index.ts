@@ -5,6 +5,8 @@ import { corsHeaders, requireHitekAdmin, isSafeExternalUrl } from "../_shared/au
 const DEPARTMENTS = ["operations", "compliance", "finance", "commercial", "it"] as const;
 const SEVERITIES = ["act_now", "this_week", "awareness"] as const;
 const HORIZONS = ["today", "this_week", "this_month", "horizon"] as const;
+const CATEGORIES = ["operational", "financial", "global"] as const;
+const MODES = ["sea", "air", "road", "rail"] as const;
 
 function extractPubDate(meta: any, markdown?: string): string | null {
   const candidates: any[] = [
@@ -82,9 +84,24 @@ type Drafted = {
   time_to_impact: typeof HORIZONS[number];
   affected_tags: string[];
   owner?: string | null;
+  // Phase 4 unified enrichment
+  category: typeof CATEGORIES[number];
+  country: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  event_date: string | null;
+  transport_modes: string[];
+  port_affected: string | null;
+  airport_affected: string | null;
+  carrier_affected: string | null;
+  lane_affected: string | null;
+  why_it_matters_to_hitek: string;
+  affected_lanes_or_customers: string | null;
+  suggested_action: string;
+  action_required_bool: boolean;
 };
 
-const SYSTEM_PROMPT = `You triage external signals for Hitek Logistic Morocco, a freight-forwarding company at Tanger Med. Convert a raw news item into one actionable Intelligence Item for the right department. Write plainly. No marketing. No hedging.
+const SYSTEM_PROMPT = `You triage external signals for Hitek Logistic Morocco, a freight-forwarding company at Tanger Med. Convert a raw news item into one actionable Intelligence Item. Write plainly. No marketing. No hedging.
 
 Departments:
 - operations: disruptions, road/port/border events, congestion, cutoffs, carrier delays, weather.
@@ -92,6 +109,11 @@ Departments:
 - finance: surcharges (BAF/fuel), duty/tariff changes, FX moves, sanctions, economic signals affecting cost.
 - commercial: macro rate environment, capacity, demand signals.
 - it: AI/tech developments, automation tools, cybersecurity relevant to logistics IT.
+
+Category (high-level bucket, separate from department):
+- operational: physical movement, ports/airports/lanes, weather, congestion, strikes, security.
+- financial: rates, surcharges, tariffs, duties, FX, sanctions, macro cost signals.
+- global: geopolitics, broad trends, IT/tech, regulatory horizon-scanning that isn't immediately operational or financial.
 
 Severity (be strict):
 - act_now: requires action today; affects ongoing/imminent shipments or has hard legal deadline within days.
@@ -106,6 +128,21 @@ affected_tags: 1-4 short chips (locations, modes, lanes, doc types), e.g. ["Tang
 
 impact: one sentence describing who/what is affected concretely. No fluff.
 action_required: one sentence with the next concrete step for the owner. If nothing to do, write "Monitor only.".
+
+Geography:
+- country: ISO country name in English (e.g. "Morocco", "Spain", "France", "Global"). Use "Global" only when truly worldwide.
+- latitude/longitude: best-guess decimal coordinates of the most affected place (port, city, border). Null only if truly unknowable.
+- event_date: YYYY-MM-DD of when the event happens / takes effect. If unclear, use the publication date.
+
+Transport & assets:
+- transport_modes: subset of ["sea","air","road","rail"]. Empty if not transport-specific.
+- port_affected / airport_affected / carrier_affected / lane_affected: name the specific asset if mentioned, else null.
+
+Hitek-specific enrichment:
+- why_it_matters_to_hitek: one sentence explaining the concrete impact on a Morocco-based freight forwarder operating at Tanger Med with Europe/Africa lanes.
+- affected_lanes_or_customers: short phrase like "Morocco-Spain road" or "Tanger Med ocean exports", null if not lane-specific.
+- suggested_action: one concrete next step (e.g. "Reroute via Algeciras", "Update customs templates", "Brief sales team"). Use "Monitor only." if no action.
+- action_required_bool: true if a concrete action is needed, false for awareness-only.
 
 Return ONLY a JSON object matching the schema. No prose, no fences.`;
 
@@ -123,6 +160,16 @@ function coerce(d: any): Drafted {
   const tags = Array.isArray(d?.affected_tags)
     ? d.affected_tags.filter((x: any) => typeof x === "string").slice(0, 6)
     : [];
+  const cat = CATEGORIES.includes(d?.category)
+    ? d.category
+    : (dept === "finance" ? "financial" : dept === "it" || dept === "commercial" ? "global" : "operational");
+  const modes = Array.isArray(d?.transport_modes)
+    ? d.transport_modes.filter((m: any) => MODES.includes(m)).slice(0, 4)
+    : [];
+  const lat = typeof d?.latitude === "number" && d.latitude >= -90 && d.latitude <= 90 ? d.latitude : null;
+  const lng = typeof d?.longitude === "number" && d.longitude >= -180 && d.longitude <= 180 ? d.longitude : null;
+  const ev = typeof d?.event_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.event_date) ? d.event_date : null;
+  const trim = (v: any, n: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, n) : null);
   return {
     headline: String(d?.headline || "").slice(0, 240) || "Untitled",
     summary: String(d?.summary || "").slice(0, 600),
@@ -133,6 +180,22 @@ function coerce(d: any): Drafted {
     time_to_impact: hor,
     affected_tags: tags,
     owner: d?.owner ? String(d.owner).slice(0, 120) : null,
+    category: cat,
+    country: trim(d?.country, 80),
+    latitude: lat,
+    longitude: lng,
+    event_date: ev,
+    transport_modes: modes,
+    port_affected: trim(d?.port_affected, 120),
+    airport_affected: trim(d?.airport_affected, 120),
+    carrier_affected: trim(d?.carrier_affected, 120),
+    lane_affected: trim(d?.lane_affected, 160),
+    why_it_matters_to_hitek: String(d?.why_it_matters_to_hitek || "").slice(0, 400),
+    affected_lanes_or_customers: trim(d?.affected_lanes_or_customers, 200),
+    suggested_action: String(d?.suggested_action || d?.action_required || "Monitor only.").slice(0, 400),
+    action_required_bool: typeof d?.action_required_bool === "boolean"
+      ? d.action_required_bool
+      : sev !== "awareness",
   };
 }
 
@@ -186,7 +249,7 @@ HEADLINE: ${input.headline || "(none)"}
 SUMMARY: ${input.summary || "(none)"}
 CONTENT: ${(input.full_content || "").slice(0, 1200)}
 
-Return the JSON object: { headline, summary, impact, action_required, department, severity, time_to_impact, affected_tags, owner }.
+Return the JSON object: { headline, summary, impact, action_required, department, severity, time_to_impact, affected_tags, owner, category, country, latitude, longitude, event_date, transport_modes, port_affected, airport_affected, carrier_affected, lane_affected, why_it_matters_to_hitek, affected_lanes_or_customers, suggested_action, action_required_bool }.
 If the input has no actionable freight relevance for a Morocco freight forwarder, still classify it (most likely awareness/it or awareness/commercial) — never invent urgency.`;
 }
 
