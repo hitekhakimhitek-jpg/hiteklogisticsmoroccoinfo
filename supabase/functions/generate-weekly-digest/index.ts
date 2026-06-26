@@ -119,8 +119,10 @@ serve(async (req) => {
         act_now_count: catItems.filter((i: any) => i.severity === "act_now").length,
         this_week_count: catItems.filter((i: any) => i.severity === "this_week").length,
       };
+      // v2 schema: category column drives grouping (was misnamed `department` before).
+      console.log(`[digest v2] inserting cat=${cat} items=${catItems.length}`);
       const { error: insErr } = await supabase.from("weekly_digests").insert(row);
-      if (insErr) console.error(`insert ${cat} failed:`, insErr.message);
+      if (insErr) console.error(`[digest v2] insert ${cat} failed:`, insErr.message, JSON.stringify(row));
       generated.push({ category: cat, items: catItems.length });
     }
 
