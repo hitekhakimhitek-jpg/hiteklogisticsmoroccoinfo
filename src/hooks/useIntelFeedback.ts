@@ -4,27 +4,47 @@ import { useEffect, useState } from "react";
 
 export type IntelVote = "useful" | "not_useful";
 
-function useCurrentUserId() {
-  const [uid, setUid] = useState<string | null>(null);
+/**
+ * Stable per-browser voter id. Signed-in users use their auth uid;
+ * everyone else gets an anonymous UUID persisted in localStorage so
+ * likes/dislikes work without requiring sign-in.
+ */
+const ANON_KEY = "hitek_anon_voter_id";
+function getOrCreateAnonId(): string {
+  try {
+    let id = localStorage.getItem(ANON_KEY);
+    if (!id) {
+      id = (crypto as any).randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem(ANON_KEY, id);
+    }
+    return id;
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+function useVoterId() {
+  const [vid, setVid] = useState<string | null>(null);
   useEffect(() => {
     let mounted = true;
     supabase.auth.getUser().then(({ data }) => {
-      if (mounted) setUid(data.user?.id ?? null);
+      if (!mounted) return;
+      setVid(data.user?.id ?? getOrCreateAnonId());
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      setUid(s?.user?.id ?? null);
+      setVid(s?.user?.id ?? getOrCreateAnonId());
     });
     return () => {
       mounted = false;
       sub.subscription.unsubscribe();
     };
   }, []);
-  return uid;
+  return vid;
 }
 
 /** All of the current user's votes, keyed by item_id. */
 export function useMyIntelVotes() {
-  const uid = useCurrentUserId();
+  const uid = useVoterId();
   return useQuery({
     enabled: !!uid,
     queryKey: ["intel_feedback_mine", uid],
@@ -65,7 +85,7 @@ export function useIntelVoteCounts() {
 
 export function useCastIntelVote() {
   const qc = useQueryClient();
-  const uid = useCurrentUserId();
+  const uid = useVoterId();
   return useMutation({
     mutationFn: async ({
       itemId,
@@ -74,7 +94,7 @@ export function useCastIntelVote() {
       itemId: string;
       next: IntelVote | null;
     }) => {
-      if (!uid) throw new Error("Sign in to vote.");
+      if (!uid) throw new Error("Voter id not ready.");
       if (next === null) {
         const { error } = await supabase
           .from("intel_feedback")
@@ -102,6 +122,12 @@ export function useCastIntelVote() {
 }
 
 export function useIsSignedIn() {
-  const uid = useCurrentUserId();
-  return !!uid;
+  // Kept for backwards compatibility; voting no longer requires sign-in.
+  const [signed, setSigned] = useState(false);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setSigned(!!data.user));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSigned(!!s?.user));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+  return signed;
 }

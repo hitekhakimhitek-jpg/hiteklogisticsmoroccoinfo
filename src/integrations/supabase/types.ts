@@ -243,7 +243,7 @@ export type Database = {
           item_id: string
           updated_at?: string
           vote: string
-          voter?: string
+          voter: string
         }
         Update: {
           created_at?: string
@@ -288,6 +288,7 @@ export type Database = {
           latitude: number | null
           longitude: number | null
           month: number | null
+          og_image_url: string | null
           owner: string | null
           port_affected: string | null
           predicted_relevance: number
@@ -332,6 +333,7 @@ export type Database = {
           latitude?: number | null
           longitude?: number | null
           month?: number | null
+          og_image_url?: string | null
           owner?: string | null
           port_affected?: string | null
           predicted_relevance?: number
@@ -376,6 +378,7 @@ export type Database = {
           latitude?: number | null
           longitude?: number | null
           month?: number | null
+          og_image_url?: string | null
           owner?: string | null
           port_affected?: string | null
           predicted_relevance?: number
