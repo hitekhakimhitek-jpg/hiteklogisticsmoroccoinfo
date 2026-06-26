@@ -61,7 +61,7 @@ const WeeklyDigest = () => {
   // Latest week first
   const latest = data?.[0];
   const filtered = data?.filter((d: any) =>
-    dept === "all" ? d.department === null : d.department === dept
+    dept === "all" ? d.category === null : d.category === dept
   );
 
   return (
@@ -122,8 +122,8 @@ const WeeklyDigest = () => {
                     {lang === "fr" ? `Semaine ${d.week_number} · ${d.year}` : `Week ${d.week_number} · ${d.year}`}
                   </div>
                   <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-                    {d.department
-                      ? (lang === "fr" ? DEPT_LABELS_FR : DEPT_LABELS)[d.department] || d.department
+                    {d.category
+                      ? (lang === "fr" ? DEPT_LABELS_FR : DEPT_LABELS)[d.category] || d.category
                       : (lang === "fr" ? "Tout" : "All")}
                   </h2>
                 </div>
