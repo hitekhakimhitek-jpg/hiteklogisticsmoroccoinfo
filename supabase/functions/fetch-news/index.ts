@@ -182,6 +182,17 @@ const MOROCCO_SOURCE_NAMES = new Set([
   "La Vie Éco", "Finances News Hebdo",
 ]);
 
+// Fetch with timeout — prevents one hung source from blocking the whole run.
+async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 function normalizeSearchItems(result: any): any[] {
   if (Array.isArray(result?.data)) return result.data;
   if (Array.isArray(result?.results)) return result.results;
@@ -215,11 +226,11 @@ async function firecrawlMapDomain(
   search?: string,
 ): Promise<string[]> {
   try {
-    const resp = await fetch("https://api.firecrawl.dev/v2/map", {
+    const resp = await fetchWithTimeout("https://api.firecrawl.dev/v2/map", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ url: homepage, search, limit: 30, includeSubdomains: false }),
-    });
+    }, 20000);
     if (!resp.ok) {
       console.error(`Firecrawl /map failed for ${homepage} (${search ?? "no kw"}):`, resp.status, await resp.text());
       return [];
@@ -243,11 +254,11 @@ async function firecrawlScrapeUrl(
   url: string,
 ): Promise<{ title: string; url: string; description: string; markdown: string } | null> {
   try {
-    const resp = await fetch("https://api.firecrawl.dev/v2/scrape", {
+    const resp = await fetchWithTimeout("https://api.firecrawl.dev/v2/scrape", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true }),
-    });
+    }, 25000);
     if (!resp.ok) {
       console.error(`Firecrawl /scrape failed for ${url}:`, resp.status);
       return null;
@@ -360,9 +371,10 @@ serve(async (req) => {
       publishedDate?: string | null;
     }> = [];
 
+    const queryStats = { ok: 0, failed: 0, empty: 0 };
     const searchPromises = searchQueries.map(async (query) => {
       try {
-        const response = await fetch("https://api.firecrawl.dev/v2/search", {
+        const response = await fetchWithTimeout("https://api.firecrawl.dev/v2/search", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
@@ -374,16 +386,18 @@ serve(async (req) => {
             tbs: "qdr:w",
             scrapeOptions: { formats: ["markdown"] },
           }),
-        });
+        }, 30000);
 
         if (!response.ok) {
           const errText = await response.text();
           console.error(`Firecrawl search error for "${query.substring(0, 50)}...":`, response.status, errText);
+          queryStats.failed++;
           return [];
         }
 
         const result = await response.json();
         const items = normalizeSearchItems(result);
+        if (items.length === 0) queryStats.empty++; else queryStats.ok++;
         return items.map((item: any) => ({
           title: item.title || item.metadata?.title || "",
           url: item.url || item.metadata?.sourceURL || "",
@@ -394,11 +408,14 @@ serve(async (req) => {
         }));
       } catch (e) {
         console.error(`Search failed for query: ${query.substring(0, 50)}...`, e);
+        queryStats.failed++;
         return [];
       }
     });
 
-    const results = await Promise.all(searchPromises);
+    const settled = await Promise.allSettled(searchPromises);
+    const results = settled.map((s) => (s.status === "fulfilled" ? s.value : []));
+    console.log(`[search-stats] ok=${queryStats.ok} empty=${queryStats.empty} failed=${queryStats.failed} of ${searchQueries.length}`);
     for (const batch of results) {
       allArticles.push(...batch);
     }
@@ -919,6 +936,11 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         updated_at: data[0]?.fetched_date ?? checkedAt,
         message: data.length > 0 ? "Refresh successful" : "Refresh successful: 0 new entries",
         sources: [...new Set(rows.map((r: any) => r.source_name))],
+        source_report: {
+          queries: { total: searchQueries.length, ok: queryStats.ok, empty: queryStats.empty, failed: queryStats.failed },
+          scraped_by_source: scrapedBySource,
+          inserted_by_source: insertedBySource,
+        },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
