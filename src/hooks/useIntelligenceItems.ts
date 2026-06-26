@@ -168,7 +168,10 @@ export function useUpdateIntelStatus() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: IntelStatus }) => {
-      const patch: Record<string, unknown> = { status, last_reviewed_at: new Date().toISOString() };
+      const patch: { status: IntelStatus; last_reviewed_at: string; is_ai_draft?: boolean } = {
+        status,
+        last_reviewed_at: new Date().toISOString(),
+      };
       if (status === "acknowledged" || status === "actioned") patch.is_ai_draft = false;
       const { error } = await supabase.from("intelligence_items").update(patch).eq("id", id);
       if (error) throw error;
