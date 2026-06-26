@@ -15,9 +15,7 @@ import {
   useMyIntelVotes,
   useIntelVoteCounts,
   useCastIntelVote,
-  useIsSignedIn,
 } from "@/hooks/useIntelFeedback";
-import { toast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { ShareDialog } from "./ShareDialog";
 
@@ -45,7 +43,6 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
   const SEV = SEVERITY_LABELS_BY_LANG[lang];
   const DEPT = DEPARTMENT_LABELS_BY_LANG[lang];
   const HORIZON = HORIZON_LABELS_BY_LANG[lang];
-  const signedIn = useIsSignedIn();
   const { data: mine } = useMyIntelVotes();
   const { data: counts } = useIntelVoteCounts();
   const cast = useCastIntelVote();
@@ -54,16 +51,6 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
   const [shareOpen, setShareOpen] = useState(false);
 
   const onVote = (next: "useful" | "not_useful") => {
-    if (!signedIn) {
-      toast({
-        title: lang === "fr" ? "Connexion requise" : "Sign in required",
-        description:
-          lang === "fr"
-            ? "Connectez-vous pour voter."
-            : "Sign in to record your feedback.",
-      });
-      return;
-    }
     cast.mutate({ itemId: item.id, next: myVote === next ? null : next });
   };
 
