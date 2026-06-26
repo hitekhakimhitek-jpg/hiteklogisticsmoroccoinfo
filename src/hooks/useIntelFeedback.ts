@@ -110,10 +110,39 @@ export function useCastIntelVote() {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    onMutate: async ({ itemId, next }) => {
+      if (!uid) return;
+      await qc.cancelQueries({ queryKey: ["intel_feedback_mine", uid] });
+      await qc.cancelQueries({ queryKey: ["intel_feedback_counts"] });
+      const prevMine = qc.getQueryData<any>(["intel_feedback_mine", uid]);
+      const prevCounts = qc.getQueryData<any>(["intel_feedback_counts"]);
+      const prevVote: IntelVote | null = prevMine?.map?.[itemId] ?? null;
+      // Update mine
+      qc.setQueryData(["intel_feedback_mine", uid], (old: any) => {
+        const map = { ...(old?.map ?? {}) };
+        if (next === null) delete map[itemId];
+        else map[itemId] = next;
+        return { uid, map };
+      });
+      // Update counts
+      qc.setQueryData(["intel_feedback_counts"], (old: any) => {
+        const counts = { ...(old ?? {}) };
+        const cur = { useful: 0, not_useful: 0, ...(counts[itemId] ?? {}) };
+        if (prevVote) cur[prevVote] = Math.max(0, cur[prevVote] - 1);
+        if (next) cur[next] = (cur[next] ?? 0) + 1;
+        counts[itemId] = cur;
+        return counts;
+      });
+      return { prevMine, prevCounts };
+    },
+    onError: (_e, _v, ctx: any) => {
+      if (!uid) return;
+      if (ctx?.prevMine !== undefined) qc.setQueryData(["intel_feedback_mine", uid], ctx.prevMine);
+      if (ctx?.prevCounts !== undefined) qc.setQueryData(["intel_feedback_counts"], ctx.prevCounts);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["intel_feedback_mine"] });
       qc.invalidateQueries({ queryKey: ["intel_feedback_counts"] });
-      // Predicted relevance refreshed by trigger — refetch items.
       qc.invalidateQueries({ queryKey: ["intel_items"] });
     },
   });
