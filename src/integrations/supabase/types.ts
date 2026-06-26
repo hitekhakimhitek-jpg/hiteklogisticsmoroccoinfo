@@ -666,7 +666,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cast_intel_vote: {
+        Args: { _item_id: string; _vote: string; _voter: string }
+        Returns: undefined
+      }
       cleanup_old_entries: { Args: never; Returns: undefined }
+      clear_intel_vote: {
+        Args: { _item_id: string; _voter: string }
+        Returns: undefined
+      }
       intel_item_attributes: {
         Args: { _item_id: string }
         Returns: {
