@@ -936,6 +936,11 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         updated_at: data[0]?.fetched_date ?? checkedAt,
         message: data.length > 0 ? "Refresh successful" : "Refresh successful: 0 new entries",
         sources: [...new Set(rows.map((r: any) => r.source_name))],
+        source_report: {
+          queries: { total: searchQueries.length, ok: queryStats.ok, empty: queryStats.empty, failed: queryStats.failed },
+          scraped_by_source: scrapedBySource,
+          inserted_by_source: insertedBySource,
+        },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
