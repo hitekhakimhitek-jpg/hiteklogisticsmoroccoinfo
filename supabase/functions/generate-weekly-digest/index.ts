@@ -112,7 +112,8 @@ serve(async (req) => {
       const row = {
         year,
         week_number: week,
-        department: cat,
+        category: cat,
+        department: null,
         summary_md: md,
         item_count: catItems.length,
         act_now_count: catItems.filter((i: any) => i.severity === "act_now").length,
