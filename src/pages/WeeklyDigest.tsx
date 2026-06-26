@@ -7,13 +7,19 @@ import ReactMarkdown from "react-markdown";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { translateDeep } from "@/lib/translateEntries";
 
+// Phase 5: digests are grouped by category (operational / financial / global).
+// "all" shows the top-level cross-category summary written with department=null.
 const DEPT_LABELS: Record<string, string> = {
-  all: "Global",
-  operations: "Operations",
-  compliance: "Compliance",
-  finance: "Finance",
-  commercial: "Commercial",
-  it: "IT",
+  all: "All",
+  operational: "Operational",
+  financial: "Financial",
+  global: "Global",
+};
+const DEPT_LABELS_FR: Record<string, string> = {
+  all: "Tout",
+  operational: "Opérationnel",
+  financial: "Financier",
+  global: "Global",
 };
 
 function useLatestDigests(lang: "en" | "fr") {
@@ -77,7 +83,7 @@ const WeeklyDigest = () => {
       </header>
 
       <div className="flex flex-wrap gap-1.5">
-        {Object.entries(DEPT_LABELS).map(([k, l]) => (
+        {Object.entries(DEPT_LABELS).map(([k]) => (
           <button
             key={k}
             onClick={() => setDept(k)}
@@ -88,7 +94,7 @@ const WeeklyDigest = () => {
                 : "bg-card text-card-foreground border-border hover:bg-accent"
             )}
           >
-            {l}
+            {(lang === "fr" ? DEPT_LABELS_FR : DEPT_LABELS)[k]}
           </button>
         ))}
       </div>
@@ -116,7 +122,9 @@ const WeeklyDigest = () => {
                     {lang === "fr" ? `Semaine ${d.week_number} · ${d.year}` : `Week ${d.week_number} · ${d.year}`}
                   </div>
                   <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-                    {d.department ? DEPT_LABELS[d.department] : (lang === "fr" ? "Global" : "Global")}
+                    {d.department
+                      ? (lang === "fr" ? DEPT_LABELS_FR : DEPT_LABELS)[d.department] || d.department
+                      : (lang === "fr" ? "Tout" : "All")}
                   </h2>
                 </div>
                 <div className="text-xs text-muted-foreground flex flex-wrap gap-3 items-center">
