@@ -27,6 +27,7 @@ export async function requireHitekAdmin(
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
   const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const CRON_SECRET = Deno.env.get("CRON_SECRET");
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SERVICE_ROLE) {
     return unauthorized("Auth not configured", 500, headers);
   }
@@ -36,6 +37,7 @@ export async function requireHitekAdmin(
 
   // Server-to-server / cron path.
   if (token === SERVICE_ROLE) return null;
+  if (CRON_SECRET && token === CRON_SECRET) return null;
 
   // Validate user JWT and check email domain.
   try {
@@ -63,6 +65,7 @@ export async function requireAuthenticated(
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
   const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const CRON_SECRET = Deno.env.get("CRON_SECRET");
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SERVICE_ROLE) {
     return unauthorized("Auth not configured", 500, headers);
   }
@@ -70,6 +73,7 @@ export async function requireAuthenticated(
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!token) return unauthorized("Missing bearer token", 401, headers);
   if (token === SERVICE_ROLE) return null;
+  if (CRON_SECRET && token === CRON_SECRET) return null;
   try {
     const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const { data, error } = await client.auth.getUser(token);
