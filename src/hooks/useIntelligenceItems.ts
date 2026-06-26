@@ -33,6 +33,9 @@ export type IntelligenceItem = {
   updated_date: string | null;
   effective_date: string | null;
   verification_status: VerificationStatus;
+  // Phase 6
+  predicted_relevance: number;
+  action_required_bool: boolean | null;
 };
 
 export type VerificationStatus =
@@ -94,11 +97,30 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
       const { data, error } = await q;
       if (error) throw error;
       const rows = (data || []) as IntelligenceItem[];
-      // Sort by severity then recency client-side
+      // Sort blend: recency + severity + learned predicted_relevance.
+      // HARD SAFETY FLOOR: critical (act_now) and action_required items are pinned
+      // to the top regardless of preference signal. Learning tunes noise, not alerts.
+      const now = Date.now();
+      const scoreOf = (r: IntelligenceItem) => {
+        const sevW = (3 - SEVERITY_ORDER[r.severity]) * 5; // 15 / 10 / 5
+        const ageHours = (now - new Date(r.created_at).getTime()) / 3_600_000;
+        const recency = Math.max(0, 1 - ageHours / (14 * 24)) * 3; // 0..3
+        const pr = Number(r.predicted_relevance || 0); // typically -1..+1
+        return sevW + recency + pr;
+      };
+      const isPinned = (r: IntelligenceItem) =>
+        r.severity === "act_now" || r.action_required_bool === true;
       const sorted = [...rows].sort((a, b) => {
-        const s = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
-        if (s !== 0) return s;
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        const pa = isPinned(a) ? 1 : 0;
+        const pb = isPinned(b) ? 1 : 0;
+        if (pa !== pb) return pb - pa;
+        if (pa === 1) {
+          // Inside the pinned tier, severity then recency only.
+          const s = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
+          if (s !== 0) return s;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        }
+        return scoreOf(b) - scoreOf(a);
       });
       if (lang === "fr" && sorted.length > 0) {
         try {

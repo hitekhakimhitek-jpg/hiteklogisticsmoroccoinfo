@@ -5,11 +5,19 @@ import {
   HORIZON_LABELS_BY_LANG,
 } from "@/hooks/useIntelligenceItems";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, Clock, User, CalendarDays } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ExternalLink, Clock, User, CalendarDays, ThumbsUp, ThumbsDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow as formatDistanceToNowFn, format as formatDate } from "date-fns";
 import { fr as frLocale } from "date-fns/locale";
 import { useLanguage } from "@/contexts/LanguageContext";
+import {
+  useMyIntelVotes,
+  useIntelVoteCounts,
+  useCastIntelVote,
+  useIsSignedIn,
+} from "@/hooks/useIntelFeedback";
+import { toast } from "@/hooks/use-toast";
 
 const SEVERITY_STYLES = {
   act_now: {
@@ -35,6 +43,26 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
   const SEV = SEVERITY_LABELS_BY_LANG[lang];
   const DEPT = DEPARTMENT_LABELS_BY_LANG[lang];
   const HORIZON = HORIZON_LABELS_BY_LANG[lang];
+  const signedIn = useIsSignedIn();
+  const { data: mine } = useMyIntelVotes();
+  const { data: counts } = useIntelVoteCounts();
+  const cast = useCastIntelVote();
+  const myVote = mine?.map[item.id] ?? null;
+  const c = counts?.[item.id] ?? { useful: 0, not_useful: 0 };
+
+  const onVote = (next: "useful" | "not_useful") => {
+    if (!signedIn) {
+      toast({
+        title: lang === "fr" ? "Connexion requise" : "Sign in required",
+        description:
+          lang === "fr"
+            ? "Connectez-vous pour voter."
+            : "Sign in to record your feedback.",
+      });
+      return;
+    }
+    cast.mutate({ itemId: item.id, next: myVote === next ? null : next });
+  };
 
   const locale = lang === "fr" ? frLocale : undefined;
   const pubLabel = lang === "fr" ? "Publié" : "Published";
@@ -145,6 +173,32 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
             </span>
           </>
         )}
+        <div className="ml-auto flex items-center gap-1">
+          <Button
+            variant={myVote === "useful" ? "default" : "ghost"}
+            size="sm"
+            className="h-7 px-2 gap-1"
+            onClick={() => onVote("useful")}
+            aria-label={lang === "fr" ? "Utile" : "Useful"}
+            aria-pressed={myVote === "useful"}
+            disabled={cast.isPending}
+          >
+            <ThumbsUp className="w-3.5 h-3.5" />
+            <span className="tabular-nums">{c.useful}</span>
+          </Button>
+          <Button
+            variant={myVote === "not_useful" ? "default" : "ghost"}
+            size="sm"
+            className="h-7 px-2 gap-1"
+            onClick={() => onVote("not_useful")}
+            aria-label={lang === "fr" ? "Pas utile" : "Not useful"}
+            aria-pressed={myVote === "not_useful"}
+            disabled={cast.isPending}
+          >
+            <ThumbsDown className="w-3.5 h-3.5" />
+            <span className="tabular-nums">{c.not_useful}</span>
+          </Button>
+        </div>
       </div>
     </article>
   );
