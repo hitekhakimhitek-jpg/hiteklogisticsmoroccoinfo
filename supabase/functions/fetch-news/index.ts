@@ -182,6 +182,17 @@ const MOROCCO_SOURCE_NAMES = new Set([
   "La Vie Éco", "Finances News Hebdo",
 ]);
 
+// Fetch with timeout — prevents one hung source from blocking the whole run.
+async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 function normalizeSearchItems(result: any): any[] {
   if (Array.isArray(result?.data)) return result.data;
   if (Array.isArray(result?.results)) return result.results;
@@ -215,11 +226,11 @@ async function firecrawlMapDomain(
   search?: string,
 ): Promise<string[]> {
   try {
-    const resp = await fetch("https://api.firecrawl.dev/v2/map", {
+    const resp = await fetchWithTimeout("https://api.firecrawl.dev/v2/map", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ url: homepage, search, limit: 30, includeSubdomains: false }),
-    });
+    }, 20000);
     if (!resp.ok) {
       console.error(`Firecrawl /map failed for ${homepage} (${search ?? "no kw"}):`, resp.status, await resp.text());
       return [];
@@ -243,11 +254,11 @@ async function firecrawlScrapeUrl(
   url: string,
 ): Promise<{ title: string; url: string; description: string; markdown: string } | null> {
   try {
-    const resp = await fetch("https://api.firecrawl.dev/v2/scrape", {
+    const resp = await fetchWithTimeout("https://api.firecrawl.dev/v2/scrape", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true }),
-    });
+    }, 25000);
     if (!resp.ok) {
       console.error(`Firecrawl /scrape failed for ${url}:`, resp.status);
       return null;
