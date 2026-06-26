@@ -126,24 +126,7 @@ serve(async (req) => {
       generated.push({ category: cat, items: catItems.length });
     }
 
-    // Top-level "All" digest covering every item this week.
-    const globalMd = await summarize(LOVABLE_API_KEY, "All categories", all);
-    await supabase
-      .from("weekly_digests")
-      .delete()
-      .is("department", null)
-      .is("category", null)
-      .eq("year", year)
-      .eq("week_number", week);
-    await supabase.from("weekly_digests").insert({
-      year,
-      week_number: week,
-      department: null,
-      summary_md: globalMd,
-      item_count: all.length,
-      act_now_count: all.filter((i: any) => i.severity === "act_now").length,
-      this_week_count: all.filter((i: any) => i.severity === "this_week").length,
-    });
+    // "All" bucket removed — Global category is the top-level view.
 
     return new Response(
       JSON.stringify({ success: true, year, week, generated, total: all.length }),
