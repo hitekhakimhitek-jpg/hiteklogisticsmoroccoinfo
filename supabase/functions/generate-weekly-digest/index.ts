@@ -128,7 +128,13 @@ serve(async (req) => {
 
     // Top-level "All" digest covering every item this week.
     const globalMd = await summarize(LOVABLE_API_KEY, "All categories", all);
-    await supabase.from("weekly_digests").delete().is("department", null).eq("year", year).eq("week_number", week);
+    await supabase
+      .from("weekly_digests")
+      .delete()
+      .is("department", null)
+      .is("category", null)
+      .eq("year", year)
+      .eq("week_number", week);
     await supabase.from("weekly_digests").insert({
       year,
       week_number: week,
