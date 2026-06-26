@@ -2,14 +2,22 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, requireHitekAdmin } from "../_shared/auth.ts";
 
-const DEPTS = ["operations", "compliance", "finance", "commercial", "it"] as const;
-const DEPT_LABEL: Record<string, string> = {
-  operations: "Operations",
-  compliance: "Compliance",
-  finance: "Finance",
-  commercial: "Commercial",
-  it: "IT",
+// Phase 5: digest groups by high-level CATEGORY (operational / financial / global), not department.
+const CATEGORIES = ["operational", "financial", "global"] as const;
+const CAT_LABEL: Record<string, string> = {
+  operational: "Operational",
+  financial: "Financial",
+  global: "Global",
 };
+
+// Derive a category from an intelligence item, falling back to its department for legacy rows.
+function categoryOf(item: any): typeof CATEGORIES[number] {
+  if (CATEGORIES.includes(item?.category)) return item.category;
+  const d = item?.department;
+  if (d === "operations" || d === "compliance") return "operational";
+  if (d === "finance") return "financial";
+  return "global";
+}
 
 function isoWeek(d: Date): { year: number; week: number } {
   // ISO 8601 week
@@ -77,46 +85,46 @@ serve(async (req) => {
 
     const now = new Date();
     const { year, week } = isoWeek(now);
-    // Look back 14 days so the digest covers the same window as the active
-    // dashboard feed (matches the 14-day auto-archive rule).
-    const weekStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    // CURRENT ISO WEEK only: Monday 00:00 UTC of the running week → now.
+    const monday = new Date(now);
+    const day = monday.getUTCDay() || 7; // Sun=0 → 7
+    monday.setUTCDate(monday.getUTCDate() - (day - 1));
+    monday.setUTCHours(0, 0, 0, 0);
+    const weekStart = monday.toISOString();
 
     const { data: items, error } = await supabase
       .from("intelligence_items")
-      .select("headline, summary, impact, action_required, department, severity, source_name")
-      .gte("created_at", weekStart)
+      .select("headline, summary, impact, action_required, department, severity, source_name, category, event_date, publication_date, created_at")
+      .or(`event_date.gte.${monday.toISOString().slice(0,10)},and(event_date.is.null,created_at.gte.${weekStart})`)
       .neq("status", "archived");
     if (error) throw new Error(error.message);
 
     const all = items || [];
     const generated: any[] = [];
 
-    // Per-department digests
-    for (const dept of DEPTS) {
-      const deptItems = all.filter((i: any) => i.department === dept);
-      const md = await summarize(LOVABLE_API_KEY, DEPT_LABEL[dept], deptItems, all);
+    // Wipe this week's existing rows up front so re-runs are idempotent across the new category schema.
+    await supabase.from("weekly_digests").delete().eq("year", year).eq("week_number", week);
+
+    // One digest per CATEGORY (operational / financial / global), stored in the `department` column for compatibility.
+    for (const cat of CATEGORIES) {
+      const catItems = all.filter((i: any) => categoryOf(i) === cat);
+      const md = await summarize(LOVABLE_API_KEY, CAT_LABEL[cat], catItems, all);
       const row = {
         year,
         week_number: week,
-        department: dept,
+        department: cat,
         summary_md: md,
-        item_count: deptItems.length,
-        act_now_count: deptItems.filter((i: any) => i.severity === "act_now").length,
-        this_week_count: deptItems.filter((i: any) => i.severity === "this_week").length,
+        item_count: catItems.length,
+        act_now_count: catItems.filter((i: any) => i.severity === "act_now").length,
+        this_week_count: catItems.filter((i: any) => i.severity === "this_week").length,
       };
-      await supabase
-        .from("weekly_digests")
-        .delete()
-        .eq("year", year)
-        .eq("week_number", week)
-        .eq("department", dept);
       const { error: insErr } = await supabase.from("weekly_digests").insert(row);
-      if (insErr) console.error(`insert ${dept} failed:`, insErr.message);
-      generated.push({ department: dept, items: deptItems.length });
+      if (insErr) console.error(`insert ${cat} failed:`, insErr.message);
+      generated.push({ category: cat, items: catItems.length });
     }
 
-    // Global digest
-    const globalMd = await summarize(LOVABLE_API_KEY, "Global", all);
+    // Top-level "All" digest covering every item this week.
+    const globalMd = await summarize(LOVABLE_API_KEY, "All categories", all);
     await supabase.from("weekly_digests").delete().is("department", null).eq("year", year).eq("week_number", week);
     await supabase.from("weekly_digests").insert({
       year,
