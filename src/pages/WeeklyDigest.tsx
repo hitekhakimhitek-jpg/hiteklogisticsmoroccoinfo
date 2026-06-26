@@ -10,13 +10,11 @@ import { translateDeep } from "@/lib/translateEntries";
 // Phase 5: digests are grouped by category (operational / financial / global).
 // "all" shows the top-level cross-category summary written with department=null.
 const DEPT_LABELS: Record<string, string> = {
-  all: "All",
   operational: "Operational",
   financial: "Financial",
   global: "Global",
 };
 const DEPT_LABELS_FR: Record<string, string> = {
-  all: "Tout",
   operational: "Opérationnel",
   financial: "Financier",
   global: "Global",
@@ -56,13 +54,11 @@ function useLatestDigests(lang: "en" | "fr") {
 const WeeklyDigest = () => {
   const { lang } = useLanguage();
   const { data, isLoading } = useLatestDigests(lang);
-  const [dept, setDept] = useState<string>("all");
+  const [dept, setDept] = useState<string>("global");
 
   // Latest week first
   const latest = data?.[0];
-  const filtered = data?.filter((d: any) =>
-    dept === "all" ? d.category === null : d.category === dept
-  );
+  const filtered = data?.filter((d: any) => d.category === dept);
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-8">
@@ -122,9 +118,7 @@ const WeeklyDigest = () => {
                     {lang === "fr" ? `Semaine ${d.week_number} · ${d.year}` : `Week ${d.week_number} · ${d.year}`}
                   </div>
                   <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-                    {d.category
-                      ? (lang === "fr" ? DEPT_LABELS_FR : DEPT_LABELS)[d.category] || d.category
-                      : (lang === "fr" ? "Tout" : "All")}
+                    {(lang === "fr" ? DEPT_LABELS_FR : DEPT_LABELS)[d.category] || d.category}
                   </h2>
                 </div>
                 <div className="text-xs text-muted-foreground flex flex-wrap gap-3 items-center">
