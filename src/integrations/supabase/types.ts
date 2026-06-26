@@ -228,6 +228,41 @@ export type Database = {
         }
         Relationships: []
       }
+      intel_feedback: {
+        Row: {
+          created_at: string
+          id: string
+          item_id: string
+          updated_at: string
+          vote: string
+          voter: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_id: string
+          updated_at?: string
+          vote: string
+          voter?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_id?: string
+          updated_at?: string
+          vote?: string
+          voter?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intel_feedback_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "intelligence_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       intelligence_items: {
         Row: {
           action_required: string
@@ -255,6 +290,7 @@ export type Database = {
           month: number | null
           owner: string | null
           port_affected: string | null
+          predicted_relevance: number
           publication_date: string | null
           severity: Database["public"]["Enums"]["intel_severity"]
           source_entry_id: string | null
@@ -298,6 +334,7 @@ export type Database = {
           month?: number | null
           owner?: string | null
           port_affected?: string | null
+          predicted_relevance?: number
           publication_date?: string | null
           severity?: Database["public"]["Enums"]["intel_severity"]
           source_entry_id?: string | null
@@ -341,6 +378,7 @@ export type Database = {
           month?: number | null
           owner?: string | null
           port_affected?: string | null
+          predicted_relevance?: number
           publication_date?: string | null
           severity?: Database["public"]["Enums"]["intel_severity"]
           source_entry_id?: string | null
@@ -367,6 +405,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      learned_weights: {
+        Row: {
+          attribute_type: string
+          attribute_value: string
+          id: string
+          not_useful_count: number
+          updated_at: string
+          useful_count: number
+          weight: number
+        }
+        Insert: {
+          attribute_type: string
+          attribute_value: string
+          id?: string
+          not_useful_count?: number
+          updated_at?: string
+          useful_count?: number
+          weight?: number
+        }
+        Update: {
+          attribute_type?: string
+          attribute_value?: string
+          id?: string
+          not_useful_count?: number
+          updated_at?: string
+          useful_count?: number
+          weight?: number
+        }
+        Relationships: []
       }
       monthly_summaries: {
         Row: {
@@ -593,7 +661,23 @@ export type Database = {
     }
     Functions: {
       cleanup_old_entries: { Args: never; Returns: undefined }
+      intel_item_attributes: {
+        Args: { _item_id: string }
+        Returns: {
+          attribute_type: string
+          attribute_value: string
+        }[]
+      }
       is_hitek_admin: { Args: never; Returns: boolean }
+      recompute_all_predicted_relevance: { Args: never; Returns: undefined }
+      recompute_learned_weight: {
+        Args: { _attr_type: string; _attr_value: string }
+        Returns: undefined
+      }
+      recompute_predicted_relevance: {
+        Args: { _item_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       compliance_status:
