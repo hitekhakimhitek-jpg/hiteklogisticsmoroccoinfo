@@ -356,6 +356,20 @@ serve(async (req) => {
           is_ai_draft: false,
           publication_date: extractPubDate(meta, markdown),
           verification_status: "verified",
+          category: drafted.category,
+          country: drafted.country,
+          latitude: drafted.latitude,
+          longitude: drafted.longitude,
+          event_date: drafted.event_date ?? extractPubDate(meta, markdown),
+          transport_modes: drafted.transport_modes,
+          port_affected: drafted.port_affected,
+          airport_affected: drafted.airport_affected,
+          carrier_affected: drafted.carrier_affected,
+          lane_affected: drafted.lane_affected,
+          why_it_matters_to_hitek: drafted.why_it_matters_to_hitek,
+          affected_lanes_or_customers: drafted.affected_lanes_or_customers,
+          suggested_action: drafted.suggested_action,
+          action_required_bool: drafted.action_required_bool,
         })
         .select()
         .single();
@@ -421,6 +435,20 @@ serve(async (req) => {
           updated_date: (entry as any).updated_date ?? null,
           effective_date: (entry as any).effective_date ?? null,
           verification_status: (entry as any).verification_status ?? "needs_review",
+          category: drafted.category,
+          country: drafted.country,
+          latitude: drafted.latitude,
+          longitude: drafted.longitude,
+          event_date: drafted.event_date ?? (entry as any).publication_date ?? null,
+          transport_modes: drafted.transport_modes,
+          port_affected: drafted.port_affected,
+          airport_affected: drafted.airport_affected,
+          carrier_affected: drafted.carrier_affected,
+          lane_affected: drafted.lane_affected,
+          why_it_matters_to_hitek: drafted.why_it_matters_to_hitek,
+          affected_lanes_or_customers: drafted.affected_lanes_or_customers,
+          suggested_action: drafted.suggested_action,
+          action_required_bool: drafted.action_required_bool,
         });
         if (insErr) {
           failed++;
