@@ -1,0 +1,14 @@
+# Hitek Info
+
+> Freight-forwarding intelligence dashboard for Morocco: a unified feed of vetted global logistics news, a live disruption map, and a weekly digest grouped by Operational, Financial, and Global categories.
+
+## Pages
+
+- [Dashboard](/): Live intelligence feed with severity (Critical, Important, To be aware of) across Operations, Compliance, Finance, Commercial, and IT.
+- [Weekly Digest](/digest): Auto-generated Monday recap grouped by Operational, Financial, and Global categories.
+- [Disruption Map](/map): Geocoded map of active freight and logistics disruptions, refreshed daily.
+- [Regulatory Changes](/regulatory): Compliance and regulatory updates affecting Morocco freight.
+- [Finance Regulation](/finance-regulation): Tariffs, customs, and financial regulation updates.
+- [IT News](/it-news): Logistics-relevant IT and cybersecurity news.
+- [Monthly Summary](/monthly): Monthly rollup of intelligence items.
+- [Archive](/archive): Items older than 14 days.
