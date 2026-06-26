@@ -96,19 +96,17 @@ export function useCastIntelVote() {
     }) => {
       if (!uid) throw new Error("Voter id not ready.");
       if (next === null) {
-        const { error } = await supabase
-          .from("intel_feedback")
-          .delete()
-          .eq("item_id", itemId)
-          .eq("voter", uid);
+        const { error } = await supabase.rpc("clear_intel_vote", {
+          _item_id: itemId,
+          _voter: uid,
+        });
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("intel_feedback")
-          .upsert(
-            { item_id: itemId, voter: uid, vote: next },
-            { onConflict: "item_id,voter" }
-          );
+        const { error } = await supabase.rpc("cast_intel_vote", {
+          _item_id: itemId,
+          _voter: uid,
+          _vote: next,
+        });
         if (error) throw error;
       }
     },
