@@ -11,14 +11,14 @@ import { SEO } from "@/components/SEO";
 // Phase 5: digests are grouped by category (operational / financial / global).
 // "all" shows the top-level cross-category summary written with department=null.
 const DEPT_LABELS: Record<string, string> = {
+  global: "Global",
   operational: "Operational",
   financial: "Financial",
-  global: "Global",
 };
 const DEPT_LABELS_FR: Record<string, string> = {
+  global: "Global",
   operational: "Opérationnel",
   financial: "Financier",
-  global: "Global",
 };
 
 function useLatestDigests(lang: "en" | "fr") {
