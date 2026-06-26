@@ -156,7 +156,7 @@ serve(async (req) => {
     const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
     const { data: entries, error } = await supabase
       .from("intelligence_items")
-      .select("id, headline, summary, impact, source_url, source_name, department, severity, created_at")
+      .select("id, headline, summary, impact, source_url, source_name, department, severity, created_at, latitude, longitude, country, event_date, category")
       .gte("created_at", twoWeeksAgo)
       .neq("status", "archived")
       .order("created_at", { ascending: false })
@@ -206,22 +206,29 @@ serve(async (req) => {
     for (const entry of entries || []) {
       if (existingIds.has(entry.id)) { skipped++; continue; }
       try {
-        const ext = await extractLocation({ headline: entry.headline, summary: entry.summary, impact: (entry as any).impact });
-        if (!ext || !ext.is_disruption || !ext.location_name) { skipped++; continue; }
+        const sev = INTEL_SEV_MAP[(entry as any).severity] || "medium";
+        const cat = INTEL_CAT_MAP[(entry as any).department] || "other";
 
-        // Prefer intel item's own severity (mapped). Fall back to LLM-inferred.
-        const sev = INTEL_SEV_MAP[(entry as any).severity] || ext.severity;
-        const cat = INTEL_CAT_MAP[(entry as any).department] || ext.category;
-
-        // Skip non-specific places unless the item is critical (then a regional pin is OK).
-        if (ext.specificity === "none") { skipped++; continue; }
-        if (ext.specificity === "regional" && sev !== "critical") { skipped++; continue; }
-
-        let coords = await geocode(ext.location_name);
-        if (!coords && ext.approx_lat != null && ext.approx_lng != null) {
-          coords = { lat: ext.approx_lat, lng: ext.approx_lng };
+        // FAST PATH: intel item already has coords from Phase 4 enrichment — plot directly.
+        let coords: { lat: number; lng: number } | null = null;
+        let locName: string | null = (entry as any).country || null;
+        if (typeof (entry as any).latitude === "number" && typeof (entry as any).longitude === "number") {
+          coords = { lat: (entry as any).latitude, lng: (entry as any).longitude };
         }
-        if (!coords) { skipped++; continue; }
+
+        // FALLBACK: legacy items without coords — use the LLM/geocoder.
+        if (!coords) {
+          const ext = await extractLocation({ headline: entry.headline, summary: entry.summary, impact: (entry as any).impact });
+          if (!ext || !ext.is_disruption || !ext.location_name) { skipped++; continue; }
+          if (ext.specificity === "none") { skipped++; continue; }
+          if (ext.specificity === "regional" && sev !== "critical") { skipped++; continue; }
+          coords = await geocode(ext.location_name);
+          if (!coords && ext.approx_lat != null && ext.approx_lng != null) {
+            coords = { lat: ext.approx_lat, lng: ext.approx_lng };
+          }
+          if (!coords) { skipped++; continue; }
+          locName = ext.location_name;
+        }
 
         // Dedupe
         const dupe = recentList.find((d) =>
@@ -245,18 +252,22 @@ serve(async (req) => {
             summary: entry.summary,
             latitude: coords.lat,
             longitude: coords.lng,
-            location_name: ext.location_name,
+            location_name: locName,
             category: cat,
             severity: sev,
             sources: [sourceItem],
             origin: "scraped",
-            event_date: (entry as any).created_at ? new Date((entry as any).created_at).toISOString() : new Date().toISOString(),
+            event_date: (entry as any).event_date
+              ? new Date((entry as any).event_date).toISOString()
+              : (entry as any).created_at
+                ? new Date((entry as any).created_at).toISOString()
+                : new Date().toISOString(),
             source_entry_id: entry.id,
           });
           if (insErr) { console.error("insert err", insErr); failed++; }
           else {
             created++;
-            recentList.push({ id: "new", title: entry.headline, latitude: coords.lat, longitude: coords.lng, location_name: ext.location_name, sources: [sourceItem] });
+            recentList.push({ id: "new", title: entry.headline, latitude: coords.lat, longitude: coords.lng, location_name: locName, sources: [sourceItem] });
           }
         }
       } catch (e) {
