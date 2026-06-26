@@ -586,6 +586,7 @@ export type Database = {
       weekly_digests: {
         Row: {
           act_now_count: number
+          category: string | null
           department: Database["public"]["Enums"]["intel_department"] | null
           generated_at: string
           id: string
@@ -597,6 +598,7 @@ export type Database = {
         }
         Insert: {
           act_now_count?: number
+          category?: string | null
           department?: Database["public"]["Enums"]["intel_department"] | null
           generated_at?: string
           id?: string
@@ -608,6 +610,7 @@ export type Database = {
         }
         Update: {
           act_now_count?: number
+          category?: string | null
           department?: Database["public"]["Enums"]["intel_department"] | null
           generated_at?: string
           id?: string

@@ -49,6 +49,7 @@ const App = () => (
               <Route path="/digest" element={<WeeklyDigest />} />
               <Route path="/map" element={<DisruptionMap />} />
               <Route path="/item/:id" element={<IntelItemPage />} />
+              <Route path="/news/:id" element={<IntelItemPage />} />
               <Route path="/settings" element={<AdminOnly><SettingsPage /></AdminOnly>} />
             </Route>
             <Route path="/auth" element={<AuthPage />} />

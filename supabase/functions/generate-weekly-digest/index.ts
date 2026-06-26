@@ -112,20 +112,29 @@ serve(async (req) => {
       const row = {
         year,
         week_number: week,
-        department: cat,
+        category: cat,
+        department: null,
         summary_md: md,
         item_count: catItems.length,
         act_now_count: catItems.filter((i: any) => i.severity === "act_now").length,
         this_week_count: catItems.filter((i: any) => i.severity === "this_week").length,
       };
+      // v2 schema: category column drives grouping (was misnamed `department` before).
+      console.log(`[digest v2] inserting cat=${cat} items=${catItems.length}`);
       const { error: insErr } = await supabase.from("weekly_digests").insert(row);
-      if (insErr) console.error(`insert ${cat} failed:`, insErr.message);
+      if (insErr) console.error(`[digest v2] insert ${cat} failed:`, insErr.message, JSON.stringify(row));
       generated.push({ category: cat, items: catItems.length });
     }
 
     // Top-level "All" digest covering every item this week.
     const globalMd = await summarize(LOVABLE_API_KEY, "All categories", all);
-    await supabase.from("weekly_digests").delete().is("department", null).eq("year", year).eq("week_number", week);
+    await supabase
+      .from("weekly_digests")
+      .delete()
+      .is("department", null)
+      .is("category", null)
+      .eq("year", year)
+      .eq("week_number", week);
     await supabase.from("weekly_digests").insert({
       year,
       week_number: week,
