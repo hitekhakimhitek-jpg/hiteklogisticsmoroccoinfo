@@ -371,9 +371,10 @@ serve(async (req) => {
       publishedDate?: string | null;
     }> = [];
 
+    const queryStats = { ok: 0, failed: 0, empty: 0 };
     const searchPromises = searchQueries.map(async (query) => {
       try {
-        const response = await fetch("https://api.firecrawl.dev/v2/search", {
+        const response = await fetchWithTimeout("https://api.firecrawl.dev/v2/search", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
@@ -385,16 +386,18 @@ serve(async (req) => {
             tbs: "qdr:w",
             scrapeOptions: { formats: ["markdown"] },
           }),
-        });
+        }, 30000);
 
         if (!response.ok) {
           const errText = await response.text();
           console.error(`Firecrawl search error for "${query.substring(0, 50)}...":`, response.status, errText);
+          queryStats.failed++;
           return [];
         }
 
         const result = await response.json();
         const items = normalizeSearchItems(result);
+        if (items.length === 0) queryStats.empty++; else queryStats.ok++;
         return items.map((item: any) => ({
           title: item.title || item.metadata?.title || "",
           url: item.url || item.metadata?.sourceURL || "",
@@ -405,11 +408,14 @@ serve(async (req) => {
         }));
       } catch (e) {
         console.error(`Search failed for query: ${query.substring(0, 50)}...`, e);
+        queryStats.failed++;
         return [];
       }
     });
 
-    const results = await Promise.all(searchPromises);
+    const settled = await Promise.allSettled(searchPromises);
+    const results = settled.map((s) => (s.status === "fulfilled" ? s.value : []));
+    console.log(`[search-stats] ok=${queryStats.ok} empty=${queryStats.empty} failed=${queryStats.failed} of ${searchQueries.length}`);
     for (const batch of results) {
       allArticles.push(...batch);
     }
