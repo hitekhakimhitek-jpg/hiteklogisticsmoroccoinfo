@@ -136,8 +136,9 @@ export default function DisruptionMap() {
         <div className="h-[560px] w-full">
           <MapContainer center={[20, 0]} zoom={2} style={{ height: "100%", width: "100%" }} scrollWheelZoom>
             <TileLayer
-              attribution='&copy; OpenStreetMap contributors, &copy; Wikimedia'
-              url="https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png"
+              attribution='&copy; OpenStreetMap contributors, &copy; CARTO'
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+              subdomains={['a','b','c','d']}
             />
             <MarkerClusterGroup chunkedLoading showCoverageOnHover={false} maxClusterRadius={35}>
               {items.map((d) => (
