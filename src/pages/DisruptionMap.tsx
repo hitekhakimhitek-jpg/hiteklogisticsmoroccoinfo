@@ -61,6 +61,22 @@ function pinIcon(sev: Severity) {
     html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 0 0 1px ${color};opacity:0.85;"></div>`,
   });
 }
+
+// English label overlays to cover localized continent names on the basemap tiles.
+const CONTINENT_LABELS: { name: string; lat: number; lng: number; width: number }[] = [
+  { name: "AFRICA", lat: 2, lng: 21, width: 90 },
+  { name: "ASIA", lat: 47, lng: 95, width: 70 },
+  { name: "SOUTH AMERICA", lat: -15, lng: -60, width: 130 },
+];
+
+function continentLabelIcon(text: string, width: number) {
+  return L.divIcon({
+    className: "",
+    iconSize: [width, 22],
+    iconAnchor: [width / 2, 11],
+    html: `<div style="width:${width}px;text-align:center;font:600 12px/22px ui-sans-serif,system-ui,sans-serif;color:#4b5563;letter-spacing:1.5px;background:rgba(247,245,240,0.92);border-radius:3px;pointer-events:none;">${text}</div>`,
+  });
+}
 export default function DisruptionMap() {
   const { lang } = useLanguage();
   const [items, setItems] = useState<MapItem[]>([]);
@@ -179,6 +195,15 @@ export default function DisruptionMap() {
                 </Marker>
               ))}
             </MarkerClusterGroup>
+            {CONTINENT_LABELS.map((c) => (
+              <Marker
+                key={c.name}
+                position={[c.lat, c.lng]}
+                icon={continentLabelIcon(c.name, c.width)}
+                interactive={false}
+                keyboard={false}
+              />
+            ))}
           </MapContainer>
         </div>
       </div>
