@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "sdk_version": "0.20.0",
+  "path": "/functions/v1/mcp",
+  "auth": {
+    "type": "none"
+  },
+  "mcp": {
+    "server": {
+      "name": "hitek-info-mcp",
+      "version": "0.1.0",
+      "title": "Hitek Info MCP"
+    },
+    "tools": [
+      {
+        "name": "search_intelligence",
+        "title": "Search intelligence items",
+        "description": "Full-text search across Hitek Info logistics intelligence items (headlines, summaries, impacts). Returns the most recent matches.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Keyword(s) to search for."
+            },
+            "limit": {
+              "description": "Max results (default 10).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "department": {
+              "description": "Optional department filter.",
+              "type": "string",
+              "enum": [
+                "operations",
+                "finance",
+                "compliance",
+                "commercial",
+                "hr"
+              ]
+            },
+            "severity": {
+              "description": "Optional severity filter.",
+              "type": "string",
+              "enum": [
+                "act_now",
+                "this_week",
+                "monitor",
+                "fyi"
+              ]
+            }
+          },
+          "required": [
+            "query"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_intelligence_item",
+        "title": "Get intelligence item",
+        "description": "Fetch a single Hitek Info intelligence item by its UUID, including full impact and recommended action.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "Intelligence item UUID."
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_recent_intelligence",
+        "title": "List recent intelligence",
+        "description": "List the most recent Morocco freight & logistics intelligence items from Hitek Info, optionally filtered by department, severity, or days back.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "days": {
+              "description": "How many days back to look (default 7).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 90
+            },
+            "limit": {
+              "description": "Max results (default 20).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "department": {
+              "type": "string",
+              "enum": [
+                "operations",
+                "finance",
+                "compliance",
+                "commercial",
+                "hr"
+              ]
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "act_now",
+                "this_week",
+                "monitor",
+                "fyi"
+              ]
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_weekly_digest",
+        "title": "Get weekly digest",
+        "description": "Fetch the Hitek Info weekly digest summaries (global, operational, financial) for a given ISO year & week. Defaults to the current week.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "year": {
+              "type": "integer",
+              "minimum": 2020,
+              "maximum": 2100
+            },
+            "week": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 53
+            }
+          }
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
