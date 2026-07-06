@@ -13,7 +13,7 @@ export default defineTool({
   handler: async ({ id }) => {
     const supabase = createClient(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY!,
     );
     const { data, error } = await supabase
       .from("intelligence_items")

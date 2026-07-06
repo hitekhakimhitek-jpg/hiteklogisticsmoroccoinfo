@@ -23,7 +23,7 @@ var search_intelligence_default = defineTool({
   handler: async ({ query, limit, department, severity }) => {
     const supabase = createClient(
       process.env.SUPABASE_URL,
-      process.env.SUPABASE_PUBLISHABLE_KEY
+      process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY
     );
     let q = supabase.from("intelligence_items").select(
       "id, headline, summary, impact, department, severity, source_name, source_url, publication_date, event_date, country"
@@ -58,7 +58,7 @@ var get_intelligence_item_default = defineTool2({
   handler: async ({ id }) => {
     const supabase = createClient2(
       process.env.SUPABASE_URL,
-      process.env.SUPABASE_PUBLISHABLE_KEY
+      process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY
     );
     const { data, error } = await supabase.from("intelligence_items").select("*").eq("id", id).maybeSingle();
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };
@@ -88,7 +88,7 @@ var list_recent_intelligence_default = defineTool3({
   handler: async ({ days, limit, department, severity }) => {
     const supabase = createClient3(
       process.env.SUPABASE_URL,
-      process.env.SUPABASE_PUBLISHABLE_KEY
+      process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY
     );
     const since = /* @__PURE__ */ new Date();
     since.setUTCDate(since.getUTCDate() - (days ?? 7));
@@ -122,7 +122,7 @@ var get_weekly_digest_default = defineTool4({
   handler: async ({ year, week }) => {
     const supabase = createClient4(
       process.env.SUPABASE_URL,
-      process.env.SUPABASE_PUBLISHABLE_KEY
+      process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY
     );
     let q = supabase.from("weekly_digests").select("*");
     if (year) q = q.eq("year", year);

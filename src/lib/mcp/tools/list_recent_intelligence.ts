@@ -19,7 +19,7 @@ export default defineTool({
   handler: async ({ days, limit, department, severity }) => {
     const supabase = createClient(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY!,
     );
     const since = new Date();
     since.setUTCDate(since.getUTCDate() - (days ?? 7));

@@ -15,7 +15,7 @@ export default defineTool({
   handler: async ({ year, week }) => {
     const supabase = createClient(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY!,
     );
     let q = supabase.from("weekly_digests").select("*");
     if (year) q = q.eq("year", year);
