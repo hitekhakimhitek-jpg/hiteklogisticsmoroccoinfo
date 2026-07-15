@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
-import { Menu, X, LayoutDashboard, FileBarChart, CalendarDays, Archive, Settings } from "lucide-react";
+import { Menu, X, LayoutDashboard, FileBarChart, CalendarDays, Archive, Settings, Sparkles } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Weekly Digest", url: "/digest", icon: Sparkles },
   { title: "Monthly Summary", url: "/monthly", icon: CalendarDays },
   { title: "Archive", url: "/archive", icon: Archive },
   { title: "Settings", url: "/settings", icon: Settings },
