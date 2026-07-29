@@ -47,8 +47,9 @@ function extractPubDate(meta: any, markdown?: string): string | null {
   for (const c of candidates) {
     if (!c || typeof c !== "string") continue;
     const d = new Date(c);
-    if (!isNaN(d.getTime()) && d.getFullYear() > 2000 && d.getTime() <= Date.now() + 86400000) {
-      return d.toISOString().split("T")[0];
+    if (!isNaN(d.getTime()) && d.getTime() <= Date.now() + 86400000) {
+      const iso = d.toISOString().split("T")[0];
+      return isCurrentDate(iso) ? iso : null;
     }
   }
   if (typeof markdown === "string" && markdown.length > 0) {
@@ -68,8 +69,8 @@ function extractPubDate(meta: any, markdown?: string): string | null {
       const dt = new Date(Date.UTC(y, m - 1, d));
       if (isNaN(dt.getTime())) return null;
       if (dt.getTime() > Date.now() + 2 * 86400000) return null;
-      if (y < 2015) return null;
-      return dt.toISOString().split("T")[0];
+      const iso = dt.toISOString().split("T")[0];
+      return isCurrentDate(iso) ? iso : null;
     };
     // 1) ISO YYYY-MM-DD
     const iso = haystack.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
@@ -438,7 +439,7 @@ serve(async (req) => {
     let failed = 0;
     for (const entry of todo) {
       try {
-        if (!looksLikeArticleUrl(entry.source_url) || !isCurrentDate((entry as any).publication_date)) {
+        if (!looksLikeArticleUrl(entry.source_url) || !isCurrentDate((entry as any).publication_date) || !["verified", "partially_verified"].includes((entry as any).verification_status)) {
           failed++;
           console.log("Skipping stale or non-article news entry:", entry.headline, entry.source_url);
           continue;

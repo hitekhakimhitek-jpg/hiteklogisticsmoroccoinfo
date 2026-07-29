@@ -100,7 +100,8 @@ function sourceWeight(name: string | null | undefined): number {
 // counts and the visible feed can never disagree.
 const BAD_URL_PATTERNS = [
   /\/tag\//i, /\/tags\//i, /\/sujet\//i, /\/category\//i, /\/categories\//i,
-  /\/topic\//i, /\/topics\//i, /\/author\//i, /\/authors\//i, /\/section\//i,
+  /\/categorie\//i, /\/topic\//i, /\/topics\//i, /\/author\//i, /\/authors\//i,
+  /\/auteur\//i, /\/section\//i, /\/search\//i, /\/recherche\//i, /\/page\//i,
 ];
 export function isBadArticleUrl(u: string | null | undefined): boolean {
   if (!u) return false;

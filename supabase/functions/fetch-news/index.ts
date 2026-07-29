@@ -950,7 +950,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
           ? entry.classification_notes.slice(0, 500)
           : null,
       };
-    });
+    }).filter((row: any) => row.verification_status === "verified" || row.verification_status === "partially_verified");
 
     // Deduplicate against existing DB entries
     const existingUrls = new Set<string>();
