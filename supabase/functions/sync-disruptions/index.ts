@@ -32,6 +32,26 @@ const INTEL_CAT_MAP: Record<string, string> = {
   commercial: "other",
   it: "other",
 };
+const CURRENT_YEAR_START = Date.UTC(new Date().getUTCFullYear(), 0, 1);
+const ROLLING_NEWS_CUTOFF = Date.now() - 30 * 24 * 3600 * 1000;
+const BAD_ARTICLE_PATH = /\/(tag|tags|sujet|category|categories|categorie|topic|topics|author|authors|section|sections|page|search|recherche|auteur)(\/|$)/i;
+
+function passesCurrentFilter(entry: any): boolean {
+  if (!["verified", "partially_verified"].includes(entry.verification_status)) return false;
+  if (!entry.source_url) return false;
+  try {
+    const u = new URL(entry.source_url);
+    if (BAD_ARTICLE_PATH.test(u.pathname)) return false;
+  } catch {
+    return false;
+  }
+  if (!entry.publication_date) return false;
+  const pub = new Date(entry.publication_date).getTime();
+  const ev = entry.event_date ? new Date(entry.event_date).getTime() : Number.NaN;
+  if (Number.isNaN(pub) || pub < CURRENT_YEAR_START) return false;
+  if (!Number.isNaN(ev) && ev < CURRENT_YEAR_START) return false;
+  return pub >= ROLLING_NEWS_CUTOFF || (!Number.isNaN(ev) && ev >= ROLLING_NEWS_CUTOFF);
+}
 
 type Extracted = {
   location_name: string;
@@ -152,20 +172,22 @@ serve(async (req) => {
       if (typeof body.limit === "number") limit = Math.min(100, Math.max(1, body.limit));
     } catch { /* */ }
 
-    // Pull recent intelligence items (last 14 days, non-archived) — same source as the dashboard.
-    const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
+    // Pull recent verified intelligence items — same source as the dashboard.
+    const thirtyDaysAgo = new Date(ROLLING_NEWS_CUTOFF).toISOString();
     const { data: entries, error } = await supabase
       .from("intelligence_items")
-      .select("id, headline, summary, impact, source_url, source_name, department, severity, created_at, latitude, longitude, country, event_date, category")
-      .gte("created_at", twoWeeksAgo)
+      .select("id, headline, summary, impact, source_url, source_name, department, severity, created_at, latitude, longitude, country, event_date, publication_date, category, verification_status")
+      .gte("created_at", thirtyDaysAgo)
+      .in("verification_status", ["verified", "partially_verified"])
       .neq("status", "archived")
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) throw error;
+    const liveEntries = (entries || []).filter(passesCurrentFilter);
 
     // CLEANUP: remove scraped pins whose source intel item is no longer on the dashboard.
     // Keep manually-placed pins ("manual" origin) untouched.
-    const liveIds = new Set<string>((entries || []).map((e: any) => e.id));
+    const liveIds = new Set<string>(liveEntries.map((e: any) => e.id));
     const { data: allScraped } = await supabase
       .from("disruptions")
       .select("id, source_entry_id, origin")
@@ -183,7 +205,7 @@ serve(async (req) => {
 
     const existingIds = new Set<string>();
     {
-      const ids = (entries || []).map((e: any) => e.id);
+      const ids = liveEntries.map((e: any) => e.id);
       if (ids.length > 0) {
         const { data: existing } = await supabase
           .from("disruptions")
@@ -203,7 +225,7 @@ serve(async (req) => {
 
     let created = 0, skipped = 0, merged = 0, failed = 0;
 
-    for (const entry of entries || []) {
+    for (const entry of liveEntries) {
       if (existingIds.has(entry.id)) { skipped++; continue; }
       try {
         const sev = INTEL_SEV_MAP[(entry as any).severity] || "medium";
@@ -277,7 +299,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, considered: entries?.length || 0, created, merged, skipped, failed, removed }),
+      JSON.stringify({ success: true, considered: liveEntries.length, created, merged, skipped, failed, removed }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {

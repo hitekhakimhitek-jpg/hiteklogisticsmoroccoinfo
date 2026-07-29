@@ -5,6 +5,45 @@ import { corsHeaders, requireHitekAdmin } from "../_shared/auth.ts";
 // Scrape source URLs with Firecrawl and extract the publication date from
 // page metadata or article body. Updates intelligence_items.publication_date
 // + verification_status. Designed to be idempotent and chunkable.
+const CURRENT_YEAR = new Date().getUTCFullYear();
+const CURRENT_YEAR_START = Date.UTC(CURRENT_YEAR, 0, 1);
+const ROLLING_NEWS_CUTOFF = Date.now() - 30 * 24 * 60 * 60 * 1000;
+const PAYWALL_RE = /\b(only available to subscribers|subscriber(?:s)? only|thirty-day free trial|30-day free trial|subscribe to read|subscription required|premium content|sign in to continue|login to continue|become a subscriber|already a subscriber)\b/i;
+const BAD_ARTICLE_PATH = /\/(tag|tags|sujet|category|categories|categorie|topic|topics|author|authors|section|sections|page|search|recherche|auteur)(\/|$)/i;
+
+function isCurrentArticleDate(date: string | null | undefined): boolean {
+  if (!date) return false;
+  const t = new Date(date).getTime();
+  return !Number.isNaN(t) && t >= CURRENT_YEAR_START && t >= ROLLING_NEWS_CUTOFF && t <= Date.now() + 86400000;
+}
+
+function looksLikeArticleUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    const path = u.pathname;
+    if (!path || path === "/" || path.length < 8) return false;
+    if (BAD_ARTICLE_PATH.test(path)) return false;
+    if (/\.(jpg|jpeg|png|gif|pdf|mp4|css|js|xml)$/i.test(path)) return false;
+    return path.split("/").filter(Boolean).length >= 2;
+  } catch {
+    return false;
+  }
+}
+
+function contentLooksReadable(markdown: string, title = ""): boolean {
+  const text = `${title}\n${markdown}`.trim();
+  return text.length >= 180 && !PAYWALL_RE.test(text);
+}
+
+function titleSimilarity(a: string, b: string) {
+  const stop = new Set(["from", "with", "that", "this", "will", "amid", "after", "says", "news", "more", "over", "into", "near", "rate", "rates", "shipping", "freight", "cargo", "logistics", "supply", "chain", "market", "markets", "global", "container", "containers", "update", "updates", "security", "critical", "report", "reports", "trade", "transport"]);
+  const toks = (s: string) => new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 3 && !stop.has(t)));
+  const A = toks(a), B = toks(b);
+  if (A.size === 0 || B.size === 0) return 0;
+  let inter = 0;
+  for (const t of A) if (B.has(t)) inter++;
+  return inter / Math.min(A.size, B.size);
+}
 
 function pickDateFromMeta(meta: any): string | null {
   if (!meta) return null;
@@ -84,6 +123,12 @@ serve(async (req) => {
     for (const item of items || []) {
       const url = item.source_url as string;
       try {
+        if (!looksLikeArticleUrl(url)) {
+          broken++;
+          await supabase.from("intelligence_items").update({ verification_status: "broken_link", status: "archived" }).eq("id", item.id);
+          continue;
+        }
+
         const fcResp = await fetch("https://api.firecrawl.dev/v2/scrape", {
           method: "POST",
           headers: { Authorization: `Bearer ${FIRECRAWL_API_KEY}`, "Content-Type": "application/json" },
@@ -98,11 +143,30 @@ serve(async (req) => {
         const doc = fcData?.data ?? fcData;
         const meta = doc?.metadata || {};
         const markdown: string = doc?.markdown || "";
+        const pageTitle: string = meta?.title || meta?.ogTitle || markdown.split("\n").find((l: string) => l.startsWith("# "))?.replace(/^#\s*/, "") || "";
+
+        if (!contentLooksReadable(markdown, pageTitle)) {
+          broken++;
+          await supabase.from("intelligence_items").update({ verification_status: "broken_link", status: "archived" }).eq("id", item.id);
+          continue;
+        }
 
         let date = pickDateFromMeta(meta);
         if (!date) date = await extractDateWithAI(LOVABLE_API_KEY, markdown, url);
 
-        if (date) {
+        if (date && !isCurrentArticleDate(date)) {
+          stillUnverified++;
+          await supabase
+            .from("intelligence_items")
+            .update({ publication_date: date, verification_status: "outdated", status: "archived" })
+            .eq("id", item.id);
+        } else if (date && titleSimilarity((item as any).headline || "", `${pageTitle}\n${markdown.slice(0, 800)}`) < 0.2) {
+          stillUnverified++;
+          await supabase
+            .from("intelligence_items")
+            .update({ publication_date: date, verification_status: "source_mismatch", status: "archived" })
+            .eq("id", item.id);
+        } else if (date) {
           verified++;
           await supabase
             .from("intelligence_items")
@@ -122,11 +186,11 @@ serve(async (req) => {
     }
 
     // Auto-archive anything older than 14 days while we're here.
-    const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    const cutoff = new Date(ROLLING_NEWS_CUTOFF).toISOString().slice(0, 10);
     const { count: archived } = await supabase
       .from("intelligence_items")
       .update({ status: "archived" }, { count: "exact" })
-      .lt("created_at", cutoff)
+      .or(`publication_date.lt.${cutoff},event_date.lt.${new Date(CURRENT_YEAR_START).toISOString().slice(0, 10)},verification_status.in.(source_mismatch,outdated,broken_link,date_not_verified,needs_review)`)
       .neq("status", "archived");
 
     return new Response(

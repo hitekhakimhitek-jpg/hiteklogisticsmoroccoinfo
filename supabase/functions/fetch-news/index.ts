@@ -99,8 +99,9 @@ function extractPublicationDate(metadata: any, markdown?: string): string | null
   for (const c of candidates) {
     if (!c || typeof c !== "string") continue;
     const d = new Date(c);
-    if (!isNaN(d.getTime()) && d.getFullYear() > 2000 && d.getTime() <= Date.now() + 86400000) {
-      return d.toISOString().split("T")[0];
+    if (!isNaN(d.getTime()) && d.getTime() <= Date.now() + 86400000) {
+      const iso = d.toISOString().split("T")[0];
+      return isCurrentPublicationDate(iso) ? iso : null;
     }
   }
   // Look for a JSON-LD-style date in the first 2KB of markdown
@@ -111,7 +112,8 @@ function extractPublicationDate(metadata: any, markdown?: string): string | null
     if (m) {
       const d = new Date(m[0]);
       if (!isNaN(d.getTime()) && d.getTime() <= Date.now() + 86400000) {
-        return d.toISOString().split("T")[0];
+        const iso = d.toISOString().split("T")[0];
+        return isCurrentPublicationDate(iso) ? iso : null;
       }
     }
   }
@@ -347,8 +349,11 @@ async function firecrawlScrapeUrl(
     const title: string = metadata.title || markdown.split("\n").find((l: string) => l.startsWith("# "))?.replace(/^#\s*/, "") || "";
     const description: string = metadata.description || markdown.substring(0, 240).replace(/\n/g, " ");
     if (!title) return null;
+    const sourceURL = metadata.sourceURL || url;
     const publishedDate = extractPublicationDate(metadata, markdown);
-    return { title, url: metadata.sourceURL || url, description, markdown: markdown.substring(0, 1500), publishedDate } as any;
+    const article = { title, url: sourceURL, description, markdown: markdown.substring(0, 1500), publishedDate } as any;
+    if (classifyArticleRejection(article)) return null;
+    return article;
   } catch (e) {
     console.error(`/scrape exception for ${url}:`, e);
     return null;
@@ -902,13 +907,28 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       // Use the REAL source publication date when available; never fall back to today.
       const sourcePubDate: string | null =
         (originalArticle as any).publishedDate || null;
-      const verificationStatus = sourcePubDate ? "verified" : "date_not_verified";
+      const headline = entry.headline || originalArticle.title;
+      const sourceUrl = originalArticle.url || null;
+      const rejectionReason = classifyArticleRejection({
+        title: headline,
+        url: sourceUrl || "",
+        description: entry.summary || originalArticle.description || "",
+        markdown: originalArticle.markdown || "",
+        publishedDate: sourcePubDate,
+      });
+      const verificationStatus = rejectionReason === "title_url_mismatch"
+        ? "source_mismatch"
+        : rejectionReason === "outdated_or_missing_date"
+          ? "outdated"
+          : rejectionReason === "paywalled_or_unreadable"
+            ? "broken_link"
+            : sourcePubDate ? "verified" : "date_not_verified";
 
       return {
-        headline: entry.headline || originalArticle.title,
+        headline,
         summary: entry.summary || originalArticle.description,
         source_name: originalArticle.source || extractSourceName(originalArticle.url || ""),
-        source_url: originalArticle.url || null,
+        source_url: sourceUrl,
         category: CATEGORIES.includes(entry.category) ? entry.category : "general",
         region: dbRegion,
         priority: PRIORITIES.includes(entry.priority) ? entry.priority : "informational",
