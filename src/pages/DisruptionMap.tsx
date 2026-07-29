@@ -43,8 +43,8 @@ const SEV_LABEL: Record<Severity, string> = {
 const SEV_SCALE: Record<Severity, number> = { act_now: 11, this_week: 9, awareness: 7 };
 
 // Load the Google Maps JS API once, using the browser key + async loader.
-let mapsLoaderPromise: Promise<typeof google> | null = null;
-function loadGoogleMaps(): Promise<typeof google> {
+let mapsLoaderPromise: Promise<any> | null = null;
+function loadGoogleMaps(): Promise<any> {
   if (typeof window !== "undefined" && (window as any).google?.maps) {
     return Promise.resolve((window as any).google);
   }
