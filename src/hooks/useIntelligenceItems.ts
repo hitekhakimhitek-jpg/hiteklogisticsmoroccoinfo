@@ -79,6 +79,52 @@ const SEVERITY_ORDER: Record<IntelSeverity, number> = {
   awareness: 2,
 };
 
+// Trust/impact tier for logistics sources — higher = more consequential for a
+// Morocco freight forwarder like Hitek. Used to break ties within a severity
+// bucket so tier-1 wire copy (JOC, Loadstar, Lloyd's List, official regulators)
+// pins above softer trade press. Case-insensitive substring match on source_name.
+const SOURCE_TIER: Array<{ match: RegExp; weight: number }> = [
+  { match: /joc|journal of commerce|loadstar|lloyd'?s list|reuters|bloomberg/i, weight: 3 },
+  { match: /cisa|imo|iata|european commission|ec\.europa|customs|douane|adii|omc|wto/i, weight: 3 },
+  { match: /medias?24|hespress|maroc|morocco world news|le\s?matin|tanger med|onda|ports?\.gov/i, weight: 2.5 },
+  { match: /freightwaves|splash|shippingwatch|seatrade|american shipper|the maritime executive/i, weight: 2 },
+  { match: /the register|itsecurityguru|sd times|bleepingcomputer|krebs/i, weight: 1 },
+];
+function sourceWeight(name: string | null | undefined): number {
+  if (!name) return 0.5;
+  for (const t of SOURCE_TIER) if (t.match.test(name)) return t.weight;
+  return 1;
+}
+
+// Shared client-side filter: matches what `useIntelligenceItems` shows so KPI
+// counts and the visible feed can never disagree.
+const BAD_URL_PATTERNS = [
+  /\/tag\//i, /\/tags\//i, /\/sujet\//i, /\/category\//i, /\/categories\//i,
+  /\/topic\//i, /\/topics\//i, /\/author\//i, /\/authors\//i, /\/section\//i,
+];
+function isBadArticleUrl(u: string | null | undefined): boolean {
+  if (!u) return false;
+  try {
+    const url = new URL(u);
+    if (url.pathname.replace(/\/+$/, "").split("/").filter(Boolean).length <= 1) return true;
+  } catch {
+    return false;
+  }
+  return BAD_URL_PATTERNS.some((r) => r.test(u));
+}
+export function passesFeedFilter(r: {
+  publication_date?: string | null;
+  source_url?: string | null;
+}): boolean {
+  const cutoffMs = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  if (r.publication_date) {
+    const t = new Date(r.publication_date).getTime();
+    if (!Number.isNaN(t) && t < cutoffMs) return false;
+  }
+  if (isBadArticleUrl(r.source_url ?? null)) return false;
+  return true;
+}
+
 export function useIntelligenceItems(filters: IntelFilters = {}) {
   const { lang } = useLanguage();
   return useQuery({
@@ -111,54 +157,19 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
       const { data, error } = await q;
       if (error) throw error;
       let rows = (data || []) as IntelligenceItem[];
-      // Hard filter: drop stale/broken items so the feed only ever shows fresh, article-linked news.
-      // 1) publication_date must be within the last 14 days when known.
-      // 2) source_url must point to an article, not a tag / category / author landing page.
-      const cutoffMs = Date.now() - 14 * 24 * 60 * 60 * 1000;
-      const BAD_URL_PATTERNS = [
-        /\/tag\//i,
-        /\/tags\//i,
-        /\/sujet\//i,
-        /\/category\//i,
-        /\/categories\//i,
-        /\/topic\//i,
-        /\/topics\//i,
-        /\/author\//i,
-        /\/authors\//i,
-        /\/section\//i,
-      ];
-      const isBadUrl = (u: string | null) => {
-        if (!u) return false;
-        try {
-          const url = new URL(u);
-          // Root or near-root URLs (no article slug) are landing pages.
-          if (url.pathname.replace(/\/+$/, "").split("/").filter(Boolean).length <= 1) {
-            // e.g. https://site.com/ or https://site.com/news — treat as non-article
-            return true;
-          }
-        } catch {
-          return false;
-        }
-        return BAD_URL_PATTERNS.some((r) => r.test(u));
-      };
-      rows = rows.filter((r) => {
-        if (r.publication_date) {
-          const t = new Date(r.publication_date).getTime();
-          if (!Number.isNaN(t) && t < cutoffMs) return false;
-        }
-        if (isBadUrl(r.source_url)) return false;
-        return true;
-      });
+      // Hard filter shared with useIntelCounts so the KPI numbers always match the visible feed.
+      rows = rows.filter(passesFeedFilter);
       // Sort blend: recency + severity + learned predicted_relevance.
       // HARD SAFETY FLOOR: critical (act_now) and action_required items are pinned
       // to the top regardless of preference signal. Learning tunes noise, not alerts.
       const now = Date.now();
       const scoreOf = (r: IntelligenceItem) => {
-        const sevW = (3 - SEVERITY_ORDER[r.severity]) * 5; // 15 / 10 / 5
+        const sevW = (3 - SEVERITY_ORDER[r.severity]) * 10; // 30 / 20 / 10 — severity dominates
         const ageHours = (now - new Date(r.created_at).getTime()) / 3_600_000;
-        const recency = Math.max(0, 1 - ageHours / (14 * 24)) * 3; // 0..3
+        const recency = Math.max(0, 1 - ageHours / (14 * 24)) * 2; // 0..2
         const pr = Number(r.predicted_relevance || 0); // typically -1..+1
-        return sevW + recency + pr;
+        const src = sourceWeight(r.source_name); // 0.5..3
+        return sevW + recency + pr + src;
       };
       const isPinned = (r: IntelligenceItem) =>
         r.severity === "act_now" || r.action_required_bool === true;
@@ -167,9 +178,11 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
         const pb = isPinned(b) ? 1 : 0;
         if (pa !== pb) return pb - pa;
         if (pa === 1) {
-          // Inside the pinned tier, severity then recency only.
+          // Inside the pinned tier: severity, then source tier, then recency.
           const s = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
           if (s !== 0) return s;
+          const sw = sourceWeight(b.source_name) - sourceWeight(a.source_name);
+          if (sw !== 0) return sw;
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         }
         return scoreOf(b) - scoreOf(a);
@@ -215,8 +228,9 @@ export function useIntelCounts() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("intelligence_items")
-        .select("severity,department,status,is_ai_draft");
+        .select("severity,department,status,is_ai_draft,publication_date,source_url,created_at");
       if (error) throw error;
+      const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
       const counts = {
         act_now: 0,
         this_week: 0,
@@ -226,6 +240,9 @@ export function useIntelCounts() {
       };
       for (const r of data || []) {
         if ((r as any).status === "archived") continue;
+        // Match the visible feed: last 14 days by created_at AND passes the shared filter.
+        if (((r as any).created_at || "") < cutoff) continue;
+        if (!passesFeedFilter(r as any)) continue;
         const sev = (r as any).severity as IntelSeverity;
         if (sev in counts) (counts as any)[sev]++;
         const d = (r as any).department as string;
