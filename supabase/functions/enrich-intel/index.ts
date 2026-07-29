@@ -7,6 +7,36 @@ const SEVERITIES = ["act_now", "this_week", "awareness"] as const;
 const HORIZONS = ["today", "this_week", "this_month", "horizon"] as const;
 const CATEGORIES = ["operational", "financial", "global"] as const;
 const MODES = ["sea", "air", "road", "rail"] as const;
+const CURRENT_YEAR = new Date().getUTCFullYear();
+const CURRENT_YEAR_START = Date.UTC(CURRENT_YEAR, 0, 1);
+const ROLLING_NEWS_CUTOFF = Date.now() - 30 * 24 * 60 * 60 * 1000;
+const PAYWALL_RE = /\b(only available to subscribers|subscriber(?:s)? only|thirty-day free trial|30-day free trial|subscribe to read|subscription required|premium content|sign in to continue|login to continue|become a subscriber|already a subscriber)\b/i;
+const BAD_ARTICLE_PATH = /\/(tag|tags|sujet|category|categories|categorie|topic|topics|author|authors|section|sections|page|search|recherche|auteur)(\/|$)/i;
+
+function isCurrentDate(date: string | null | undefined): boolean {
+  if (!date) return false;
+  const t = new Date(date).getTime();
+  return !Number.isNaN(t) && t >= CURRENT_YEAR_START && t >= ROLLING_NEWS_CUTOFF && t <= Date.now() + 86400000;
+}
+
+function looksLikeArticleUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    const path = u.pathname;
+    if (!path || path === "/" || path.length < 8) return false;
+    if (BAD_ARTICLE_PATH.test(path)) return false;
+    if (/\.(jpg|jpeg|png|gif|pdf|mp4|css|js|xml)$/i.test(path)) return false;
+    return path.split("/").filter(Boolean).length >= 2;
+  } catch {
+    return false;
+  }
+}
+
+function contentLooksReadable(markdown?: string, title?: string): boolean {
+  const text = `${title || ""}\n${markdown || ""}`.trim();
+  return text.length >= 180 && !PAYWALL_RE.test(text);
+}
 
 function extractPubDate(meta: any, markdown?: string): string | null {
   const candidates: any[] = [
@@ -17,8 +47,9 @@ function extractPubDate(meta: any, markdown?: string): string | null {
   for (const c of candidates) {
     if (!c || typeof c !== "string") continue;
     const d = new Date(c);
-    if (!isNaN(d.getTime()) && d.getFullYear() > 2000 && d.getTime() <= Date.now() + 86400000) {
-      return d.toISOString().split("T")[0];
+    if (!isNaN(d.getTime()) && d.getTime() <= Date.now() + 86400000) {
+      const iso = d.toISOString().split("T")[0];
+      return isCurrentDate(iso) ? iso : null;
     }
   }
   if (typeof markdown === "string" && markdown.length > 0) {
@@ -38,8 +69,8 @@ function extractPubDate(meta: any, markdown?: string): string | null {
       const dt = new Date(Date.UTC(y, m - 1, d));
       if (isNaN(dt.getTime())) return null;
       if (dt.getTime() > Date.now() + 2 * 86400000) return null;
-      if (y < 2015) return null;
-      return dt.toISOString().split("T")[0];
+      const iso = dt.toISOString().split("T")[0];
+      return isCurrentDate(iso) ? iso : null;
     };
     // 1) ISO YYYY-MM-DD
     const iso = haystack.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
@@ -323,7 +354,11 @@ serve(async (req) => {
         try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return "Web"; }
       })();
 
+      const pubDate = extractPubDate(meta, markdown);
       if (!markdown && !pageTitle) throw new Error("Firecrawl returned no content");
+      if (!looksLikeArticleUrl(url)) throw new Error("URL is not a direct article");
+      if (!contentLooksReadable(markdown, pageTitle)) throw new Error("Article is paywalled or unreadable");
+      if (!isCurrentDate(pubDate)) throw new Error("Article is outside the current 30-day window");
 
       const drafted = await callAI(
         LOVABLE_API_KEY,
@@ -354,13 +389,13 @@ serve(async (req) => {
           owner: drafted.owner,
           status: "new",
           is_ai_draft: false,
-          publication_date: extractPubDate(meta, markdown),
+          publication_date: pubDate,
           verification_status: "verified",
           category: drafted.category,
           country: drafted.country,
           latitude: drafted.latitude,
           longitude: drafted.longitude,
-          event_date: drafted.event_date ?? extractPubDate(meta, markdown),
+          event_date: drafted.event_date ?? pubDate,
           transport_modes: drafted.transport_modes,
           port_affected: drafted.port_affected,
           airport_affected: drafted.airport_affected,
@@ -404,6 +439,11 @@ serve(async (req) => {
     let failed = 0;
     for (const entry of todo) {
       try {
+        if (!looksLikeArticleUrl(entry.source_url) || !isCurrentDate((entry as any).publication_date) || !["verified", "partially_verified"].includes((entry as any).verification_status)) {
+          failed++;
+          console.log("Skipping stale or non-article news entry:", entry.headline, entry.source_url);
+          continue;
+        }
         const drafted = await callAI(
           LOVABLE_API_KEY,
           buildUserPrompt({

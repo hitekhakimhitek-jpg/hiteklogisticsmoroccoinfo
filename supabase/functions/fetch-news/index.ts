@@ -30,6 +30,57 @@ const CONTENT_TYPES = [
   "general_news",
 ];
 const PRIORITIES = ["critical", "important", "informational"];
+const CURRENT_YEAR = new Date().getUTCFullYear();
+const CURRENT_YEAR_START = new Date(Date.UTC(CURRENT_YEAR, 0, 1)).getTime();
+const ROLLING_NEWS_CUTOFF = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+const BAD_ARTICLE_PATH = /\/(tag|tags|sujet|category|categories|categorie|topic|topics|author|authors|section|sections|page|search|recherche)(\/|$)/i;
+const PAYWALL_RE = /\b(only available to subscribers|subscriber(?:s)? only|thirty-day free trial|30-day free trial|subscribe to read|subscription required|premium content|sign in to continue|login to continue|become a subscriber|already a subscriber)\b/i;
+const GENERIC_TITLE_WORDS = new Set([
+  "from", "with", "that", "this", "will", "amid", "after", "says", "news", "more", "over", "into", "near",
+  "rate", "rates", "shipping", "freight", "cargo", "logistics", "supply", "chain", "market", "markets", "global",
+  "container", "containers", "update", "updates", "security", "critical", "report", "reports", "trade", "transport",
+]);
+
+function isCurrentPublicationDate(date: string | null | undefined): boolean {
+  if (!date) return false;
+  const t = new Date(date).getTime();
+  if (Number.isNaN(t)) return false;
+  if (t < CURRENT_YEAR_START) return false;
+  return t >= ROLLING_NEWS_CUTOFF;
+}
+
+function tokenize(v: string | null | undefined): string[] {
+  return String(v || "")
+    .toLowerCase()
+    .replace(/https?:\/\/[^/]+/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= 4 && !GENERIC_TITLE_WORDS.has(w));
+}
+
+function contentLooksReadable(markdown?: string, description?: string, title?: string): boolean {
+  const text = `${title || ""}\n${description || ""}\n${markdown || ""}`.trim();
+  if (text.length < 180) return false;
+  if (PAYWALL_RE.test(text)) return false;
+  return true;
+}
+
+function titleMatchesUrlOrContent(article: { title: string; url: string; description?: string; markdown?: string }): boolean {
+  const titleWords = tokenize(article.title);
+  if (titleWords.length === 0) return false;
+  const haystackWords = new Set(tokenize(`${article.url} ${article.description || ""} ${(article.markdown || "").slice(0, 600)}`));
+  const overlap = titleWords.filter((w) => haystackWords.has(w)).length;
+  return overlap >= Math.min(2, titleWords.length);
+}
+
+function classifyArticleRejection(article: { title: string; url: string; description: string; markdown?: string; publishedDate?: string | null }): string | null {
+  if (!looksLikeArticleUrl(article.url)) return "non_article_url";
+  if (!isCurrentPublicationDate(article.publishedDate)) return "outdated_or_missing_date";
+  if (!contentLooksReadable(article.markdown, article.description, article.title)) return "paywalled_or_unreadable";
+  if (!titleMatchesUrlOrContent(article)) return "title_url_mismatch";
+  return null;
+}
 
 // Try to extract an ISO publication date from Firecrawl metadata or article markdown.
 // Returns YYYY-MM-DD or null. NEVER fall back to "today" — the dashboard requires
@@ -48,8 +99,9 @@ function extractPublicationDate(metadata: any, markdown?: string): string | null
   for (const c of candidates) {
     if (!c || typeof c !== "string") continue;
     const d = new Date(c);
-    if (!isNaN(d.getTime()) && d.getFullYear() > 2000 && d.getTime() <= Date.now() + 86400000) {
-      return d.toISOString().split("T")[0];
+    if (!isNaN(d.getTime()) && d.getTime() <= Date.now() + 86400000) {
+      const iso = d.toISOString().split("T")[0];
+      return isCurrentPublicationDate(iso) ? iso : null;
     }
   }
   // Look for a JSON-LD-style date in the first 2KB of markdown
@@ -60,7 +112,8 @@ function extractPublicationDate(metadata: any, markdown?: string): string | null
     if (m) {
       const d = new Date(m[0]);
       if (!isNaN(d.getTime()) && d.getTime() <= Date.now() + 86400000) {
-        return d.toISOString().split("T")[0];
+        const iso = d.toISOString().split("T")[0];
+        return isCurrentPublicationDate(iso) ? iso : null;
       }
     }
   }
@@ -236,7 +289,7 @@ function looksLikeArticleUrl(url: string): boolean {
     const u = new URL(url);
     const path = u.pathname;
     if (!path || path === "/" || path.length < 8) return false;
-    if (/\/(tag|category|categorie|auteur|author|page|search|recherche)\//i.test(path)) return false;
+    if (BAD_ARTICLE_PATH.test(path) || /\/(auteur)\//i.test(path)) return false;
     if (/\.(jpg|jpeg|png|gif|pdf|mp4|css|js|xml)$/i.test(path)) return false;
     const segments = path.split("/").filter(Boolean);
     if (segments.length < 2) return false;
@@ -296,8 +349,11 @@ async function firecrawlScrapeUrl(
     const title: string = metadata.title || markdown.split("\n").find((l: string) => l.startsWith("# "))?.replace(/^#\s*/, "") || "";
     const description: string = metadata.description || markdown.substring(0, 240).replace(/\n/g, " ");
     if (!title) return null;
+    const sourceURL = metadata.sourceURL || url;
     const publishedDate = extractPublicationDate(metadata, markdown);
-    return { title, url, description, markdown: markdown.substring(0, 1500), publishedDate } as any;
+    const article = { title, url: sourceURL, description, markdown: markdown.substring(0, 1500), publishedDate } as any;
+    if (classifyArticleRejection(article)) return null;
+    return article;
   } catch (e) {
     console.error(`/scrape exception for ${url}:`, e);
     return null;
@@ -534,34 +590,29 @@ serve(async (req) => {
       }
     }
 
-    // Filter out generic/non-article URLs
-    const isValidArticleUrl = (url: string): boolean => {
-      try {
-        const u = new URL(url);
-        const path = u.pathname;
-        if (path === "/" || path === "/en/" || path === "/news/" || path === "/en/news/") return false;
-        if (path.endsWith("view_more_news.php") || path.endsWith("index.php")) return false;
-        if (u.hostname.includes("facebook.com") || u.hostname.includes("twitter.com") || u.hostname.includes("linkedin.com")) return false;
-        if (path.split("/").filter(Boolean).length < 2) return false;
-        return true;
-      } catch {
-        return false;
-      }
-    };
-
     // Deduplicate by URL
     const uniqueArticles = Array.from(
       new Map(
         allArticles
-          .filter(a => a.url && a.title && isValidArticleUrl(a.url))
+          .filter(a => a.url && a.title)
           .map(a => [a.url, a])
       ).values()
     );
 
+    const rejectionStats: Record<string, number> = {};
+    const auditedArticles = uniqueArticles.filter((article) => {
+      const reason = classifyArticleRejection(article);
+      if (!reason) return true;
+      rejectionStats[reason] = (rejectionStats[reason] || 0) + 1;
+      console.log(`[article-reject:${reason}] ${article.title} — ${article.url}`);
+      return false;
+    });
+    console.log(`[article-audit] input=${uniqueArticles.length} accepted=${auditedArticles.length} rejected=${uniqueArticles.length - auditedArticles.length}`, rejectionStats);
+
     // Step 1b: Validate URLs
-    console.log(`Validating ${uniqueArticles.length} article URLs...`);
+    console.log(`Validating ${auditedArticles.length} article URLs...`);
     const validatedArticles: typeof uniqueArticles = [];
-    const validationPromises = uniqueArticles.map(async (article) => {
+    const validationPromises = auditedArticles.map(async (article) => {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
@@ -583,8 +634,8 @@ serve(async (req) => {
             redirect: "follow",
           });
           clearTimeout(timeout2);
-          await resp2.text();
-          if (resp2.ok) return article;
+          const body = await resp2.text();
+          if (resp2.ok && !PAYWALL_RE.test(body.slice(0, 3000))) return article;
         }
         console.log(`URL validation failed (${resp.status}): ${article.url}`);
         return null;
@@ -630,7 +681,8 @@ serve(async (req) => {
       ...articlesToProcess.filter((a) => PRIMARY_NAMES.has(a.source)),
       ...articlesToProcess.filter((a) => !PRIMARY_NAMES.has(a.source)),
     ];
-    const articleSummaries = primaryFirst.slice(0, 50).map((a, i) =>
+    const classificationBatch = primaryFirst.slice(0, 50);
+    const articleSummaries = classificationBatch.map((a, i) =>
       `[${i}] TITLE: ${a.title}\nURL: ${a.url}\nSOURCE: ${a.source}\nDESCRIPTION: ${a.description}\nCONTENT PREVIEW: ${a.markdown?.substring(0, 200) || "N/A"}`
     ).join("\n\n---\n\n");
 
@@ -808,7 +860,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
     );
 
     const rows = classifiedEntries.map((entry: any) => {
-      const originalArticle = articlesToProcess[entry.index] || {};
+      const originalArticle = classificationBatch[entry.index] || {};
 
       // ----- Geographic classification -----
       const validRegion = (r: any) =>
@@ -855,13 +907,28 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       // Use the REAL source publication date when available; never fall back to today.
       const sourcePubDate: string | null =
         (originalArticle as any).publishedDate || null;
-      const verificationStatus = sourcePubDate ? "verified" : "date_not_verified";
+      const headline = entry.headline || originalArticle.title;
+      const sourceUrl = originalArticle.url || null;
+      const rejectionReason = classifyArticleRejection({
+        title: headline,
+        url: sourceUrl || "",
+        description: entry.summary || originalArticle.description || "",
+        markdown: originalArticle.markdown || "",
+        publishedDate: sourcePubDate,
+      });
+      const verificationStatus = rejectionReason === "title_url_mismatch"
+        ? "source_mismatch"
+        : rejectionReason === "outdated_or_missing_date"
+          ? "outdated"
+          : rejectionReason === "paywalled_or_unreadable"
+            ? "broken_link"
+            : sourcePubDate ? "verified" : "date_not_verified";
 
       return {
-        headline: entry.headline || originalArticle.title,
+        headline,
         summary: entry.summary || originalArticle.description,
         source_name: originalArticle.source || extractSourceName(originalArticle.url || ""),
-        source_url: originalArticle.url || null,
+        source_url: sourceUrl,
         category: CATEGORIES.includes(entry.category) ? entry.category : "general",
         region: dbRegion,
         priority: PRIORITIES.includes(entry.priority) ? entry.priority : "informational",
@@ -883,7 +950,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
           ? entry.classification_notes.slice(0, 500)
           : null,
       };
-    });
+    }).filter((row: any) => row.verification_status === "verified" || row.verification_status === "partially_verified");
 
     // Deduplicate against existing DB entries
     const existingUrls = new Set<string>();
