@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { translateDeep } from "@/lib/translateEntries";
 import { SEO } from "@/components/SEO";
+import { passesFeedFilter } from "@/hooks/useIntelligenceItems";
 
 // Single source of truth: read intelligence_items directly (same feed as the Dashboard).
 type Severity = "act_now" | "this_week" | "awareness";
@@ -26,6 +27,7 @@ type MapItem = {
   created_at: string;
   source_url: string | null;
   source_name: string | null;
+  verification_status: string | null;
 };
 
 const SEV_COLOR: Record<Severity, string> = {
@@ -76,18 +78,18 @@ export default function DisruptionMap() {
 
   const load = async () => {
     setLoading(true);
-    // Rolling 14-day window, matches the dashboard.
-    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
+    // Same current, verified article window as the dashboard feed.
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
     const { data, error } = await supabase
       .from("intelligence_items")
-      .select("id, headline, summary, latitude, longitude, country, port_affected, airport_affected, severity, department, category, event_date, publication_date, created_at, source_url, source_name")
-      .gte("created_at", fourteenDaysAgo)
+      .select("id, headline, summary, latitude, longitude, country, port_affected, airport_affected, severity, department, category, event_date, publication_date, created_at, source_url, source_name, verification_status")
+      .gte("created_at", thirtyDaysAgo)
       .neq("status", "archived")
       .not("latitude", "is", null)
       .not("longitude", "is", null)
       .order("created_at", { ascending: false });
     if (error) console.error(error);
-    let rows = ((data || []) as any[]) as MapItem[];
+    let rows = (((data || []) as any[]) as MapItem[]).filter(passesFeedFilter);
     if (lang === "fr" && rows.length > 0) {
       try {
         const payload = rows.map((r) => ({ id: r.id, headline: r.headline, summary: r.summary }));
@@ -153,8 +155,8 @@ export default function DisruptionMap() {
     const openLabel = lang === "fr" ? "Voir l'article" : "Open article";
 
     const singleHtml = (d: MapItem) => {
-      const dateStr = (d.event_date || d.publication_date)
-        ? format(new Date(d.event_date || d.publication_date!), "MMM d, yyyy")
+      const dateStr = (d.publication_date || d.event_date)
+        ? format(new Date(d.publication_date || d.event_date!), "MMM d, yyyy")
         : "";
       const meta = [d.port_affected, d.airport_affected, d.country].filter(Boolean).join(" · ");
       return `
@@ -179,8 +181,8 @@ export default function DisruptionMap() {
       const order = { act_now: 0, this_week: 1, awareness: 2 } as const;
       const sorted = [...list].sort((a, b) => order[a.severity] - order[b.severity]);
       const rows = sorted.map((d) => {
-        const dateStr = (d.event_date || d.publication_date)
-          ? format(new Date(d.event_date || d.publication_date!), "MMM d, yyyy")
+        const dateStr = (d.publication_date || d.event_date)
+          ? format(new Date(d.publication_date || d.event_date!), "MMM d, yyyy")
           : "";
         return `
           <a href="/news/${d.id}" style="display:block;padding:8px 0;border-top:1px solid #f1f5f9;text-decoration:none;color:inherit;">

@@ -30,6 +30,57 @@ const CONTENT_TYPES = [
   "general_news",
 ];
 const PRIORITIES = ["critical", "important", "informational"];
+const CURRENT_YEAR = new Date().getUTCFullYear();
+const CURRENT_YEAR_START = new Date(Date.UTC(CURRENT_YEAR, 0, 1)).getTime();
+const ROLLING_NEWS_CUTOFF = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+const BAD_ARTICLE_PATH = /\/(tag|tags|sujet|category|categories|categorie|topic|topics|author|authors|section|sections|page|search|recherche)(\/|$)/i;
+const PAYWALL_RE = /\b(only available to subscribers|subscriber(?:s)? only|thirty-day free trial|30-day free trial|subscribe to read|subscription required|premium content|sign in to continue|login to continue|become a subscriber|already a subscriber)\b/i;
+const GENERIC_TITLE_WORDS = new Set([
+  "from", "with", "that", "this", "will", "amid", "after", "says", "news", "more", "over", "into", "near",
+  "rate", "rates", "shipping", "freight", "cargo", "logistics", "supply", "chain", "market", "markets", "global",
+  "container", "containers", "update", "updates", "security", "critical", "report", "reports", "trade", "transport",
+]);
+
+function isCurrentPublicationDate(date: string | null | undefined): boolean {
+  if (!date) return false;
+  const t = new Date(date).getTime();
+  if (Number.isNaN(t)) return false;
+  if (t < CURRENT_YEAR_START) return false;
+  return t >= ROLLING_NEWS_CUTOFF;
+}
+
+function tokenize(v: string | null | undefined): string[] {
+  return String(v || "")
+    .toLowerCase()
+    .replace(/https?:\/\/[^/]+/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= 4 && !GENERIC_TITLE_WORDS.has(w));
+}
+
+function contentLooksReadable(markdown?: string, description?: string, title?: string): boolean {
+  const text = `${title || ""}\n${description || ""}\n${markdown || ""}`.trim();
+  if (text.length < 180) return false;
+  if (PAYWALL_RE.test(text)) return false;
+  return true;
+}
+
+function titleMatchesUrlOrContent(article: { title: string; url: string; description?: string; markdown?: string }): boolean {
+  const titleWords = tokenize(article.title);
+  if (titleWords.length === 0) return false;
+  const haystackWords = new Set(tokenize(`${article.url} ${article.description || ""} ${(article.markdown || "").slice(0, 600)}`));
+  const overlap = titleWords.filter((w) => haystackWords.has(w)).length;
+  return overlap >= Math.min(2, titleWords.length);
+}
+
+function classifyArticleRejection(article: { title: string; url: string; description: string; markdown?: string; publishedDate?: string | null }): string | null {
+  if (!looksLikeArticleUrl(article.url)) return "non_article_url";
+  if (!isCurrentPublicationDate(article.publishedDate)) return "outdated_or_missing_date";
+  if (!contentLooksReadable(article.markdown, article.description, article.title)) return "paywalled_or_unreadable";
+  if (!titleMatchesUrlOrContent(article)) return "title_url_mismatch";
+  return null;
+}
 
 // Try to extract an ISO publication date from Firecrawl metadata or article markdown.
 // Returns YYYY-MM-DD or null. NEVER fall back to "today" — the dashboard requires
@@ -236,7 +287,7 @@ function looksLikeArticleUrl(url: string): boolean {
     const u = new URL(url);
     const path = u.pathname;
     if (!path || path === "/" || path.length < 8) return false;
-    if (/\/(tag|category|categorie|auteur|author|page|search|recherche)\//i.test(path)) return false;
+    if (BAD_ARTICLE_PATH.test(path) || /\/(auteur)\//i.test(path)) return false;
     if (/\.(jpg|jpeg|png|gif|pdf|mp4|css|js|xml)$/i.test(path)) return false;
     const segments = path.split("/").filter(Boolean);
     if (segments.length < 2) return false;
@@ -297,7 +348,7 @@ async function firecrawlScrapeUrl(
     const description: string = metadata.description || markdown.substring(0, 240).replace(/\n/g, " ");
     if (!title) return null;
     const publishedDate = extractPublicationDate(metadata, markdown);
-    return { title, url, description, markdown: markdown.substring(0, 1500), publishedDate } as any;
+    return { title, url: metadata.sourceURL || url, description, markdown: markdown.substring(0, 1500), publishedDate } as any;
   } catch (e) {
     console.error(`/scrape exception for ${url}:`, e);
     return null;
