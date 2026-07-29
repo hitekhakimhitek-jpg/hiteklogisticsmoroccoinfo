@@ -110,7 +110,45 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
       q = q.order("created_at", { ascending: false }).limit(filters.limit || 200);
       const { data, error } = await q;
       if (error) throw error;
-      const rows = (data || []) as IntelligenceItem[];
+      let rows = (data || []) as IntelligenceItem[];
+      // Hard filter: drop stale/broken items so the feed only ever shows fresh, article-linked news.
+      // 1) publication_date must be within the last 14 days when known.
+      // 2) source_url must point to an article, not a tag / category / author landing page.
+      const cutoffMs = Date.now() - 14 * 24 * 60 * 60 * 1000;
+      const BAD_URL_PATTERNS = [
+        /\/tag\//i,
+        /\/tags\//i,
+        /\/sujet\//i,
+        /\/category\//i,
+        /\/categories\//i,
+        /\/topic\//i,
+        /\/topics\//i,
+        /\/author\//i,
+        /\/authors\//i,
+        /\/section\//i,
+      ];
+      const isBadUrl = (u: string | null) => {
+        if (!u) return false;
+        try {
+          const url = new URL(u);
+          // Root or near-root URLs (no article slug) are landing pages.
+          if (url.pathname.replace(/\/+$/, "").split("/").filter(Boolean).length <= 1) {
+            // e.g. https://site.com/ or https://site.com/news — treat as non-article
+            return true;
+          }
+        } catch {
+          return false;
+        }
+        return BAD_URL_PATTERNS.some((r) => r.test(u));
+      };
+      rows = rows.filter((r) => {
+        if (r.publication_date) {
+          const t = new Date(r.publication_date).getTime();
+          if (!Number.isNaN(t) && t < cutoffMs) return false;
+        }
+        if (isBadUrl(r.source_url)) return false;
+        return true;
+      });
       // Sort blend: recency + severity + learned predicted_relevance.
       // HARD SAFETY FLOOR: critical (act_now) and action_required items are pinned
       // to the top regardless of preference signal. Learning tunes noise, not alerts.
