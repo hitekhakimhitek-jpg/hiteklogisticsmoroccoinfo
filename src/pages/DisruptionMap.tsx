@@ -6,6 +6,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { translateDeep } from "@/lib/translateEntries";
 import { SEO } from "@/components/SEO";
 import { passesFeedFilter } from "@/hooks/useIntelligenceItems";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 // Single source of truth: read intelligence_items directly (same feed as the Dashboard).
 type Severity = "act_now" | "this_week" | "awareness";
@@ -42,39 +44,13 @@ const SEV_LABEL: Record<Severity, string> = {
 };
 const SEV_SCALE: Record<Severity, number> = { act_now: 11, this_week: 9, awareness: 7 };
 
-// Load the Google Maps JS API once, using the browser key + async loader.
-let mapsLoaderPromise: Promise<any> | null = null;
-function loadGoogleMaps(): Promise<any> {
-  if (typeof window !== "undefined" && (window as any).google?.maps) {
-    return Promise.resolve((window as any).google);
-  }
-  if (mapsLoaderPromise) return mapsLoaderPromise;
-  mapsLoaderPromise = new Promise((resolve, reject) => {
-    const key = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY;
-    const channel = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID;
-    if (!key) {
-      reject(new Error("Google Maps browser key missing"));
-      return;
-    }
-    (window as any).__initHitekMap = () => resolve((window as any).google);
-    const s = document.createElement("script");
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&loading=async&callback=__initHitekMap${channel ? `&channel=${channel}` : ""}`;
-    s.async = true;
-    s.defer = true;
-    s.onerror = () => reject(new Error("Google Maps failed to load"));
-    document.head.appendChild(s);
-  });
-  return mapsLoaderPromise;
-}
-
 export default function DisruptionMap() {
   const { lang } = useLanguage();
   const [items, setItems] = useState<MapItem[]>([]);
   const [loading, setLoading] = useState(true);
   const mapDivRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
-  const infoRef = useRef<any>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<L.Marker[]>([]);
 
   const load = async () => {
     setLoading(true);
@@ -115,31 +91,37 @@ export default function DisruptionMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
 
-  // Initialize the Google Map once the container is mounted.
+  // Initialize the Leaflet map once the container is mounted. Uses Carto
+  // Voyager tiles — no API key, English labels, Google-Maps-like look.
   useEffect(() => {
-    let cancelled = false;
-    loadGoogleMaps()
-      .then((google) => {
-        if (cancelled || !mapDivRef.current || mapRef.current) return;
-        mapRef.current = new google.maps.Map(mapDivRef.current, {
-          center: { lat: 20, lng: 0 },
-          zoom: 2,
-          mapTypeControl: true,
-          streetViewControl: false,
-          fullscreenControl: true,
-          gestureHandling: "greedy",
-        });
-        infoRef.current = new google.maps.InfoWindow();
-      })
-      .catch((e) => console.error("Google Maps init failed", e));
-    return () => { cancelled = true; };
+    if (!mapDivRef.current || mapRef.current) return;
+    const map = L.map(mapDivRef.current, {
+      center: [20, 0],
+      zoom: 2,
+      worldCopyJump: true,
+      scrollWheelZoom: true,
+    });
+    L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+      {
+        maxZoom: 19,
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: "abcd",
+      }
+    ).addTo(map);
+    mapRef.current = map;
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
   }, []);
 
   // Sync markers with items.
   useEffect(() => {
-    const google = (window as any).google;
-    if (!google?.maps || !mapRef.current) return;
-    markersRef.current.forEach((m) => m.setMap(null));
+    const map = mapRef.current;
+    if (!map) return;
+    markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
     // Group items whose coordinates are effectively the same spot (~1km).
@@ -207,23 +189,19 @@ export default function DisruptionMap() {
     groups.forEach((list) => {
       if (list.length === 1) {
         const d = list[0];
-        const marker = new google.maps.Marker({
-          position: { lat: Number(d.latitude), lng: Number(d.longitude) },
-          map: mapRef.current,
+        const r = SEV_SCALE[d.severity];
+        const dotSize = r * 2 + 4;
+        const dotIcon = L.divIcon({
+          className: "hitek-dot-marker",
+          html: `<div style="width:${dotSize}px;height:${dotSize}px;border-radius:50%;background:${SEV_COLOR[d.severity]};opacity:0.9;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.35);"></div>`,
+          iconSize: [dotSize, dotSize],
+          iconAnchor: [dotSize / 2, dotSize / 2],
+        });
+        const marker = L.marker([Number(d.latitude), Number(d.longitude)], {
+          icon: dotIcon,
           title: d.headline,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: SEV_SCALE[d.severity],
-            fillColor: SEV_COLOR[d.severity],
-            fillOpacity: 0.85,
-            strokeColor: "#ffffff",
-            strokeWeight: 2,
-          },
-        });
-        marker.addListener("click", () => {
-          infoRef.current.setContent(singleHtml(d));
-          infoRef.current.open({ anchor: marker, map: mapRef.current });
-        });
+        }).addTo(map);
+        marker.bindPopup(singleHtml(d), { minWidth: 240, maxWidth: 300 });
         markersRef.current.push(marker);
         return;
       }
@@ -233,25 +211,17 @@ export default function DisruptionMap() {
       const topSev = [...list].sort((a, b) => order[a.severity] - order[b.severity])[0].severity;
       const color = SEV_COLOR[topSev];
       const size = 34;
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-        <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="${color}" fill-opacity="0.9" stroke="#ffffff" stroke-width="2"/>
-        <text x="50%" y="52%" text-anchor="middle" dominant-baseline="middle" font-family="Inter, system-ui, sans-serif" font-size="14" font-weight="700" fill="#ffffff">${list.length}</text>
-      </svg>`;
-      const marker = new google.maps.Marker({
-        position: { lat: Number(list[0].latitude), lng: Number(list[0].longitude) },
-        map: mapRef.current,
-        title: `${list.length} events at this location`,
-        icon: {
-          url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-          scaledSize: new google.maps.Size(size, size),
-          anchor: new google.maps.Point(size / 2, size / 2),
-        },
-        zIndex: 1000,
+      const clusterIcon = L.divIcon({
+        className: "hitek-cluster-marker",
+        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};opacity:0.92;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;color:#fff;font:700 14px Inter,system-ui,sans-serif;">${list.length}</div>`,
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2],
       });
-      marker.addListener("click", () => {
-        infoRef.current.setContent(groupHtml(list));
-        infoRef.current.open({ anchor: marker, map: mapRef.current });
-      });
+      const marker = L.marker(
+        [Number(list[0].latitude), Number(list[0].longitude)],
+        { icon: clusterIcon, title: `${list.length} events at this location`, zIndexOffset: 1000 }
+      ).addTo(map);
+      marker.bindPopup(groupHtml(list), { minWidth: 260, maxWidth: 320 });
       markersRef.current.push(marker);
     });
   }, [items, lang]);
