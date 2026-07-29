@@ -139,41 +139,115 @@ export default function DisruptionMap() {
     if (!google?.maps || !mapRef.current) return;
     markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
-    items.forEach((d) => {
-      const marker = new google.maps.Marker({
-        position: { lat: Number(d.latitude), lng: Number(d.longitude) },
-        map: mapRef.current,
-        title: d.headline,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: SEV_SCALE[d.severity],
-          fillColor: SEV_COLOR[d.severity],
-          fillOpacity: 0.85,
-          strokeColor: "#ffffff",
-          strokeWeight: 2,
-        },
-      });
-      marker.addListener("click", () => {
+
+    // Group items whose coordinates are effectively the same spot (~1km).
+    // Any group with 2+ items renders as a single numbered marker that
+    // expands into a list of headlines on click.
+    const groups = new Map<string, MapItem[]>();
+    for (const d of items) {
+      const key = `${Number(d.latitude).toFixed(2)},${Number(d.longitude).toFixed(2)}`;
+      const arr = groups.get(key);
+      if (arr) arr.push(d); else groups.set(key, [d]);
+    }
+
+    const openLabel = lang === "fr" ? "Voir l'article" : "Open article";
+
+    const singleHtml = (d: MapItem) => {
+      const dateStr = (d.event_date || d.publication_date)
+        ? format(new Date(d.event_date || d.publication_date!), "MMM d, yyyy")
+        : "";
+      const meta = [d.port_affected, d.airport_affected, d.country].filter(Boolean).join(" · ");
+      return `
+        <div style="font-family:inherit;min-width:230px;max-width:280px;font-size:13px;line-height:1.4;">
+          <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(d.headline)}</div>
+          <div style="color:#6b7280;font-size:11px;margin-bottom:6px;">${escapeHtml(meta)}${meta && dateStr ? " · " : ""}${escapeHtml(dateStr)}</div>
+          <div style="margin-bottom:6px;">
+            ${d.category ? `<span style="display:inline-block;padding:1px 6px;border:1px solid #e5e7eb;border-radius:999px;font-size:10px;text-transform:capitalize;margin-right:4px;">${escapeHtml(d.category)}</span>` : ""}
+            <span style="display:inline-block;padding:1px 6px;border-radius:999px;font-size:10px;background:${SEV_COLOR[d.severity]};color:#fff;">${SEV_LABEL[d.severity]}</span>
+          </div>
+          ${d.summary ? `<p style="margin:0 0 6px 0;font-size:12px;">${escapeHtml(d.summary)}</p>` : ""}
+          <div style="display:flex;gap:12px;font-size:12px;">
+            <a href="/news/${d.id}" style="color:hsl(var(--primary,220 90% 56%));text-decoration:none;">${openLabel} →</a>
+            ${d.source_url ? `<a href="${escapeAttr(d.source_url)}" target="_blank" rel="noreferrer" style="color:#6b7280;text-decoration:none;">${escapeHtml(d.source_name || "Source")}</a>` : ""}
+          </div>
+        </div>`;
+    };
+
+    const groupHtml = (list: MapItem[]) => {
+      const loc = [list[0].port_affected, list[0].airport_affected, list[0].country].filter(Boolean).join(" · ");
+      // Highest severity first (act_now < this_week < awareness).
+      const order = { act_now: 0, this_week: 1, awareness: 2 } as const;
+      const sorted = [...list].sort((a, b) => order[a.severity] - order[b.severity]);
+      const rows = sorted.map((d) => {
         const dateStr = (d.event_date || d.publication_date)
           ? format(new Date(d.event_date || d.publication_date!), "MMM d, yyyy")
           : "";
-        const meta = [d.port_affected, d.airport_affected, d.country].filter(Boolean).join(" · ");
-        const openLabel = lang === "fr" ? "Voir l'article" : "Open article";
-        const html = `
-          <div style="font-family:inherit;min-width:230px;max-width:280px;font-size:13px;line-height:1.4;">
-            <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(d.headline)}</div>
-            <div style="color:#6b7280;font-size:11px;margin-bottom:6px;">${escapeHtml(meta)}${meta && dateStr ? " · " : ""}${escapeHtml(dateStr)}</div>
-            <div style="margin-bottom:6px;">
-              ${d.category ? `<span style="display:inline-block;padding:1px 6px;border:1px solid #e5e7eb;border-radius:999px;font-size:10px;text-transform:capitalize;margin-right:4px;">${escapeHtml(d.category)}</span>` : ""}
-              <span style="display:inline-block;padding:1px 6px;border-radius:999px;font-size:10px;background:${SEV_COLOR[d.severity]};color:#fff;">${SEV_LABEL[d.severity]}</span>
+        return `
+          <a href="/news/${d.id}" style="display:block;padding:8px 0;border-top:1px solid #f1f5f9;text-decoration:none;color:inherit;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:${SEV_COLOR[d.severity]};display:inline-block;flex:none;"></span>
+              <span style="font-weight:600;font-size:12px;line-height:1.3;">${escapeHtml(d.headline)}</span>
             </div>
-            ${d.summary ? `<p style="margin:0 0 6px 0;font-size:12px;">${escapeHtml(d.summary)}</p>` : ""}
-            <div style="display:flex;gap:12px;font-size:12px;">
-              <a href="/news/${d.id}" style="color:hsl(var(--primary,220 90% 56%));text-decoration:none;">${openLabel} →</a>
-              ${d.source_url ? `<a href="${escapeAttr(d.source_url)}" target="_blank" rel="noreferrer" style="color:#6b7280;text-decoration:none;">${escapeHtml(d.source_name || "Source")}</a>` : ""}
-            </div>
-          </div>`;
-        infoRef.current.setContent(html);
+            ${dateStr ? `<div style="color:#6b7280;font-size:10px;margin-left:14px;">${escapeHtml(dateStr)}</div>` : ""}
+          </a>`;
+      }).join("");
+      const title = lang === "fr"
+        ? `${list.length} événements à cet endroit`
+        : `${list.length} events at this location`;
+      return `
+        <div style="font-family:inherit;min-width:260px;max-width:300px;font-size:13px;line-height:1.4;">
+          <div style="font-weight:600;margin-bottom:2px;">${escapeHtml(title)}</div>
+          ${loc ? `<div style="color:#6b7280;font-size:11px;margin-bottom:4px;">${escapeHtml(loc)}</div>` : ""}
+          ${rows}
+        </div>`;
+    };
+
+    groups.forEach((list) => {
+      if (list.length === 1) {
+        const d = list[0];
+        const marker = new google.maps.Marker({
+          position: { lat: Number(d.latitude), lng: Number(d.longitude) },
+          map: mapRef.current,
+          title: d.headline,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: SEV_SCALE[d.severity],
+            fillColor: SEV_COLOR[d.severity],
+            fillOpacity: 0.85,
+            strokeColor: "#ffffff",
+            strokeWeight: 2,
+          },
+        });
+        marker.addListener("click", () => {
+          infoRef.current.setContent(singleHtml(d));
+          infoRef.current.open({ anchor: marker, map: mapRef.current });
+        });
+        markersRef.current.push(marker);
+        return;
+      }
+
+      // Cluster marker: numbered pin colored by the highest severity in the group.
+      const order = { act_now: 0, this_week: 1, awareness: 2 } as const;
+      const topSev = [...list].sort((a, b) => order[a.severity] - order[b.severity])[0].severity;
+      const color = SEV_COLOR[topSev];
+      const size = 34;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+        <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="${color}" fill-opacity="0.9" stroke="#ffffff" stroke-width="2"/>
+        <text x="50%" y="52%" text-anchor="middle" dominant-baseline="middle" font-family="Inter, system-ui, sans-serif" font-size="14" font-weight="700" fill="#ffffff">${list.length}</text>
+      </svg>`;
+      const marker = new google.maps.Marker({
+        position: { lat: Number(list[0].latitude), lng: Number(list[0].longitude) },
+        map: mapRef.current,
+        title: `${list.length} events at this location`,
+        icon: {
+          url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+          scaledSize: new google.maps.Size(size, size),
+          anchor: new google.maps.Point(size / 2, size / 2),
+        },
+        zIndex: 1000,
+      });
+      marker.addListener("click", () => {
+        infoRef.current.setContent(groupHtml(list));
         infoRef.current.open({ anchor: marker, map: mapRef.current });
       });
       markersRef.current.push(marker);
