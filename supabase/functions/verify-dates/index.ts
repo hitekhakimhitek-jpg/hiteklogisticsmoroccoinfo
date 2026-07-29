@@ -60,7 +60,10 @@ function pickDateFromMeta(meta: any): string | null {
   for (const c of candidates) {
     if (typeof c === "string" && c.length > 4) {
       const d = new Date(c);
-      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+      if (!isNaN(d.getTime())) {
+        const iso = d.toISOString().slice(0, 10);
+        return isCurrentArticleDate(iso) ? iso : null;
+      }
     }
   }
   return null;
@@ -85,7 +88,7 @@ async function extractDateWithAI(LOVABLE_API_KEY: string, markdown: string, url:
   const data = await resp.json();
   try {
     const parsed = JSON.parse((data.choices?.[0]?.message?.content || "{}").replace(/```json|```/g, ""));
-    if (parsed?.date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date)) return parsed.date;
+    if (parsed?.date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) && isCurrentArticleDate(parsed.date)) return parsed.date;
   } catch { /* ignore */ }
   return null;
 }
@@ -108,7 +111,7 @@ serve(async (req) => {
     // Pick items that need date verification AND have a source URL.
     const { data: items, error } = await supabase
       .from("intelligence_items")
-      .select("id, source_url, publication_date, verification_status")
+      .select("id, headline, source_url, publication_date, verification_status")
       .not("source_url", "is", null)
       .neq("status", "archived")
       .or("publication_date.is.null,verification_status.eq.date_not_verified,verification_status.eq.needs_review")
