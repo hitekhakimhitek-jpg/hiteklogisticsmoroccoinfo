@@ -585,34 +585,29 @@ serve(async (req) => {
       }
     }
 
-    // Filter out generic/non-article URLs
-    const isValidArticleUrl = (url: string): boolean => {
-      try {
-        const u = new URL(url);
-        const path = u.pathname;
-        if (path === "/" || path === "/en/" || path === "/news/" || path === "/en/news/") return false;
-        if (path.endsWith("view_more_news.php") || path.endsWith("index.php")) return false;
-        if (u.hostname.includes("facebook.com") || u.hostname.includes("twitter.com") || u.hostname.includes("linkedin.com")) return false;
-        if (path.split("/").filter(Boolean).length < 2) return false;
-        return true;
-      } catch {
-        return false;
-      }
-    };
-
     // Deduplicate by URL
     const uniqueArticles = Array.from(
       new Map(
         allArticles
-          .filter(a => a.url && a.title && isValidArticleUrl(a.url))
+          .filter(a => a.url && a.title)
           .map(a => [a.url, a])
       ).values()
     );
 
+    const rejectionStats: Record<string, number> = {};
+    const auditedArticles = uniqueArticles.filter((article) => {
+      const reason = classifyArticleRejection(article);
+      if (!reason) return true;
+      rejectionStats[reason] = (rejectionStats[reason] || 0) + 1;
+      console.log(`[article-reject:${reason}] ${article.title} — ${article.url}`);
+      return false;
+    });
+    console.log(`[article-audit] input=${uniqueArticles.length} accepted=${auditedArticles.length} rejected=${uniqueArticles.length - auditedArticles.length}`, rejectionStats);
+
     // Step 1b: Validate URLs
-    console.log(`Validating ${uniqueArticles.length} article URLs...`);
+    console.log(`Validating ${auditedArticles.length} article URLs...`);
     const validatedArticles: typeof uniqueArticles = [];
-    const validationPromises = uniqueArticles.map(async (article) => {
+    const validationPromises = auditedArticles.map(async (article) => {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
@@ -634,8 +629,8 @@ serve(async (req) => {
             redirect: "follow",
           });
           clearTimeout(timeout2);
-          await resp2.text();
-          if (resp2.ok) return article;
+          const body = await resp2.text();
+          if (resp2.ok && !PAYWALL_RE.test(body.slice(0, 3000))) return article;
         }
         console.log(`URL validation failed (${resp.status}): ${article.url}`);
         return null;
@@ -681,7 +676,8 @@ serve(async (req) => {
       ...articlesToProcess.filter((a) => PRIMARY_NAMES.has(a.source)),
       ...articlesToProcess.filter((a) => !PRIMARY_NAMES.has(a.source)),
     ];
-    const articleSummaries = primaryFirst.slice(0, 50).map((a, i) =>
+    const classificationBatch = primaryFirst.slice(0, 50);
+    const articleSummaries = classificationBatch.map((a, i) =>
       `[${i}] TITLE: ${a.title}\nURL: ${a.url}\nSOURCE: ${a.source}\nDESCRIPTION: ${a.description}\nCONTENT PREVIEW: ${a.markdown?.substring(0, 200) || "N/A"}`
     ).join("\n\n---\n\n");
 
@@ -859,7 +855,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
     );
 
     const rows = classifiedEntries.map((entry: any) => {
-      const originalArticle = articlesToProcess[entry.index] || {};
+      const originalArticle = classificationBatch[entry.index] || {};
 
       // ----- Geographic classification -----
       const validRegion = (r: any) =>
