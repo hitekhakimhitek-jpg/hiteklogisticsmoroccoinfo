@@ -33,12 +33,13 @@ async function summarize(
   LOVABLE_API_KEY: string,
   deptLabel: string,
   items: any[],
-  fallbackItems: any[] = []
+  fallbackItems: any[] = [],
+  fallbackLabel = "the previous week"
 ): Promise<string> {
-  const hasDept = items.length > 0;
-  const source = hasDept ? items : fallbackItems;
+  const hasCurrent = items.length > 0;
+  const source = hasCurrent ? items : fallbackItems;
   if (source.length === 0) {
-    return `- Quiet week — no notable items logged across the dashboard.`;
+    return `- Quiet period — no notable items logged across the dashboard in the last two weeks.`;
   }
   const briefs = source
     .slice(0, 25)
@@ -47,14 +48,10 @@ async function summarize(
         `- [${i.severity}] (${i.department}) ${i.headline}\n  Impact: ${i.impact}\n  Action: ${i.action_required}`
     )
     .join("\n");
-  const prompt = hasDept
-    ? `You write the weekly digest for the ${deptLabel} team at a Morocco freight forwarder. Summarize the week's intelligence in 4-6 plain bullet points: what changed, what to watch, what to do. Be concise. Use markdown bullets only. No headings, no preamble.
+  const window = hasCurrent ? "this week" : fallbackLabel;
+  const prompt = `You write the weekly digest for the ${deptLabel} team at a Morocco freight forwarder. Summarize the ${window}'s intelligence in 4-6 plain bullet points: what changed, what to watch, what to do. Be concise. Use markdown bullets only. No headings, no preamble. Do NOT mention that a category was empty or that there were no items — just recap the most relevant events.
 
-THIS WEEK'S ITEMS:
-${briefs}`
-    : `You write the weekly digest for the ${deptLabel} team at a Morocco freight forwarder. There were NO ${deptLabel}-tagged items this week, but write a useful 2-4 bullet recap of what the ${deptLabel} team should still note from the broader week (cross-impacts, things to monitor, regulatory or market context relevant to ${deptLabel}). Markdown bullets only. No headings, no preamble. Begin with one bullet stating that no direct ${deptLabel} alerts were logged this week.
-
-THIS WEEK'S BROADER ITEMS (other departments):
+ITEMS (${window}):
 ${briefs}`;
   const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -91,15 +88,23 @@ serve(async (req) => {
     monday.setUTCDate(monday.getUTCDate() - (day - 1));
     monday.setUTCHours(0, 0, 0, 0);
     const weekStart = monday.toISOString();
+    // Fallback window: previous 7 days before this Monday, so an empty current week
+    // still yields a "last week" recap instead of a "no items" placeholder.
+    const prevMonday = new Date(monday);
+    prevMonday.setUTCDate(prevMonday.getUTCDate() - 7);
+    const prevWeekStart = prevMonday.toISOString();
 
     const { data: items, error } = await supabase
       .from("intelligence_items")
       .select("headline, summary, impact, action_required, department, severity, source_name, category, event_date, publication_date, created_at")
-      .or(`event_date.gte.${monday.toISOString().slice(0,10)},and(event_date.is.null,created_at.gte.${weekStart})`)
+      .gte("created_at", prevWeekStart)
       .neq("status", "archived");
     if (error) throw new Error(error.message);
 
     const all = items || [];
+    const isThisWeek = (i: any) => new Date(i.created_at).getTime() >= monday.getTime();
+    const currentAll = all.filter(isThisWeek);
+    const prevAll = all.filter((i: any) => !isThisWeek(i));
     const generated: any[] = [];
 
     // Wipe this week's existing rows up front so re-runs are idempotent across the new category schema.
@@ -107,20 +112,25 @@ serve(async (req) => {
 
     // One digest per CATEGORY (operational / financial / global), stored in the `department` column for compatibility.
     for (const cat of CATEGORIES) {
-      const catItems = all.filter((i: any) => categoryOf(i) === cat);
-      const md = await summarize(LOVABLE_API_KEY, CAT_LABEL[cat], catItems, all);
+      const catItems = currentAll.filter((i: any) => categoryOf(i) === cat);
+      // Fallback to the same category from the previous week; if that is also empty,
+      // fall back to the broader previous-week feed so the section is never blank.
+      const prevCatItems = prevAll.filter((i: any) => categoryOf(i) === cat);
+      const fallback = prevCatItems.length > 0 ? prevCatItems : prevAll;
+      const md = await summarize(LOVABLE_API_KEY, CAT_LABEL[cat], catItems, fallback);
+      const usedCount = catItems.length > 0 ? catItems.length : fallback.length;
       const row = {
         year,
         week_number: week,
         category: cat,
         department: null,
         summary_md: md,
-        item_count: catItems.length,
-        act_now_count: catItems.filter((i: any) => i.severity === "act_now").length,
-        this_week_count: catItems.filter((i: any) => i.severity === "this_week").length,
+        item_count: usedCount,
+        act_now_count: (catItems.length > 0 ? catItems : fallback).filter((i: any) => i.severity === "act_now").length,
+        this_week_count: (catItems.length > 0 ? catItems : fallback).filter((i: any) => i.severity === "this_week").length,
       };
       // v2 schema: category column drives grouping (was misnamed `department` before).
-      console.log(`[digest v2] inserting cat=${cat} items=${catItems.length}`);
+      console.log(`[digest v2] inserting cat=${cat} current=${catItems.length} fallback=${fallback.length}`);
       const { error: insErr } = await supabase.from("weekly_digests").insert(row);
       if (insErr) console.error(`[digest v2] insert ${cat} failed:`, insErr.message, JSON.stringify(row));
       generated.push({ category: cat, items: catItems.length });
