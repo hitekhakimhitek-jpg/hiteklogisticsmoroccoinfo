@@ -51,9 +51,10 @@ const BOT_BLOCKED_TRUSTED = /(^|\.)(medias24\.com|leconomiste\.com|lematin\.ma|h
 // now goes through a token bucket (max REQS_PER_WINDOW per 60s, bounded
 // concurrency) with a single 429 retry that honours the reset hint.
 // ---------------------------------------------------------------------------
-const REQS_PER_WINDOW = 16;
+const REQS_PER_WINDOW = 10;
 const WINDOW_MS = 60_000;
-const MAX_CONCURRENCY = 4;
+const MAX_CONCURRENCY = 3;
+const MAX_RETRIES = 3;
 let windowStart = Date.now();
 let windowCount = 0;
 let inFlight = 0;
@@ -76,7 +77,7 @@ async function acquireSlot(): Promise<void> {
 }
 
 async function firecrawlFetch(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     await acquireSlot();
     let resp: Response;
     try {
@@ -84,16 +85,33 @@ async function firecrawlFetch(url: string, init: RequestInit, timeoutMs: number)
     } finally {
       inFlight--;
     }
-    if (resp.status !== 429 || attempt === 1) return resp;
+    if (resp.status !== 429 || attempt === MAX_RETRIES - 1) return resp;
     const body = await resp.text();
     const retryAfter = Number(resp.headers.get("retry-after")) ||
       Number(body.match(/retry after (\d+)s/i)?.[1]) || 15;
-    console.warn(`[firecrawl-429] waiting ${Math.min(retryAfter, 30)}s before retry`);
+    const waitMs = Math.min(retryAfter + attempt * 5, 35) * 1000;
+    console.warn(`[firecrawl-429] attempt ${attempt + 1}, waiting ${waitMs / 1000}s`);
     windowStart = Date.now();
     windowCount = 0;
-    await sleep(Math.min(retryAfter, 30) * 1000);
+    await sleep(waitMs);
   }
   throw new Error("unreachable");
+}
+
+/** Drop URLs we have already ingested so Firecrawl credits and rate budget are
+ *  only spent on genuinely new articles. */
+async function filterUnseenUrls(supabase: any, urls: string[]): Promise<string[]> {
+  if (urls.length === 0) return urls;
+  try {
+    const { data } = await supabase
+      .from("news_entries")
+      .select("source_url")
+      .in("source_url", urls);
+    const seen = new Set((data || []).map((r: any) => r.source_url));
+    return urls.filter((u) => !seen.has(u));
+  } catch {
+    return urls;
+  }
 }
 const PAYWALL_RE = /\b(only available to subscribers|subscriber(?:s)? only|thirty-day free trial|30-day free trial|subscribe to read|subscription required|premium content|sign in to continue|login to continue|become a subscriber|already a subscriber)\b/i;
 const GENERIC_TITLE_WORDS = new Set([
@@ -528,7 +546,7 @@ serve(async (req) => {
     const CORE_SOURCES = new Set<string>([
       "The Loadstar", "JOC", "FreightWaves", "Lloyd's List", "Splash247",
     ]);
-    const ROTATION_PER_RUN = 8;
+    const ROTATION_PER_RUN = 6;
     const dayIndex = Math.floor(Date.now() / 86_400_000);
 
     const sourceList = enabledSources
@@ -554,7 +572,7 @@ serve(async (req) => {
       searchQueries.push(...SOURCE_QUERIES[s]);
     }
     searchQueries.push(...GENERAL_QUERIES);
-    if (runMoroccoPriority) searchQueries.push(...MOROCCO_PRIORITY_QUERIES.slice(0, 5));
+    if (runMoroccoPriority) searchQueries.push(...MOROCCO_PRIORITY_QUERIES.slice(0, 4));
     console.log(
       `[query-plan] core=${coreSources.length} rotating=${rotatingSources.length} (${rotatingSources.join(", ")}) queries=${searchQueries.length}`,
     );
@@ -647,7 +665,7 @@ serve(async (req) => {
           // Keep enough candidates to avoid repeatedly exhausting the same homepage links.
           const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 30);
           primaryStats[src.name].mapped = candidateUrls.length;
-          const toScrape = candidateUrls.slice(0, 8);
+          const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 8);
           const scraped = await Promise.all(
             toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
           );
@@ -697,7 +715,7 @@ serve(async (req) => {
            const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 25);
           directScrapeStats[src.name].mapped = candidateUrls.length;
 
-           const toScrape = candidateUrls.slice(0, 6);
+           const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 6);
           const scraped = await Promise.all(
             toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
           );
