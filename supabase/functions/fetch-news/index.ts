@@ -55,6 +55,15 @@ const REQS_PER_WINDOW = 10;
 const WINDOW_MS = 60_000;
 const MAX_CONCURRENCY = 3;
 const MAX_RETRIES = 3;
+// The edge worker is terminated after ~3.5 minutes. Scraping passes must stop
+// well before that so the articles already gathered still get processed,
+// inserted and reported instead of dying mid-run.
+const RUN_BUDGET_MS = 145_000;
+let runDeadline = Number.MAX_SAFE_INTEGER;
+export class BudgetExceeded extends Error {}
+function budgetLeftMs(): number {
+  return runDeadline - Date.now();
+}
 let windowStart = Date.now();
 let windowCount = 0;
 let inFlight = 0;
@@ -62,6 +71,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function acquireSlot(): Promise<void> {
   while (true) {
+    if (budgetLeftMs() <= 0) throw new BudgetExceeded("run budget exhausted");
     const now = Date.now();
     if (now - windowStart >= WINDOW_MS) {
       windowStart = now;
@@ -90,6 +100,7 @@ async function firecrawlFetch(url: string, init: RequestInit, timeoutMs: number)
     const retryAfter = Number(resp.headers.get("retry-after")) ||
       Number(body.match(/retry after (\d+)s/i)?.[1]) || 15;
     const waitMs = Math.min(retryAfter + attempt * 5, 35) * 1000;
+    if (waitMs > budgetLeftMs()) throw new BudgetExceeded("no time left to retry");
     console.warn(`[firecrawl-429] attempt ${attempt + 1}, waiting ${waitMs / 1000}s`);
     windowStart = Date.now();
     windowCount = 0;
