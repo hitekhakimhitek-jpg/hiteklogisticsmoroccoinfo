@@ -35,6 +35,66 @@ const CURRENT_YEAR_START = new Date(Date.UTC(CURRENT_YEAR, 0, 1)).getTime();
 const ROLLING_NEWS_CUTOFF = Date.now() - 14 * 24 * 60 * 60 * 1000;
 
 const BAD_ARTICLE_PATH = /\/(tag|tags|sujet|category|categories|categorie|topic|topics|author|authors|section|sections|page|search|recherche)(\/|$)/i;
+
+// Social networks, dictionaries, ticketing and encyclopedias polluted the
+// candidate pool and burned the audit budget every run.
+const JUNK_DOMAINS = /(^|\.)(tiktok|instagram|facebook|x|twitter|pinterest|youtube|reddit|linkedin|merriam-webster|wikipedia|ticketmaster|tripadvisor|amazon)\.[a-z.]+$/i;
+
+// Sites that reliably answer bot requests with 403/429 but are vetted sources.
+const BOT_BLOCKED_TRUSTED = /(^|\.)(medias24\.com|leconomiste\.com|lematin\.ma|hespress\.com|lopinion\.ma|venturebeat\.com|joc\.com|lloydslist\.com)$/i;
+
+// ---------------------------------------------------------------------------
+// Firecrawl rate limiter.
+// The previous implementation fired every query + /map + /scrape in parallel,
+// which blew past Firecrawl's per-minute quota: 65 of 75 queries came back 429
+// and effectively only ~6 sources were ever consulted. All Firecrawl traffic
+// now goes through a token bucket (max REQS_PER_WINDOW per 60s, bounded
+// concurrency) with a single 429 retry that honours the reset hint.
+// ---------------------------------------------------------------------------
+const REQS_PER_WINDOW = 16;
+const WINDOW_MS = 60_000;
+const MAX_CONCURRENCY = 4;
+let windowStart = Date.now();
+let windowCount = 0;
+let inFlight = 0;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function acquireSlot(): Promise<void> {
+  while (true) {
+    const now = Date.now();
+    if (now - windowStart >= WINDOW_MS) {
+      windowStart = now;
+      windowCount = 0;
+    }
+    if (windowCount < REQS_PER_WINDOW && inFlight < MAX_CONCURRENCY) {
+      windowCount++;
+      inFlight++;
+      return;
+    }
+    await sleep(inFlight >= MAX_CONCURRENCY ? 200 : Math.max(250, WINDOW_MS - (now - windowStart)));
+  }
+}
+
+async function firecrawlFetch(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await acquireSlot();
+    let resp: Response;
+    try {
+      resp = await fetchWithTimeout(url, init, timeoutMs);
+    } finally {
+      inFlight--;
+    }
+    if (resp.status !== 429 || attempt === 1) return resp;
+    const body = await resp.text();
+    const retryAfter = Number(resp.headers.get("retry-after")) ||
+      Number(body.match(/retry after (\d+)s/i)?.[1]) || 15;
+    console.warn(`[firecrawl-429] waiting ${Math.min(retryAfter, 30)}s before retry`);
+    windowStart = Date.now();
+    windowCount = 0;
+    await sleep(Math.min(retryAfter, 30) * 1000);
+  }
+  throw new Error("unreachable");
+}
 const PAYWALL_RE = /\b(only available to subscribers|subscriber(?:s)? only|thirty-day free trial|30-day free trial|subscribe to read|subscription required|premium content|sign in to continue|login to continue|become a subscriber|already a subscriber)\b/i;
 const GENERIC_TITLE_WORDS = new Set([
   "from", "with", "that", "this", "will", "amid", "after", "says", "news", "more", "over", "into", "near",
@@ -102,6 +162,9 @@ function extractPublicationDate(metadata: any, markdown?: string): string | null
     metadata?.["og:published_time"],
     metadata?.pubdate,
     metadata?.date,
+    metadata?.["article:modified_time"],
+    metadata?.modifiedTime,
+    metadata?.dateModified,
   ];
   for (const c of candidates) {
     if (!c || typeof c !== "string") continue;
@@ -113,8 +176,26 @@ function extractPublicationDate(metadata: any, markdown?: string): string | null
   }
   // Look for a JSON-LD-style date in the first 2KB of markdown
   if (typeof markdown === "string" && markdown.length > 0) {
-    const m = markdown.substring(0, 2000).match(
-      /\b(20\d{2}-\d{2}-\d{2})\b|\b(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+20\d{2})\b/i,
+    const head = markdown.substring(0, 4000);
+    const FR_MONTHS: Record<string, number> = {
+      janvier: 1, février: 2, fevrier: 2, mars: 3, avril: 4, mai: 5, juin: 6,
+      juillet: 7, août: 8, aout: 8, septembre: 9, octobre: 10, novembre: 11, décembre: 12, decembre: 12,
+    };
+    const frMatch = head.match(
+      /\b(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+(20\d{2})\b/i,
+    );
+    if (frMatch) {
+      const mm = FR_MONTHS[frMatch[2].toLowerCase()];
+      const iso = `${frMatch[3]}-${String(mm).padStart(2, "0")}-${frMatch[1].padStart(2, "0")}`;
+      if (isCurrentPublicationDate(iso)) return iso;
+    }
+    const dmy = head.match(/\b(0?[1-9]|[12]\d|3[01])[\/.](0?[1-9]|1[0-2])[\/.](20\d{2})\b/);
+    if (dmy) {
+      const iso = `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+      if (isCurrentPublicationDate(iso)) return iso;
+    }
+    const m = head.match(
+      /\b(20\d{2}-\d{2}-\d{2})\b|\b(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+20\d{2})\b|\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+20\d{2}\b/i,
     );
     if (m) {
       const d = new Date(m[0]);
@@ -298,8 +379,16 @@ function looksLikeArticleUrl(url: string): boolean {
     if (!path || path === "/" || path.length < 8) return false;
     if (BAD_ARTICLE_PATH.test(path) || /\/(auteur)\//i.test(path)) return false;
     if (/\.(jpg|jpeg|png|gif|pdf|mp4|css|js|xml)$/i.test(path)) return false;
+    if (JUNK_DOMAINS.test(u.hostname)) return false;
     const segments = path.split("/").filter(Boolean);
-    if (segments.length < 2) return false;
+    if (segments.length === 0) return false;
+    // Many publishers (The Loadstar, JOC, Hespress...) serve articles at a
+    // single flat slug: /kenya-the-latest-to-unveil-tighter-rules/. Requiring
+    // two path segments was silently rejecting most tier-1 freight articles.
+    if (segments.length === 1) {
+      const slug = segments[0];
+      return slug.length >= 20 && (slug.match(/-/g)?.length ?? 0) >= 2;
+    }
     return true;
   } catch {
     return false;
@@ -313,7 +402,7 @@ async function firecrawlMapDomain(
   search?: string,
 ): Promise<string[]> {
   try {
-    const resp = await fetchWithTimeout("https://api.firecrawl.dev/v2/map", {
+    const resp = await firecrawlFetch("https://api.firecrawl.dev/v2/map", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ url: homepage, search, limit: 30, includeSubdomains: false }),
@@ -341,7 +430,7 @@ async function firecrawlScrapeUrl(
   url: string,
 ): Promise<{ title: string; url: string; description: string; markdown: string } | null> {
   try {
-    const resp = await fetchWithTimeout("https://api.firecrawl.dev/v2/scrape", {
+    const resp = await firecrawlFetch("https://api.firecrawl.dev/v2/scrape", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true }),
@@ -428,33 +517,47 @@ serve(async (req) => {
       }
     } catch { /* empty body is fine */ }
 
-    // Build search queries based on enabled sources
-    const searchQueries: string[] = [];
+    // Build search queries.
+    // Firing all ~75 queries at once exceeded Firecrawl's per-minute quota, so
+    // most sources never actually ran. Instead: core freight + Morocco sources
+    // run on EVERY execution, and the remaining sources rotate on a daily
+    // schedule so the full source list is covered over a few days without ever
+    // tripping the rate limit.
+    // Morocco sources are covered every run by the direct-scrape pass below,
+    // so they stay out of the per-run search budget.
+    const CORE_SOURCES = new Set<string>([
+      "The Loadstar", "JOC", "FreightWaves", "Lloyd's List", "Splash247",
+    ]);
+    const ROTATION_PER_RUN = 8;
+    const dayIndex = Math.floor(Date.now() / 86_400_000);
+
+    const sourceList = enabledSources
+      ? enabledSources.filter((s) => SOURCE_QUERIES[s])
+      : Object.keys(SOURCE_QUERIES);
     let runMoroccoPriority = false;
-    if (enabledSources) {
-      for (const source of enabledSources) {
-        if (SOURCE_QUERIES[source]) {
-          searchQueries.push(...SOURCE_QUERIES[source]);
-        }
-        if (MOROCCO_SOURCE_NAMES.has(source)) runMoroccoPriority = true;
-      }
-      // Always include general queries
-      searchQueries.push(...GENERAL_QUERIES);
-      console.log(`Using ${searchQueries.length} queries for ${enabledSources.length} enabled sources`);
-    } else {
-      // No filter — use all queries
-      for (const queries of Object.values(SOURCE_QUERIES)) {
-        searchQueries.push(...queries);
-      }
-      searchQueries.push(...GENERAL_QUERIES);
-      runMoroccoPriority = true;
-      console.log(`Using all ${searchQueries.length} queries (no source filter)`);
+    for (const s of (enabledSources ?? Object.keys(SOURCE_QUERIES))) {
+      if (MOROCCO_SOURCE_NAMES.has(s)) runMoroccoPriority = true;
+    }
+    if (!enabledSources) runMoroccoPriority = true;
+
+    const coreSources = sourceList.filter((s) => CORE_SOURCES.has(s));
+    const rotatingPool = sourceList
+      .filter((s) => !CORE_SOURCES.has(s) && !MOROCCO_SOURCE_NAMES.has(s))
+      .sort();
+    const rotatingSources: string[] = [];
+    for (let i = 0; i < Math.min(ROTATION_PER_RUN, rotatingPool.length); i++) {
+      rotatingSources.push(rotatingPool[(dayIndex * ROTATION_PER_RUN + i) % rotatingPool.length]);
     }
 
-    if (runMoroccoPriority) {
-      searchQueries.push(...MOROCCO_PRIORITY_QUERIES);
-      console.log(`Added ${MOROCCO_PRIORITY_QUERIES.length} Morocco priority queries`);
+    const searchQueries: string[] = [];
+    for (const s of [...coreSources, ...rotatingSources]) {
+      searchQueries.push(...SOURCE_QUERIES[s]);
     }
+    searchQueries.push(...GENERAL_QUERIES);
+    if (runMoroccoPriority) searchQueries.push(...MOROCCO_PRIORITY_QUERIES.slice(0, 5));
+    console.log(
+      `[query-plan] core=${coreSources.length} rotating=${rotatingSources.length} (${rotatingSources.join(", ")}) queries=${searchQueries.length}`,
+    );
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     telemetryClient = supabase;
@@ -482,7 +585,7 @@ serve(async (req) => {
     const queryStats = { ok: 0, failed: 0, empty: 0 };
     const searchPromises = searchQueries.map(async (query) => {
       try {
-        const response = await fetchWithTimeout("https://api.firecrawl.dev/v2/search", {
+        const response = await firecrawlFetch("https://api.firecrawl.dev/v2/search", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
@@ -537,14 +640,14 @@ serve(async (req) => {
       for (const src of PRIMARY_DIRECT_SOURCES) {
         primaryStats[src.name] = { mapped: 0, scraped: 0 };
         try {
-          const keywords = src.mapKeywords && src.mapKeywords.length > 0 ? src.mapKeywords : [undefined as unknown as string];
+          const keywords = (src.mapKeywords && src.mapKeywords.length > 0 ? src.mapKeywords : [undefined as unknown as string]).slice(0, 3);
           const mapResults = await Promise.all(
             keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
           );
           // Keep enough candidates to avoid repeatedly exhausting the same homepage links.
-          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 40);
+          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 30);
           primaryStats[src.name].mapped = candidateUrls.length;
-          const toScrape = candidateUrls.slice(0, 20);
+          const toScrape = candidateUrls.slice(0, 8);
           const scraped = await Promise.all(
             toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
           );
@@ -573,22 +676,28 @@ serve(async (req) => {
     // This catches time-sensitive items (manifestations, blocages) that
     // /search misses. Runs whenever a Morocco source is in scope.
     if (runMoroccoPriority) {
-      console.log(`Running direct scrape for ${MOROCCO_DIRECT_SOURCES.length} Morocco priority sources...`);
+      // Rotate which Morocco sources get the deep direct scrape each run so the
+      // whole list is covered across days inside the Firecrawl rate budget.
+      const MOROCCO_PER_RUN = 3;
+      const moroccoToday = Array.from({ length: Math.min(MOROCCO_PER_RUN, MOROCCO_DIRECT_SOURCES.length) }, (_, i) =>
+        MOROCCO_DIRECT_SOURCES[(dayIndex * MOROCCO_PER_RUN + i) % MOROCCO_DIRECT_SOURCES.length],
+      );
+      console.log(`Running direct scrape for ${moroccoToday.map((s) => s.name).join(", ")}`);
       const directScrapeStats: Record<string, { mapped: number; scraped: number }> = {};
 
-      for (const src of MOROCCO_DIRECT_SOURCES) {
+      for (const src of moroccoToday) {
         directScrapeStats[src.name] = { mapped: 0, scraped: 0 };
         try {
           // Run /map for each keyword in parallel; keywords like "manifestation"
           // surface civic-event articles that pure logistics queries miss.
-          const keywords = src.mapKeywords && src.mapKeywords.length > 0 ? src.mapKeywords : [undefined as unknown as string];
+          const keywords = (src.mapKeywords && src.mapKeywords.length > 0 ? src.mapKeywords : [undefined as unknown as string]).slice(0, 2);
           const mapResults = await Promise.all(
             keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
           );
            const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 25);
           directScrapeStats[src.name].mapped = candidateUrls.length;
 
-           const toScrape = candidateUrls.slice(0, 12);
+           const toScrape = candidateUrls.slice(0, 6);
           const scraped = await Promise.all(
             toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
           );
@@ -660,6 +769,11 @@ serve(async (req) => {
           clearTimeout(timeout2);
           const body = await resp2.text();
           if (resp2.ok && !PAYWALL_RE.test(body.slice(0, 3000))) return article;
+        }
+        // Vetted publishers that block bots outright shouldn't be dropped —
+        // their content already came through Firecrawl.
+        if ((resp.status === 403 || resp.status === 429) && BOT_BLOCKED_TRUSTED.test(new URL(article.url).hostname)) {
+          return article;
         }
         console.log(`URL validation failed (${resp.status}): ${article.url}`);
         return null;
@@ -1070,6 +1184,20 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
 
     console.log(`Successfully inserted ${data.length} REAL news entries from web scraping`);
 
+    // Persist telemetry BEFORE the downstream chain. Classification and
+    // enrichment can outlive the worker, which previously left the run row
+    // stuck at "running" even though ingestion had succeeded.
+    await finishRun({
+      status: queryStats.failed > 0 ? "partial" : "success",
+      queries_total: searchQueries.length,
+      queries_failed: queryStats.failed,
+      candidates_found: uniqueArticles.length,
+      candidates_accepted: validatedArticles.length,
+      inserted_count: data.length,
+      rejection_counts: rejectionStats,
+      source_report: { scraped_by_source: scrapedBySource, inserted_by_source: insertedBySource },
+    });
+
     // Step 4: Trigger AI classification for Finance/IT section relevance
     const newIds = data.map((d: any) => d.id);
     if (newIds.length > 0) {
@@ -1119,17 +1247,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       console.error("Failed to trigger enrich-intel:", enrichErr);
     }
 
-    await finishRun({
-      status: queryStats.failed > 0 ? "partial" : "success",
-      queries_total: searchQueries.length,
-      queries_failed: queryStats.failed,
-      candidates_found: uniqueArticles.length,
-      candidates_accepted: validatedArticles.length,
-      inserted_count: data.length,
-      enriched_count: enrichedCount,
-      rejection_counts: rejectionStats,
-      source_report: { scraped_by_source: scrapedBySource, inserted_by_source: insertedBySource },
-    });
+    await finishRun({ enriched_count: enrichedCount });
 
     return new Response(
       JSON.stringify({
