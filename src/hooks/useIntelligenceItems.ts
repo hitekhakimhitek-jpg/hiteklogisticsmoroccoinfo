@@ -121,18 +121,14 @@ export function passesFeedFilter(r: {
 }): boolean {
   if (r.verification_status && !VERIFIED_STATUSES.includes(r.verification_status as VerificationStatus)) return false;
   const now = new Date();
-  const rollingCutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const rollingCutoffMs = Date.now() - 14 * 24 * 60 * 60 * 1000;
   const yearStartMs = Date.UTC(now.getUTCFullYear(), 0, 1);
   if (!r.publication_date) return false;
   const pubMs = new Date(r.publication_date).getTime();
   if (Number.isNaN(pubMs) || pubMs < yearStartMs) return false;
-  if (r.event_date) {
-    const eventMs = new Date(r.event_date).getTime();
-    if (!Number.isNaN(eventMs) && eventMs < yearStartMs) return false;
-  }
-  const eventMs = r.event_date ? new Date(r.event_date).getTime() : Number.NaN;
-  const hasRecentOrCurrentEvent = !Number.isNaN(eventMs) && eventMs >= rollingCutoffMs;
-  if (pubMs < rollingCutoffMs && !hasRecentOrCurrentEvent) return false;
+  // Publication freshness is authoritative. Event dates must never revive an
+  // old article (several legacy rows contain placeholder event dates).
+  if (pubMs < rollingCutoffMs) return false;
   if (isBadArticleUrl(r.source_url ?? null)) return false;
   return true;
 }
@@ -144,8 +140,8 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
     queryFn: async () => {
       let q = supabase.from("intelligence_items").select("*");
       // Pull a wider candidate set, then enforce the shared verified/current article filter below.
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      q = q.gte("created_at", thirtyDaysAgo);
+      const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      q = q.gte("created_at", fourteenDaysAgo);
       if (filters.department && filters.department !== "all") {
         q = q.eq("department", filters.department);
       }
@@ -242,7 +238,7 @@ export function useIntelCounts() {
         .from("intelligence_items")
         .select("severity,department,status,is_ai_draft,publication_date,event_date,source_url,created_at,verification_status");
       if (error) throw error;
-      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
       const counts = {
         act_now: 0,
         this_week: 0,

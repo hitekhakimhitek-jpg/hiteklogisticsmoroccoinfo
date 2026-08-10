@@ -55,11 +55,11 @@ export default function DisruptionMap() {
   const load = async () => {
     setLoading(true);
     // Same current, verified article window as the dashboard feed.
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
     const { data, error } = await supabase
       .from("intelligence_items")
       .select("id, headline, summary, latitude, longitude, country, port_affected, airport_affected, severity, department, category, event_date, publication_date, created_at, source_url, source_name, verification_status")
-      .gte("created_at", thirtyDaysAgo)
+      .gte("created_at", fourteenDaysAgo)
       .neq("status", "archived")
       .not("latitude", "is", null)
       .not("longitude", "is", null)

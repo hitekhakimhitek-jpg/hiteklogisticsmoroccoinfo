@@ -33,7 +33,7 @@ const INTEL_CAT_MAP: Record<string, string> = {
   it: "other",
 };
 const CURRENT_YEAR_START = Date.UTC(new Date().getUTCFullYear(), 0, 1);
-const ROLLING_NEWS_CUTOFF = Date.now() - 30 * 24 * 3600 * 1000;
+const ROLLING_NEWS_CUTOFF = Date.now() - 14 * 24 * 3600 * 1000;
 const BAD_ARTICLE_PATH = /\/(tag|tags|sujet|category|categories|categorie|topic|topics|author|authors|section|sections|page|search|recherche|auteur)(\/|$)/i;
 
 function passesCurrentFilter(entry: any): boolean {
@@ -47,10 +47,8 @@ function passesCurrentFilter(entry: any): boolean {
   }
   if (!entry.publication_date) return false;
   const pub = new Date(entry.publication_date).getTime();
-  const ev = entry.event_date ? new Date(entry.event_date).getTime() : Number.NaN;
   if (Number.isNaN(pub) || pub < CURRENT_YEAR_START) return false;
-  if (!Number.isNaN(ev) && ev < CURRENT_YEAR_START) return false;
-  return pub >= ROLLING_NEWS_CUTOFF || (!Number.isNaN(ev) && ev >= ROLLING_NEWS_CUTOFF);
+  return pub >= ROLLING_NEWS_CUTOFF;
 }
 
 type Extracted = {
@@ -173,11 +171,11 @@ serve(async (req) => {
     } catch { /* */ }
 
     // Pull recent verified intelligence items — same source as the dashboard.
-    const thirtyDaysAgo = new Date(ROLLING_NEWS_CUTOFF).toISOString();
+    const fourteenDaysAgo = new Date(ROLLING_NEWS_CUTOFF).toISOString();
     const { data: entries, error } = await supabase
       .from("intelligence_items")
       .select("id, headline, summary, impact, source_url, source_name, department, severity, created_at, latitude, longitude, country, event_date, publication_date, category, verification_status")
-      .gte("created_at", thirtyDaysAgo)
+      .gte("created_at", fourteenDaysAgo)
       .in("verification_status", ["verified", "partially_verified"])
       .neq("status", "archived")
       .order("created_at", { ascending: false })

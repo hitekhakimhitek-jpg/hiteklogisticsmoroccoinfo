@@ -319,7 +319,7 @@ const EXACT: Record<string, string> = {
   "Generate Report": "Générer le rapport",
   "Generating...": "Génération...",
   "Collecting last 7 days of news...": "Collecte des actualités des 7 derniers jours...",
-  "Collecting last 30 days of news...": "Collecte des actualités des 30 derniers jours...",
+  "Collecting last 14 days of news...": "Collecte des actualités des 14 derniers jours...",
   "Running AI analysis...": "Analyse IA en cours...",
   "Scoring risk & generating recommendations...":
     "Évaluation des risques & génération des recommandations...",

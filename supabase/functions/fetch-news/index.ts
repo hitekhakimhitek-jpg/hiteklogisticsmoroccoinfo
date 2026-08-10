@@ -32,7 +32,7 @@ const CONTENT_TYPES = [
 const PRIORITIES = ["critical", "important", "informational"];
 const CURRENT_YEAR = new Date().getUTCFullYear();
 const CURRENT_YEAR_START = new Date(Date.UTC(CURRENT_YEAR, 0, 1)).getTime();
-const ROLLING_NEWS_CUTOFF = Date.now() - 30 * 24 * 60 * 60 * 1000;
+const ROLLING_NEWS_CUTOFF = Date.now() - 14 * 24 * 60 * 60 * 1000;
 
 const BAD_ARTICLE_PATH = /\/(tag|tags|sujet|category|categories|categorie|topic|topics|author|authors|section|sections|page|search|recherche)(\/|$)/i;
 const PAYWALL_RE = /\b(only available to subscribers|subscriber(?:s)? only|thirty-day free trial|30-day free trial|subscribe to read|subscription required|premium content|sign in to continue|login to continue|become a subscriber|already a subscriber)\b/i;
@@ -48,6 +48,13 @@ function isCurrentPublicationDate(date: string | null | undefined): boolean {
   if (Number.isNaN(t)) return false;
   if (t < CURRENT_YEAR_START) return false;
   return t >= ROLLING_NEWS_CUTOFF;
+}
+
+function extractDateFromUrl(url: string): string | null {
+  const match = url.match(/\/(20\d{2})[\/-](0?[1-9]|1[0-2])[\/-](0?[1-9]|[12]\d|3[01])(?:\/|$)/);
+  if (!match) return null;
+  const iso = `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+  return isCurrentPublicationDate(iso) ? iso : null;
 }
 
 function tokenize(v: string | null | undefined): string[] {
@@ -350,7 +357,7 @@ async function firecrawlScrapeUrl(
     const description: string = metadata.description || markdown.substring(0, 240).replace(/\n/g, " ");
     if (!title) return null;
     const sourceURL = metadata.sourceURL || url;
-    const publishedDate = extractPublicationDate(metadata, markdown);
+    const publishedDate = extractPublicationDate(metadata, markdown) || extractDateFromUrl(sourceURL);
     const article = { title, url: sourceURL, description, markdown: markdown.substring(0, 1500), publishedDate } as any;
     if (classifyArticleRejection(article)) return null;
     return article;
@@ -389,6 +396,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const authErr = await requireHitekAdmin(req);
   if (authErr) return authErr;
+
+  let telemetryClient: any = null;
+  let runId: string | null = null;
+  const finishRun = async (patch: Record<string, unknown>) => {
+    if (!telemetryClient || !runId) return;
+    const { error } = await telemetryClient
+      .from("ingestion_runs")
+      .update({ finished_at: new Date().toISOString(), ...patch })
+      .eq("id", runId);
+    if (error) console.error("Failed to persist ingestion telemetry:", error.message);
+  };
 
   try {
     const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
@@ -439,6 +457,13 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    telemetryClient = supabase;
+    const { data: run } = await supabase
+      .from("ingestion_runs")
+      .insert({ pipeline: "fetch-news", status: "running" })
+      .select("id")
+      .single();
+    runId = run?.id ?? null;
     const checkedAt = new Date().toISOString();
     const today = checkedAt.split("T")[0];
 
@@ -487,7 +512,7 @@ serve(async (req) => {
           description: item.description || item.excerpt || "",
           source: extractSourceName(item.url || ""),
           markdown: item.markdown?.substring(0, 1000) || "",
-          publishedDate: extractPublicationDate(item.metadata || {}, item.markdown || ""),
+            publishedDate: extractPublicationDate(item.metadata || {}, item.markdown || "") || extractDateFromUrl(item.url || ""),
         }));
       } catch (e) {
         console.error(`Search failed for query: ${query.substring(0, 50)}...`, e);
@@ -516,10 +541,10 @@ serve(async (req) => {
           const mapResults = await Promise.all(
             keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
           );
-          // Higher budget for primary sources: up to 20 mapped, 10 scraped each.
-          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 20);
+          // Keep enough candidates to avoid repeatedly exhausting the same homepage links.
+          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 40);
           primaryStats[src.name].mapped = candidateUrls.length;
-          const toScrape = candidateUrls.slice(0, 10);
+          const toScrape = candidateUrls.slice(0, 20);
           const scraped = await Promise.all(
             toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
           );
@@ -560,11 +585,10 @@ serve(async (req) => {
           const mapResults = await Promise.all(
             keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
           );
-          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 10);
+           const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 25);
           directScrapeStats[src.name].mapped = candidateUrls.length;
 
-          // Scrape top 5 per source (raised budget per acceptance criteria #3).
-          const toScrape = candidateUrls.slice(0, 5);
+           const toScrape = candidateUrls.slice(0, 12);
           const scraped = await Promise.all(
             toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
           );
@@ -658,6 +682,14 @@ serve(async (req) => {
 
     if (articlesToProcess.length === 0) {
       const updatedAt = await touchLatestRefresh(supabase, checkedAt);
+      await finishRun({
+        status: "partial",
+        queries_total: searchQueries.length,
+        queries_failed: queryStats.failed,
+        candidates_found: uniqueArticles.length,
+        candidates_accepted: 0,
+        rejection_counts: rejectionStats,
+      });
       return new Response(
         JSON.stringify({
           success: true,
@@ -681,7 +713,7 @@ serve(async (req) => {
       ...articlesToProcess.filter((a) => PRIMARY_NAMES.has(a.source)),
       ...articlesToProcess.filter((a) => !PRIMARY_NAMES.has(a.source)),
     ];
-    const classificationBatch = primaryFirst.slice(0, 50);
+    const classificationBatch = primaryFirst.slice(0, 100);
     const articleSummaries = classificationBatch.map((a, i) =>
       `[${i}] TITLE: ${a.title}\nURL: ${a.url}\nSOURCE: ${a.source}\nDESCRIPTION: ${a.description}\nCONTENT PREVIEW: ${a.markdown?.substring(0, 200) || "N/A"}`
     ).join("\n\n---\n\n");
@@ -840,6 +872,14 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
     if (!Array.isArray(classifiedEntries) || classifiedEntries.length === 0) {
       console.log("AI filtered out all articles as irrelevant");
       const updatedAt = await touchLatestRefresh(supabase, checkedAt);
+      await finishRun({
+        status: "partial",
+        queries_total: searchQueries.length,
+        queries_failed: queryStats.failed,
+        candidates_found: uniqueArticles.length,
+        candidates_accepted: validatedArticles.length,
+        rejection_counts: rejectionStats,
+      });
       return new Response(
         JSON.stringify({
           success: true,
@@ -979,6 +1019,14 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
     if (newRows.length === 0) {
       console.log("All articles already exist in database, skipping insert");
       const updatedAt = await touchLatestRefresh(supabase, checkedAt);
+      await finishRun({
+        status: "success",
+        queries_total: searchQueries.length,
+        queries_failed: queryStats.failed,
+        candidates_found: uniqueArticles.length,
+        candidates_accepted: validatedArticles.length,
+        rejection_counts: rejectionStats,
+      });
       return new Response(
         JSON.stringify({
           success: true,
@@ -1050,6 +1098,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
     }
 
     // Chain enrichment: turn the new raw entries into Intelligence Items
+    let enrichedCount = 0;
     try {
       const enrichResp = await fetch(`${SUPABASE_URL}/functions/v1/enrich-intel`, {
         method: "POST",
@@ -1061,6 +1110,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       });
       if (enrichResp.ok) {
         const r = await enrichResp.json();
+        enrichedCount = Number(r.created || 0);
         console.log(`enrich-intel: created ${r.created}, failed ${r.failed}`);
       } else {
         console.error("enrich-intel call failed:", enrichResp.status, await enrichResp.text());
@@ -1068,6 +1118,18 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
     } catch (enrichErr) {
       console.error("Failed to trigger enrich-intel:", enrichErr);
     }
+
+    await finishRun({
+      status: queryStats.failed > 0 ? "partial" : "success",
+      queries_total: searchQueries.length,
+      queries_failed: queryStats.failed,
+      candidates_found: uniqueArticles.length,
+      candidates_accepted: validatedArticles.length,
+      inserted_count: data.length,
+      enriched_count: enrichedCount,
+      rejection_counts: rejectionStats,
+      source_report: { scraped_by_source: scrapedBySource, inserted_by_source: insertedBySource },
+    });
 
     return new Response(
       JSON.stringify({
@@ -1088,6 +1150,10 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
     );
   } catch (e) {
     console.error("fetch-news error:", e);
+    await finishRun({
+      status: "failed",
+      error_message: e instanceof Error ? e.message.slice(0, 1000) : "Unknown error",
+    });
     return new Response(
       JSON.stringify({
         success: false,
