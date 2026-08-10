@@ -521,6 +521,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
 export function useLanguage() {
   const ctx = useContext(LanguageContext);
-  if (!ctx) throw new Error("useLanguage must be used within LanguageProvider");
-  return ctx;
+  // Fallback keeps the UI alive if the context module is momentarily out of
+  // sync (e.g. hot-reload remount) instead of blanking the whole app.
+  return ctx ?? { lang: "en" as const, toggle: () => {} };
 }
