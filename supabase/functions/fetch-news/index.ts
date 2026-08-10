@@ -668,6 +668,10 @@ serve(async (req) => {
       console.log(`Running direct scrape for ${PRIMARY_DIRECT_SOURCES.length} primary global sources...`);
       const primaryStats: Record<string, { mapped: number; scraped: number }> = {};
       for (const src of PRIMARY_DIRECT_SOURCES) {
+        if (budgetLeftMs() < 25_000) {
+          console.log(`[budget] skipping remaining primary direct scrapes (${Math.round(budgetLeftMs() / 1000)}s left)`);
+          break;
+        }
         primaryStats[src.name] = { mapped: 0, scraped: 0 };
         try {
           const keywords = (src.mapKeywords && src.mapKeywords.length > 0 ? src.mapKeywords : [undefined as unknown as string]).slice(0, 3);
@@ -716,6 +720,10 @@ serve(async (req) => {
       const directScrapeStats: Record<string, { mapped: number; scraped: number }> = {};
 
       for (const src of moroccoToday) {
+        if (budgetLeftMs() < 25_000) {
+          console.log(`[budget] skipping remaining Morocco direct scrapes (${Math.round(budgetLeftMs() / 1000)}s left)`);
+          break;
+        }
         directScrapeStats[src.name] = { mapped: 0, scraped: 0 };
         try {
           // Run /map for each keyword in parallel; keywords like "manifestation"
