@@ -7,7 +7,7 @@ import { corsHeaders, requireHitekAdmin } from "../_shared/auth.ts";
 // + verification_status. Designed to be idempotent and chunkable.
 const CURRENT_YEAR = new Date().getUTCFullYear();
 const CURRENT_YEAR_START = Date.UTC(CURRENT_YEAR, 0, 1);
-const ROLLING_NEWS_CUTOFF = Date.now() - 30 * 24 * 60 * 60 * 1000;
+const ROLLING_NEWS_CUTOFF = Date.now() - 14 * 24 * 60 * 60 * 1000;
 const PAYWALL_RE = /\b(only available to subscribers|subscriber(?:s)? only|thirty-day free trial|30-day free trial|subscribe to read|subscription required|premium content|sign in to continue|login to continue|become a subscriber|already a subscriber)\b/i;
 const BAD_ARTICLE_PATH = /\/(tag|tags|sujet|category|categories|categorie|topic|topics|author|authors|section|sections|page|search|recherche|auteur)(\/|$)/i;
 
@@ -111,7 +111,7 @@ serve(async (req) => {
     // Pick items that need date verification AND have a source URL.
     const { data: items, error } = await supabase
       .from("intelligence_items")
-      .select("id, headline, source_url, publication_date, verification_status")
+      .select("id, headline, source_url, publication_date, verification_status, verification_attempts")
       .not("source_url", "is", null)
       .neq("status", "archived")
       .or("publication_date.is.null,verification_status.eq.date_not_verified,verification_status.eq.needs_review")
@@ -139,7 +139,11 @@ serve(async (req) => {
         });
         if (!fcResp.ok) {
           broken++;
-          await supabase.from("intelligence_items").update({ verification_status: "broken_link" }).eq("id", item.id);
+          await supabase.from("intelligence_items").update({
+            verification_status: "broken_link",
+            verification_attempts: Number(item.verification_attempts || 0) + 1,
+            last_verification_attempt_at: new Date().toISOString(),
+          }).eq("id", item.id);
           continue;
         }
         const fcData = await fcResp.json();
@@ -150,7 +154,13 @@ serve(async (req) => {
 
         if (!contentLooksReadable(markdown, pageTitle)) {
           broken++;
-          await supabase.from("intelligence_items").update({ verification_status: "broken_link", status: "archived" }).eq("id", item.id);
+          const attempts = Number(item.verification_attempts || 0) + 1;
+          await supabase.from("intelligence_items").update({
+            verification_status: "broken_link",
+            verification_attempts: attempts,
+            last_verification_attempt_at: new Date().toISOString(),
+            ...(attempts >= 3 ? { status: "archived" } : {}),
+          }).eq("id", item.id);
           continue;
         }
 
@@ -161,25 +171,25 @@ serve(async (req) => {
           stillUnverified++;
           await supabase
             .from("intelligence_items")
-            .update({ publication_date: date, verification_status: "outdated", status: "archived" })
+            .update({ publication_date: date, verification_status: "outdated", status: "archived", verification_attempts: Number(item.verification_attempts || 0) + 1, last_verification_attempt_at: new Date().toISOString() })
             .eq("id", item.id);
         } else if (date && titleSimilarity((item as any).headline || "", `${pageTitle}\n${markdown.slice(0, 800)}`) < 0.2) {
           stillUnverified++;
           await supabase
             .from("intelligence_items")
-            .update({ publication_date: date, verification_status: "source_mismatch", status: "archived" })
+            .update({ publication_date: date, verification_status: "source_mismatch", status: "archived", verification_attempts: Number(item.verification_attempts || 0) + 1, last_verification_attempt_at: new Date().toISOString() })
             .eq("id", item.id);
         } else if (date) {
           verified++;
           await supabase
             .from("intelligence_items")
-            .update({ publication_date: date, verification_status: "verified" })
+            .update({ publication_date: date, verification_status: "verified", verification_attempts: Number(item.verification_attempts || 0) + 1, last_verification_attempt_at: new Date().toISOString() })
             .eq("id", item.id);
         } else {
           stillUnverified++;
           await supabase
             .from("intelligence_items")
-            .update({ verification_status: "date_not_verified" })
+            .update({ verification_status: "date_not_verified", verification_attempts: Number(item.verification_attempts || 0) + 1, last_verification_attempt_at: new Date().toISOString() })
             .eq("id", item.id);
         }
       } catch (e) {
@@ -188,12 +198,13 @@ serve(async (req) => {
       }
     }
 
-    // Auto-archive anything older than 14 days while we're here.
+    // Auto-archive articles outside the hard 14-day publication window and
+    // hard validation failures. Temporary date failures get three attempts.
     const cutoff = new Date(ROLLING_NEWS_CUTOFF).toISOString().slice(0, 10);
     const { count: archived } = await supabase
       .from("intelligence_items")
       .update({ status: "archived" }, { count: "exact" })
-      .or(`publication_date.lt.${cutoff},event_date.lt.${new Date(CURRENT_YEAR_START).toISOString().slice(0, 10)},verification_status.in.(source_mismatch,outdated,broken_link,date_not_verified,needs_review)`)
+      .or(`publication_date.lt.${cutoff},verification_status.in.(source_mismatch,outdated),and(verification_status.in.(broken_link,date_not_verified),verification_attempts.gte.3)`)
       .neq("status", "archived");
 
     return new Response(

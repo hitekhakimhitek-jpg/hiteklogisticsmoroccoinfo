@@ -9,7 +9,7 @@ const CATEGORIES = ["operational", "financial", "global"] as const;
 const MODES = ["sea", "air", "road", "rail"] as const;
 const CURRENT_YEAR = new Date().getUTCFullYear();
 const CURRENT_YEAR_START = Date.UTC(CURRENT_YEAR, 0, 1);
-const ROLLING_NEWS_CUTOFF = Date.now() - 30 * 24 * 60 * 60 * 1000;
+const ROLLING_NEWS_CUTOFF = Date.now() - 14 * 24 * 60 * 60 * 1000;
 const PAYWALL_RE = /\b(only available to subscribers|subscriber(?:s)? only|thirty-day free trial|30-day free trial|subscribe to read|subscription required|premium content|sign in to continue|login to continue|become a subscriber|already a subscriber)\b/i;
 const BAD_ARTICLE_PATH = /\/(tag|tags|sujet|category|categories|categorie|topic|topics|author|authors|section|sections|page|search|recherche|auteur)(\/|$)/i;
 
@@ -358,7 +358,7 @@ serve(async (req) => {
       if (!markdown && !pageTitle) throw new Error("Firecrawl returned no content");
       if (!looksLikeArticleUrl(url)) throw new Error("URL is not a direct article");
       if (!contentLooksReadable(markdown, pageTitle)) throw new Error("Article is paywalled or unreadable");
-      if (!isCurrentDate(pubDate)) throw new Error("Article is outside the current 30-day window");
+      if (!isCurrentDate(pubDate)) throw new Error("Article is outside the current 14-day window");
 
       const drafted = await callAI(
         LOVABLE_API_KEY,

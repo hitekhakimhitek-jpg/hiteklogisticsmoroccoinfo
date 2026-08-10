@@ -32,7 +32,7 @@ const CONTENT_TYPES = [
 const PRIORITIES = ["critical", "important", "informational"];
 const CURRENT_YEAR = new Date().getUTCFullYear();
 const CURRENT_YEAR_START = new Date(Date.UTC(CURRENT_YEAR, 0, 1)).getTime();
-const ROLLING_NEWS_CUTOFF = Date.now() - 30 * 24 * 60 * 60 * 1000;
+const ROLLING_NEWS_CUTOFF = Date.now() - 14 * 24 * 60 * 60 * 1000;
 
 const BAD_ARTICLE_PATH = /\/(tag|tags|sujet|category|categories|categorie|topic|topics|author|authors|section|sections|page|search|recherche)(\/|$)/i;
 const PAYWALL_RE = /\b(only available to subscribers|subscriber(?:s)? only|thirty-day free trial|30-day free trial|subscribe to read|subscription required|premium content|sign in to continue|login to continue|become a subscriber|already a subscriber)\b/i;
@@ -48,6 +48,13 @@ function isCurrentPublicationDate(date: string | null | undefined): boolean {
   if (Number.isNaN(t)) return false;
   if (t < CURRENT_YEAR_START) return false;
   return t >= ROLLING_NEWS_CUTOFF;
+}
+
+function extractDateFromUrl(url: string): string | null {
+  const match = url.match(/\/(20\d{2})[\/-](0?[1-9]|1[0-2])[\/-](0?[1-9]|[12]\d|3[01])(?:\/|$)/);
+  if (!match) return null;
+  const iso = `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+  return isCurrentPublicationDate(iso) ? iso : null;
 }
 
 function tokenize(v: string | null | undefined): string[] {
@@ -350,7 +357,7 @@ async function firecrawlScrapeUrl(
     const description: string = metadata.description || markdown.substring(0, 240).replace(/\n/g, " ");
     if (!title) return null;
     const sourceURL = metadata.sourceURL || url;
-    const publishedDate = extractPublicationDate(metadata, markdown);
+    const publishedDate = extractPublicationDate(metadata, markdown) || extractDateFromUrl(sourceURL);
     const article = { title, url: sourceURL, description, markdown: markdown.substring(0, 1500), publishedDate } as any;
     if (classifyArticleRejection(article)) return null;
     return article;
@@ -487,7 +494,7 @@ serve(async (req) => {
           description: item.description || item.excerpt || "",
           source: extractSourceName(item.url || ""),
           markdown: item.markdown?.substring(0, 1000) || "",
-          publishedDate: extractPublicationDate(item.metadata || {}, item.markdown || ""),
+            publishedDate: extractPublicationDate(item.metadata || {}, item.markdown || "") || extractDateFromUrl(item.url || ""),
         }));
       } catch (e) {
         console.error(`Search failed for query: ${query.substring(0, 50)}...`, e);
@@ -516,10 +523,10 @@ serve(async (req) => {
           const mapResults = await Promise.all(
             keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
           );
-          // Higher budget for primary sources: up to 20 mapped, 10 scraped each.
-          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 20);
+          // Keep enough candidates to avoid repeatedly exhausting the same homepage links.
+          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 40);
           primaryStats[src.name].mapped = candidateUrls.length;
-          const toScrape = candidateUrls.slice(0, 10);
+          const toScrape = candidateUrls.slice(0, 20);
           const scraped = await Promise.all(
             toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
           );
@@ -560,11 +567,10 @@ serve(async (req) => {
           const mapResults = await Promise.all(
             keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
           );
-          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 10);
+           const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 25);
           directScrapeStats[src.name].mapped = candidateUrls.length;
 
-          // Scrape top 5 per source (raised budget per acceptance criteria #3).
-          const toScrape = candidateUrls.slice(0, 5);
+           const toScrape = candidateUrls.slice(0, 12);
           const scraped = await Promise.all(
             toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
           );
@@ -681,7 +687,7 @@ serve(async (req) => {
       ...articlesToProcess.filter((a) => PRIMARY_NAMES.has(a.source)),
       ...articlesToProcess.filter((a) => !PRIMARY_NAMES.has(a.source)),
     ];
-    const classificationBatch = primaryFirst.slice(0, 50);
+    const classificationBatch = primaryFirst.slice(0, 100);
     const articleSummaries = classificationBatch.map((a, i) =>
       `[${i}] TITLE: ${a.title}\nURL: ${a.url}\nSOURCE: ${a.source}\nDESCRIPTION: ${a.description}\nCONTENT PREVIEW: ${a.markdown?.substring(0, 200) || "N/A"}`
     ).join("\n\n---\n\n");
