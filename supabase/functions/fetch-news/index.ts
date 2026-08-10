@@ -36,6 +36,13 @@ const ROLLING_NEWS_CUTOFF = Date.now() - 14 * 24 * 60 * 60 * 1000;
 
 const BAD_ARTICLE_PATH = /\/(tag|tags|sujet|category|categories|categorie|topic|topics|author|authors|section|sections|page|search|recherche)(\/|$)/i;
 
+// Social networks, dictionaries, ticketing and encyclopedias polluted the
+// candidate pool and burned the audit budget every run.
+const JUNK_DOMAINS = /(^|\.)(tiktok|instagram|facebook|x|twitter|pinterest|youtube|reddit|linkedin|merriam-webster|wikipedia|ticketmaster|tripadvisor|amazon)\.[a-z.]+$/i;
+
+// Sites that reliably answer bot requests with 403/429 but are vetted sources.
+const BOT_BLOCKED_TRUSTED = /(^|\.)(medias24\.com|leconomiste\.com|lematin\.ma|hespress\.com|lopinion\.ma|venturebeat\.com|joc\.com|lloydslist\.com)$/i;
+
 // ---------------------------------------------------------------------------
 // Firecrawl rate limiter.
 // The previous implementation fired every query + /map + /scrape in parallel,
