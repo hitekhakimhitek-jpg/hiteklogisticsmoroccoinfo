@@ -677,14 +677,14 @@ serve(async (req) => {
         }
         primaryStats[src.name] = { mapped: 0, scraped: 0 };
         try {
-          const keywords = (src.mapKeywords && src.mapKeywords.length > 0 ? src.mapKeywords : [undefined as unknown as string]).slice(0, 3);
+          const keywords = (src.mapKeywords && src.mapKeywords.length > 0 ? src.mapKeywords : [undefined as unknown as string]).slice(0, 2);
           const mapResults = await Promise.all(
             keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
           );
           // Keep enough candidates to avoid repeatedly exhausting the same homepage links.
           const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 30);
           primaryStats[src.name].mapped = candidateUrls.length;
-          const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 8);
+          const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 6);
           const scraped = await Promise.all(
             toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
           );
@@ -715,7 +715,7 @@ serve(async (req) => {
     if (runMoroccoPriority) {
       // Rotate which Morocco sources get the deep direct scrape each run so the
       // whole list is covered across days inside the Firecrawl rate budget.
-      const MOROCCO_PER_RUN = 3;
+      const MOROCCO_PER_RUN = 2;
       const moroccoToday = Array.from({ length: Math.min(MOROCCO_PER_RUN, MOROCCO_DIRECT_SOURCES.length) }, (_, i) =>
         MOROCCO_DIRECT_SOURCES[(dayIndex * MOROCCO_PER_RUN + i) % MOROCCO_DIRECT_SOURCES.length],
       );
@@ -731,14 +731,14 @@ serve(async (req) => {
         try {
           // Run /map for each keyword in parallel; keywords like "manifestation"
           // surface civic-event articles that pure logistics queries miss.
-          const keywords = (src.mapKeywords && src.mapKeywords.length > 0 ? src.mapKeywords : [undefined as unknown as string]).slice(0, 2);
+          const keywords = (src.mapKeywords && src.mapKeywords.length > 0 ? src.mapKeywords : [undefined as unknown as string]).slice(0, 1);
           const mapResults = await Promise.all(
             keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
           );
            const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 25);
           directScrapeStats[src.name].mapped = candidateUrls.length;
 
-           const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 6);
+           const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 4);
           const scraped = await Promise.all(
             toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
           );
