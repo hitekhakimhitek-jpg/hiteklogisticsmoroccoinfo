@@ -558,7 +558,7 @@ serve(async (req) => {
     const CORE_SOURCES = new Set<string>([
       "The Loadstar", "JOC", "FreightWaves", "Lloyd's List", "Splash247",
     ]);
-    const ROTATION_PER_RUN = 6;
+    const ROTATION_PER_RUN = 4;
     const dayIndex = Math.floor(Date.now() / 86_400_000);
 
     const sourceList = enabledSources
@@ -579,12 +579,15 @@ serve(async (req) => {
       rotatingSources.push(rotatingPool[(dayIndex * ROTATION_PER_RUN + i) % rotatingPool.length]);
     }
 
+    // Hard search budget: the run has ~145s of wall clock and Firecrawl only
+    // tolerates ~10 requests/minute, so the search phase must leave room for
+    // the direct-scrape passes. One query per source keeps coverage broad.
     const searchQueries: string[] = [];
     for (const s of [...coreSources, ...rotatingSources]) {
-      searchQueries.push(...SOURCE_QUERIES[s]);
+      searchQueries.push(...SOURCE_QUERIES[s].slice(0, 1));
     }
-    searchQueries.push(...GENERAL_QUERIES);
-    if (runMoroccoPriority) searchQueries.push(...MOROCCO_PRIORITY_QUERIES.slice(0, 4));
+    searchQueries.push(...GENERAL_QUERIES.slice(0, 2));
+    if (runMoroccoPriority) searchQueries.push(...MOROCCO_PRIORITY_QUERIES.slice(0, 2));
     console.log(
       `[query-plan] core=${coreSources.length} rotating=${rotatingSources.length} (${rotatingSources.join(", ")}) queries=${searchQueries.length}`,
     );
