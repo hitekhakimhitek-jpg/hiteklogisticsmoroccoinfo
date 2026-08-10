@@ -379,6 +379,7 @@ function looksLikeArticleUrl(url: string): boolean {
     if (!path || path === "/" || path.length < 8) return false;
     if (BAD_ARTICLE_PATH.test(path) || /\/(auteur)\//i.test(path)) return false;
     if (/\.(jpg|jpeg|png|gif|pdf|mp4|css|js|xml)$/i.test(path)) return false;
+    if (JUNK_DOMAINS.test(u.hostname)) return false;
     const segments = path.split("/").filter(Boolean);
     if (segments.length === 0) return false;
     // Many publishers (The Loadstar, JOC, Hespress...) serve articles at a
@@ -768,6 +769,11 @@ serve(async (req) => {
           clearTimeout(timeout2);
           const body = await resp2.text();
           if (resp2.ok && !PAYWALL_RE.test(body.slice(0, 3000))) return article;
+        }
+        // Vetted publishers that block bots outright shouldn't be dropped —
+        // their content already came through Firecrawl.
+        if ((resp.status === 403 || resp.status === 429) && BOT_BLOCKED_TRUSTED.test(new URL(article.url).hostname)) {
+          return article;
         }
         console.log(`URL validation failed (${resp.status}): ${article.url}`);
         return null;
