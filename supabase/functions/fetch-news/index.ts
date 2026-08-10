@@ -517,6 +517,7 @@ serve(async (req) => {
 
   let telemetryClient: any = null;
   let runId: string | null = null;
+  runDeadline = Date.now() + RUN_BUDGET_MS;
   const finishRun = async (patch: Record<string, unknown>) => {
     if (!telemetryClient || !runId) return;
     const { error } = await telemetryClient
