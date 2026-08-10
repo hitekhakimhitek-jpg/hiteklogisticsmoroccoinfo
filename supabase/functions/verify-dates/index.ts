@@ -128,7 +128,13 @@ serve(async (req) => {
       try {
         if (!looksLikeArticleUrl(url)) {
           broken++;
-          await supabase.from("intelligence_items").update({ verification_status: "broken_link", status: "archived" }).eq("id", item.id);
+          const attempts = Number(item.verification_attempts || 0) + 1;
+          await supabase.from("intelligence_items").update({
+            verification_status: "broken_link",
+            verification_attempts: attempts,
+            last_verification_attempt_at: new Date().toISOString(),
+            ...(attempts >= 3 ? { status: "archived" } : {}),
+          }).eq("id", item.id);
           continue;
         }
 
