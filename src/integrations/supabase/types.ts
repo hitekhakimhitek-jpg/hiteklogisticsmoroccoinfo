@@ -228,6 +228,63 @@ export type Database = {
         }
         Relationships: []
       }
+      ingestion_runs: {
+        Row: {
+          archived_count: number
+          candidates_accepted: number
+          candidates_found: number
+          created_at: string
+          enriched_count: number
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          inserted_count: number
+          pipeline: string
+          queries_failed: number
+          queries_total: number
+          rejection_counts: Json
+          source_report: Json
+          started_at: string
+          status: string
+        }
+        Insert: {
+          archived_count?: number
+          candidates_accepted?: number
+          candidates_found?: number
+          created_at?: string
+          enriched_count?: number
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          inserted_count?: number
+          pipeline: string
+          queries_failed?: number
+          queries_total?: number
+          rejection_counts?: Json
+          source_report?: Json
+          started_at?: string
+          status: string
+        }
+        Update: {
+          archived_count?: number
+          candidates_accepted?: number
+          candidates_found?: number
+          created_at?: string
+          enriched_count?: number
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          inserted_count?: number
+          pipeline?: string
+          queries_failed?: number
+          queries_total?: number
+          rejection_counts?: Json
+          source_report?: Json
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       intel_feedback: {
         Row: {
           created_at: string
@@ -285,6 +342,7 @@ export type Database = {
           lane_affected: string | null
           language: string
           last_reviewed_at: string | null
+          last_verification_attempt_at: string | null
           latitude: number | null
           longitude: number | null
           month: number | null
@@ -305,6 +363,7 @@ export type Database = {
           transport_modes: string[] | null
           updated_at: string
           updated_date: string | null
+          verification_attempts: number
           verification_status: string
           week_number: number | null
           why_it_matters_to_hitek: string | null
@@ -330,6 +389,7 @@ export type Database = {
           lane_affected?: string | null
           language?: string
           last_reviewed_at?: string | null
+          last_verification_attempt_at?: string | null
           latitude?: number | null
           longitude?: number | null
           month?: number | null
@@ -350,6 +410,7 @@ export type Database = {
           transport_modes?: string[] | null
           updated_at?: string
           updated_date?: string | null
+          verification_attempts?: number
           verification_status?: string
           week_number?: number | null
           why_it_matters_to_hitek?: string | null
@@ -375,6 +436,7 @@ export type Database = {
           lane_affected?: string | null
           language?: string
           last_reviewed_at?: string | null
+          last_verification_attempt_at?: string | null
           latitude?: number | null
           longitude?: number | null
           month?: number | null
@@ -395,6 +457,7 @@ export type Database = {
           transport_modes?: string[] | null
           updated_at?: string
           updated_date?: string | null
+          verification_attempts?: number
           verification_status?: string
           week_number?: number | null
           why_it_matters_to_hitek?: string | null
