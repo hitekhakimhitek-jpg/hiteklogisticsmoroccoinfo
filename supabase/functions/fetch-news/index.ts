@@ -1171,6 +1171,20 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
 
     console.log(`Successfully inserted ${data.length} REAL news entries from web scraping`);
 
+    // Persist telemetry BEFORE the downstream chain. Classification and
+    // enrichment can outlive the worker, which previously left the run row
+    // stuck at "running" even though ingestion had succeeded.
+    await finishRun({
+      status: queryStats.failed > 0 ? "partial" : "success",
+      queries_total: searchQueries.length,
+      queries_failed: queryStats.failed,
+      candidates_found: uniqueArticles.length,
+      candidates_accepted: validatedArticles.length,
+      inserted_count: data.length,
+      rejection_counts: rejectionStats,
+      source_report: { scraped_by_source: scrapedBySource, inserted_by_source: insertedBySource },
+    });
+
     // Step 4: Trigger AI classification for Finance/IT section relevance
     const newIds = data.map((d: any) => d.id);
     if (newIds.length > 0) {
@@ -1220,17 +1234,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       console.error("Failed to trigger enrich-intel:", enrichErr);
     }
 
-    await finishRun({
-      status: queryStats.failed > 0 ? "partial" : "success",
-      queries_total: searchQueries.length,
-      queries_failed: queryStats.failed,
-      candidates_found: uniqueArticles.length,
-      candidates_accepted: validatedArticles.length,
-      inserted_count: data.length,
-      enriched_count: enrichedCount,
-      rejection_counts: rejectionStats,
-      source_report: { scraped_by_source: scrapedBySource, inserted_by_source: insertedBySource },
-    });
+    await finishRun({ enriched_count: enrichedCount });
 
     return new Response(
       JSON.stringify({
