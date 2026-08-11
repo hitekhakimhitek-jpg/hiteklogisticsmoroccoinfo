@@ -14,6 +14,25 @@ function unauthorized(msg = "Unauthorized", status = 401, headers: HeadersInit) 
 }
 
 /**
+ * True when the bearer token is this project's publishable/anon key
+ * (either the new `sb_publishable_*` format or a legacy anon JWT).
+ */
+function isPublishableKey(token: string, anonKey: string): boolean {
+  if (anonKey && token === anonKey) return true;
+  if (token.startsWith("sb_publishable_")) return true;
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  try {
+    const json = JSON.parse(
+      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
+    );
+    return json?.role === "anon";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Require either:
  *  - a Bearer token equal to SUPABASE_SERVICE_ROLE_KEY (used by pg_cron / server-to-server calls), OR
  *  - a valid Supabase user JWT whose email belongs to the @hitek.ma admin domain.
