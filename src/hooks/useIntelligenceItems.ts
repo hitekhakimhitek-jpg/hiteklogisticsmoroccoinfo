@@ -232,6 +232,9 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
       }
       return sorted;
     },
+    // Keep the previous list on screen while a language switch re-translates,
+    // instead of blanking the feed for several seconds.
+    placeholderData: (prev) => prev,
     refetchInterval: 60_000,
   });
 }
