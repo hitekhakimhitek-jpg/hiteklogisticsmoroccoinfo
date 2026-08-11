@@ -11,7 +11,7 @@ const FIELDS: (keyof DbNewsEntry)[] = [
 
 // Bump version to invalidate stale cached translations (e.g. when the
 // edge function previously echoed English back unchanged).
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 function cacheKey(target: "fr" | "en", text: string) {
   return `tr:${CACHE_VERSION}:${target}:${text}`;
 }
@@ -111,7 +111,6 @@ const SKIP_KEYS = new Set([
   "status",
   "direction",
   "priority",
-  "impact",
   "change",
   "current",
   "previous",

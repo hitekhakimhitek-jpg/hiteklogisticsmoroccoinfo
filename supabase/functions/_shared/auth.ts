@@ -14,6 +14,25 @@ function unauthorized(msg = "Unauthorized", status = 401, headers: HeadersInit) 
 }
 
 /**
+ * True when the bearer token is this project's publishable/anon key
+ * (either the new `sb_publishable_*` format or a legacy anon JWT).
+ */
+function isPublishableKey(token: string, anonKey: string): boolean {
+  if (anonKey && token === anonKey) return true;
+  if (token.startsWith("sb_publishable_")) return true;
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  try {
+    const json = JSON.parse(
+      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
+    );
+    return json?.role === "anon";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Require either:
  *  - a Bearer token equal to SUPABASE_SERVICE_ROLE_KEY (used by pg_cron / server-to-server calls), OR
  *  - a valid Supabase user JWT whose email belongs to the @hitek.ma admin domain.
@@ -61,6 +80,7 @@ export async function requireHitekAdmin(
 export async function requireAuthenticated(
   req: Request,
   headers: HeadersInit = corsHeaders,
+  opts: { allowAnonKey?: boolean } = {},
 ): Promise<Response | null> {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
@@ -74,6 +94,9 @@ export async function requireAuthenticated(
   if (!token) return unauthorized("Missing bearer token", 401, headers);
   if (token === SERVICE_ROLE) return null;
   if (CRON_SECRET && token === CRON_SECRET) return null;
+  // Public read-only utilities (translation) may be called by signed-out
+  // visitors, which send the publishable/anon key as the bearer token.
+  if (opts.allowAnonKey && isPublishableKey(token, SUPABASE_ANON_KEY)) return null;
   try {
     const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const { data, error } = await client.auth.getUser(token);
