@@ -102,7 +102,10 @@ export async function translateEntries(
   const uniques = Array.from(need);
   if (uniques.length > 0) {
     const translated = await batchTranslate(uniques, target);
-    uniques.forEach((src, i) => setCached(target, src, translated[i] ?? src));
+    uniques.forEach((src, i) => {
+      const t = translated[i];
+      if (t) setCached(target, src, t);
+    });
   }
 
   // Build translated copies.
@@ -196,7 +199,10 @@ export async function translateDeep<T>(value: T, target: "fr" | "en"): Promise<T
   const uniques = Array.from(need).filter((s) => !getCached(target, s));
   if (uniques.length > 0) {
     const translated = await batchTranslate(uniques, target);
-    uniques.forEach((src, i) => setCached(target, src, translated[i] ?? src));
+    uniques.forEach((src, i) => {
+      const t = translated[i];
+      if (t) setCached(target, src, t);
+    });
   }
   return applyTranslations(value, target);
 }
