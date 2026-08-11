@@ -36,7 +36,7 @@ async function translateChunk(
   slice: string[],
   target: "fr" | "en",
   attempt = 0,
-): Promise<string[]> {
+): Promise<(string | null)[]> {
   try {
     const { data, error } = await supabase.functions.invoke("translate-text", {
       body: { texts: slice, target },
@@ -44,22 +44,24 @@ async function translateChunk(
     if (error) throw error;
     const translations: string[] = Array.isArray(data?.translations)
       ? data.translations
-      : slice;
-    return translations.length === slice.length ? translations : slice;
+      : [];
+    if (translations.length !== slice.length) return slice.map(() => null);
+    return translations;
   } catch (e) {
     if (attempt < 2) {
       await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
       return translateChunk(slice, target, attempt + 1);
     }
     console.error("translate batch failed", e);
-    return slice;
+    // Return nulls so failures are NOT cached as if they were translations.
+    return slice.map(() => null);
   }
 }
 
 async function batchTranslate(
   texts: string[],
   target: "fr" | "en",
-): Promise<string[]> {
+): Promise<(string | null)[]> {
   if (texts.length === 0) return [];
   // Small chunks + limited concurrency: long single requests were being
   // aborted by the browser ("Load failed"), which silently returned English.
@@ -67,7 +69,7 @@ async function batchTranslate(
   const CONCURRENCY = 4;
   const chunks: string[][] = [];
   for (let i = 0; i < texts.length; i += CHUNK) chunks.push(texts.slice(i, i + CHUNK));
-  const results: string[][] = new Array(chunks.length);
+  const results: (string | null)[][] = new Array(chunks.length);
   let cursor = 0;
   await Promise.all(
     Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, async () => {
