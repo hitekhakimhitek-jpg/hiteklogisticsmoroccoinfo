@@ -10,7 +10,9 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
-  const authErr = await requireAuthenticated(req);
+  // Translation is a public, read-only utility: the dashboard is browsable
+  // signed-out, so accept the anon key in addition to real sessions.
+  const authErr = await requireAuthenticated(req, corsHeaders, { allowAnonKey: true });
   if (authErr) return authErr;
   try {
     const { texts, target } = await req.json();

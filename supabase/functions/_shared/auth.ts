@@ -61,6 +61,7 @@ export async function requireHitekAdmin(
 export async function requireAuthenticated(
   req: Request,
   headers: HeadersInit = corsHeaders,
+  opts: { allowAnonKey?: boolean } = {},
 ): Promise<Response | null> {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
@@ -74,6 +75,9 @@ export async function requireAuthenticated(
   if (!token) return unauthorized("Missing bearer token", 401, headers);
   if (token === SERVICE_ROLE) return null;
   if (CRON_SECRET && token === CRON_SECRET) return null;
+  // Public read-only utilities (translation) may be called by signed-out
+  // visitors, which send the publishable anon key as the bearer token.
+  if (opts.allowAnonKey && token === SUPABASE_ANON_KEY) return null;
   try {
     const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const { data, error } = await client.auth.getUser(token);
