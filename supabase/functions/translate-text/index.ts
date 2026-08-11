@@ -68,7 +68,8 @@ serve(async (req) => {
 Rules:
 - Translate ALL strings, even short ones. Do not echo English back.
 - Preserve meaning, tone, and freight/logistics terminology.
-- Keep proper nouns (company names, ports, "Morocco", "Tanger Med", "ADII", "EU", "Maersk", "DHL", "Amazon", "WTO", "ICC", currencies, route codes) as-is.
+- Keep brand/company names, port names and codes as-is ("Tanger Med", "ADII", "Maersk", "DHL", "Amazon", "WTO", "ICC", currencies, route codes).
+- DO translate country, region and place names that have a standard ${lang} form (e.g. Morocco -> Maroc, Spain -> Espagne, European Union -> Union européenne, Red Sea -> mer Rouge).
 - Convert idioms naturally — do not transliterate.
 - If a string is ALREADY fully in ${lang}, return it unchanged. Otherwise it MUST be translated.
 - Output array length MUST equal input length. Same order.

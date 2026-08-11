@@ -11,14 +11,14 @@ const FIELDS: (keyof DbNewsEntry)[] = [
 
 // Bump version to invalidate stale cached translations (e.g. when the
 // edge function previously echoed English back unchanged).
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 function cacheKey(target: "fr" | "en", text: string) {
   return `tr:${CACHE_VERSION}:${target}:${text}`;
 }
 
 function getCached(target: "fr" | "en", text: string): string | null {
   try {
-    return sessionStorage.getItem(cacheKey(target, text));
+    return localStorage.getItem(cacheKey(target, text));
   } catch {
     return null;
   }
@@ -26,37 +26,60 @@ function getCached(target: "fr" | "en", text: string): string | null {
 
 function setCached(target: "fr" | "en", text: string, value: string) {
   try {
-    sessionStorage.setItem(cacheKey(target, text), value);
+    localStorage.setItem(cacheKey(target, text), value);
   } catch {
     /* quota — ignore */
+  }
+}
+
+async function translateChunk(
+  slice: string[],
+  target: "fr" | "en",
+  attempt = 0,
+): Promise<(string | null)[]> {
+  try {
+    const { data, error } = await supabase.functions.invoke("translate-text", {
+      body: { texts: slice, target },
+    });
+    if (error) throw error;
+    const translations: string[] = Array.isArray(data?.translations)
+      ? data.translations
+      : [];
+    if (translations.length !== slice.length) return slice.map(() => null);
+    return translations;
+  } catch (e) {
+    if (attempt < 2) {
+      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      return translateChunk(slice, target, attempt + 1);
+    }
+    console.error("translate batch failed", e);
+    // Return nulls so failures are NOT cached as if they were translations.
+    return slice.map(() => null);
   }
 }
 
 async function batchTranslate(
   texts: string[],
   target: "fr" | "en",
-): Promise<string[]> {
+): Promise<(string | null)[]> {
   if (texts.length === 0) return [];
-  // Chunk to keep prompts manageable.
-  const CHUNK = 40;
-  const out: string[] = [];
-  for (let i = 0; i < texts.length; i += CHUNK) {
-    const slice = texts.slice(i, i + CHUNK);
-    try {
-      const { data, error } = await supabase.functions.invoke("translate-text", {
-        body: { texts: slice, target },
-      });
-      if (error) throw error;
-      const translations: string[] = Array.isArray(data?.translations)
-        ? data.translations
-        : slice;
-      out.push(...(translations.length === slice.length ? translations : slice));
-    } catch (e) {
-      console.error("translate batch failed", e);
-      out.push(...slice);
-    }
-  }
-  return out;
+  // Small chunks + limited concurrency: long single requests were being
+  // aborted by the browser ("Load failed"), which silently returned English.
+  const CHUNK = 6;
+  const CONCURRENCY = 4;
+  const chunks: string[][] = [];
+  for (let i = 0; i < texts.length; i += CHUNK) chunks.push(texts.slice(i, i + CHUNK));
+  const results: (string | null)[][] = new Array(chunks.length);
+  let cursor = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, async () => {
+      while (cursor < chunks.length) {
+        const idx = cursor++;
+        results[idx] = await translateChunk(chunks[idx], target);
+      }
+    }),
+  );
+  return results.flat();
 }
 
 export async function translateEntries(
@@ -79,7 +102,10 @@ export async function translateEntries(
   const uniques = Array.from(need);
   if (uniques.length > 0) {
     const translated = await batchTranslate(uniques, target);
-    uniques.forEach((src, i) => setCached(target, src, translated[i] ?? src));
+    uniques.forEach((src, i) => {
+      const t = translated[i];
+      if (t) setCached(target, src, t);
+    });
   }
 
   // Build translated copies.
@@ -173,7 +199,10 @@ export async function translateDeep<T>(value: T, target: "fr" | "en"): Promise<T
   const uniques = Array.from(need).filter((s) => !getCached(target, s));
   if (uniques.length > 0) {
     const translated = await batchTranslate(uniques, target);
-    uniques.forEach((src, i) => setCached(target, src, translated[i] ?? src));
+    uniques.forEach((src, i) => {
+      const t = translated[i];
+      if (t) setCached(target, src, t);
+    });
   }
   return applyTranslations(value, target);
 }
