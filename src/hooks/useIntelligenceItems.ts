@@ -204,6 +204,9 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
             summary: r.summary,
             impact: r.impact,
             action_required: r.action_required,
+            why_it_matters_to_hitek: r.why_it_matters_to_hitek,
+            affected_lanes_or_customers: r.affected_lanes_or_customers,
+            suggested_action: r.suggested_action,
           }));
           const translated = await translateDeep(payload, "fr");
           const byId = new Map(translated.map((t: any) => [t.id, t]));
@@ -216,6 +219,9 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
                   summary: t.summary ?? r.summary,
                   impact: t.impact ?? r.impact,
                   action_required: t.action_required ?? r.action_required,
+                  why_it_matters_to_hitek: t.why_it_matters_to_hitek ?? r.why_it_matters_to_hitek,
+                  affected_lanes_or_customers: t.affected_lanes_or_customers ?? r.affected_lanes_or_customers,
+                  suggested_action: t.suggested_action ?? r.suggested_action,
                 }
               : r;
           });

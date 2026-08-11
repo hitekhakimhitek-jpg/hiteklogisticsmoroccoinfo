@@ -6,6 +6,7 @@ import { IntelCard } from "@/components/intel/IntelCard";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Home } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { translateDeep } from "@/lib/translateEntries";
 
 export default function IntelItemPage() {
   const { id } = useParams<{ id: string }>();
@@ -13,7 +14,7 @@ export default function IntelItemPage() {
   const navigate = useNavigate();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["intel_item", id],
+    queryKey: ["intel_item", id, lang],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("intelligence_items")
@@ -21,7 +22,22 @@ export default function IntelItemPage() {
         .eq("id", id!)
         .maybeSingle();
       if (error) throw error;
-      return data as IntelligenceItem | null;
+      const row = data as IntelligenceItem | null;
+      if (!row || lang !== "fr") return row;
+      try {
+        const t = await translateDeep(
+          {
+            headline: row.headline,
+            summary: row.summary,
+            impact: row.impact,
+            action_required: row.action_required,
+          },
+          "fr",
+        );
+        return { ...row, ...t } as IntelligenceItem;
+      } catch {
+        return row;
+      }
     },
     enabled: !!id,
   });
