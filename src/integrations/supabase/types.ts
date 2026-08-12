@@ -267,6 +267,50 @@ export type Database = {
         }
         Relationships: []
       }
+      event_updates: {
+        Row: {
+          change_summary: string
+          created_at: string
+          event_id: string
+          event_status: string | null
+          global_logistics_impact_score: number | null
+          id: string
+          severity: string | null
+          snapshot: Json
+          source_name: string | null
+        }
+        Insert: {
+          change_summary: string
+          created_at?: string
+          event_id: string
+          event_status?: string | null
+          global_logistics_impact_score?: number | null
+          id?: string
+          severity?: string | null
+          snapshot?: Json
+          source_name?: string | null
+        }
+        Update: {
+          change_summary?: string
+          created_at?: string
+          event_id?: string
+          event_status?: string | null
+          global_logistics_impact_score?: number | null
+          id?: string
+          severity?: string | null
+          snapshot?: Json
+          source_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_updates_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "supply_chain_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ingestion_runs: {
         Row: {
           archived_count: number
@@ -541,6 +585,54 @@ export type Database = {
         }
         Relationships: []
       }
+      logistics_infrastructure: {
+        Row: {
+          aliases: string[]
+          country: string | null
+          country_code: string | null
+          created_at: string
+          hitek_relevance: number
+          id: string
+          importance: number
+          kind: string
+          latitude: number
+          longitude: number
+          name: string
+          radius_km: number
+          updated_at: string
+        }
+        Insert: {
+          aliases?: string[]
+          country?: string | null
+          country_code?: string | null
+          created_at?: string
+          hitek_relevance?: number
+          id?: string
+          importance?: number
+          kind: string
+          latitude: number
+          longitude: number
+          name: string
+          radius_km?: number
+          updated_at?: string
+        }
+        Update: {
+          aliases?: string[]
+          country?: string | null
+          country_code?: string | null
+          created_at?: string
+          hitek_relevance?: number
+          id?: string
+          importance?: number
+          kind?: string
+          latitude?: number
+          longitude?: number
+          name?: string
+          radius_km?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       monthly_summaries: {
         Row: {
           compliance_tracker: Json
@@ -682,6 +774,398 @@ export type Database = {
           verification_status?: string
           week_number?: number
           year?: number
+        }
+        Relationships: []
+      }
+      raw_items: {
+        Row: {
+          analysis_status: string
+          body: string | null
+          collected_at: string
+          countries: string[]
+          created_at: string
+          event_id: string | null
+          fetch_method: string | null
+          id: string
+          impact_score: number | null
+          intel_item_id: string | null
+          latitude: number | null
+          longitude: number | null
+          original_summary: string | null
+          original_title: string
+          payload: Json
+          published_at: string | null
+          rejection_reason: string | null
+          source_language: string | null
+          source_name: string
+          source_type: string | null
+          translated_summary: string | null
+          translated_title: string | null
+          updated_at: string
+          updated_at_source: string | null
+          url: string | null
+          url_hash: string
+        }
+        Insert: {
+          analysis_status?: string
+          body?: string | null
+          collected_at?: string
+          countries?: string[]
+          created_at?: string
+          event_id?: string | null
+          fetch_method?: string | null
+          id?: string
+          impact_score?: number | null
+          intel_item_id?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          original_summary?: string | null
+          original_title: string
+          payload?: Json
+          published_at?: string | null
+          rejection_reason?: string | null
+          source_language?: string | null
+          source_name: string
+          source_type?: string | null
+          translated_summary?: string | null
+          translated_title?: string | null
+          updated_at?: string
+          updated_at_source?: string | null
+          url?: string | null
+          url_hash: string
+        }
+        Update: {
+          analysis_status?: string
+          body?: string | null
+          collected_at?: string
+          countries?: string[]
+          created_at?: string
+          event_id?: string | null
+          fetch_method?: string | null
+          id?: string
+          impact_score?: number | null
+          intel_item_id?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          original_summary?: string | null
+          original_title?: string
+          payload?: Json
+          published_at?: string | null
+          rejection_reason?: string | null
+          source_language?: string | null
+          source_name?: string
+          source_type?: string | null
+          translated_summary?: string | null
+          translated_title?: string | null
+          updated_at?: string
+          updated_at_source?: string | null
+          url?: string | null
+          url_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "raw_items_event_fk"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "supply_chain_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      source_health: {
+        Row: {
+          consecutive_failures: number
+          created_at: string
+          http_status: number | null
+          id: string
+          items_found_last_run: number
+          last_attempt_at: string | null
+          last_error: string | null
+          last_item_detected_at: string | null
+          last_success_at: string | null
+          latest_source_publication_at: string | null
+          parse_status: string
+          parser_method: string | null
+          source_name: string
+          source_type: string | null
+          source_url: string | null
+          stale: boolean
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          consecutive_failures?: number
+          created_at?: string
+          http_status?: number | null
+          id?: string
+          items_found_last_run?: number
+          last_attempt_at?: string | null
+          last_error?: string | null
+          last_item_detected_at?: string | null
+          last_success_at?: string | null
+          latest_source_publication_at?: string | null
+          parse_status?: string
+          parser_method?: string | null
+          source_name: string
+          source_type?: string | null
+          source_url?: string | null
+          stale?: boolean
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          consecutive_failures?: number
+          created_at?: string
+          http_status?: number | null
+          id?: string
+          items_found_last_run?: number
+          last_attempt_at?: string | null
+          last_error?: string | null
+          last_item_detected_at?: string | null
+          last_success_at?: string | null
+          latest_source_publication_at?: string | null
+          parse_status?: string
+          parser_method?: string | null
+          source_name?: string
+          source_type?: string | null
+          source_url?: string | null
+          stale?: boolean
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      source_runs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          duration_ms: number | null
+          errors: string | null
+          fetch_method: string | null
+          http_status: number | null
+          id: string
+          items_discovered: number
+          items_duplicates: number
+          items_new: number
+          items_rejected: number
+          items_updated: number
+          pages_requested: number
+          run_id: string | null
+          source_name: string
+          started_at: string
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          errors?: string | null
+          fetch_method?: string | null
+          http_status?: number | null
+          id?: string
+          items_discovered?: number
+          items_duplicates?: number
+          items_new?: number
+          items_rejected?: number
+          items_updated?: number
+          pages_requested?: number
+          run_id?: string | null
+          source_name: string
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          errors?: string | null
+          fetch_method?: string | null
+          http_status?: number | null
+          id?: string
+          items_discovered?: number
+          items_duplicates?: number
+          items_new?: number
+          items_rejected?: number
+          items_updated?: number
+          pages_requested?: number
+          run_id?: string | null
+          source_name?: string
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      sources: {
+        Row: {
+          category: string | null
+          config: Json
+          country: string | null
+          created_at: string
+          enabled: boolean
+          feed_url: string | null
+          fetch_method: string
+          homepage: string | null
+          id: string
+          language: string
+          name: string
+          poll_interval_minutes: number
+          source_type: string
+          tier: number
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          config?: Json
+          country?: string | null
+          created_at?: string
+          enabled?: boolean
+          feed_url?: string | null
+          fetch_method?: string
+          homepage?: string | null
+          id?: string
+          language?: string
+          name: string
+          poll_interval_minutes?: number
+          source_type?: string
+          tier?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          config?: Json
+          country?: string | null
+          created_at?: string
+          enabled?: boolean
+          feed_url?: string | null
+          fetch_method?: string
+          homepage?: string | null
+          id?: string
+          language?: string
+          name?: string
+          poll_interval_minutes?: number
+          source_type?: string
+          tier?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      supply_chain_events: {
+        Row: {
+          affected_airports: string[]
+          affected_industrial_regions: string[]
+          affected_ports: string[]
+          affected_shipping_lanes: string[]
+          cluster_key: string
+          confidence_score: number
+          countries: string[]
+          created_at: string
+          departments: string[]
+          event_name: string | null
+          event_started_at: string | null
+          event_status: string
+          event_type: string
+          first_detected_at: string
+          forecast_time: string | null
+          forecast_track: Json | null
+          global_logistics_impact_score: number
+          hazard_type: string | null
+          hitek_relevance_score: number
+          id: string
+          is_active: boolean
+          last_updated_at: string
+          latitude: number | null
+          logistics_impact: string | null
+          longitude: number | null
+          maximum_wind: number | null
+          next_watchpoint: string | null
+          primary_source_url: string | null
+          resolved_at: string | null
+          severity: string
+          source_confidence: string
+          source_count: number
+          sources: Json
+          summary: string
+          title: string
+          transport_modes: string[]
+          updated_at: string
+        }
+        Insert: {
+          affected_airports?: string[]
+          affected_industrial_regions?: string[]
+          affected_ports?: string[]
+          affected_shipping_lanes?: string[]
+          cluster_key: string
+          confidence_score?: number
+          countries?: string[]
+          created_at?: string
+          departments?: string[]
+          event_name?: string | null
+          event_started_at?: string | null
+          event_status?: string
+          event_type?: string
+          first_detected_at?: string
+          forecast_time?: string | null
+          forecast_track?: Json | null
+          global_logistics_impact_score?: number
+          hazard_type?: string | null
+          hitek_relevance_score?: number
+          id?: string
+          is_active?: boolean
+          last_updated_at?: string
+          latitude?: number | null
+          logistics_impact?: string | null
+          longitude?: number | null
+          maximum_wind?: number | null
+          next_watchpoint?: string | null
+          primary_source_url?: string | null
+          resolved_at?: string | null
+          severity?: string
+          source_confidence?: string
+          source_count?: number
+          sources?: Json
+          summary?: string
+          title: string
+          transport_modes?: string[]
+          updated_at?: string
+        }
+        Update: {
+          affected_airports?: string[]
+          affected_industrial_regions?: string[]
+          affected_ports?: string[]
+          affected_shipping_lanes?: string[]
+          cluster_key?: string
+          confidence_score?: number
+          countries?: string[]
+          created_at?: string
+          departments?: string[]
+          event_name?: string | null
+          event_started_at?: string | null
+          event_status?: string
+          event_type?: string
+          first_detected_at?: string
+          forecast_time?: string | null
+          forecast_track?: Json | null
+          global_logistics_impact_score?: number
+          hazard_type?: string | null
+          hitek_relevance_score?: number
+          id?: string
+          is_active?: boolean
+          last_updated_at?: string
+          latitude?: number | null
+          logistics_impact?: string | null
+          longitude?: number | null
+          maximum_wind?: number | null
+          next_watchpoint?: string | null
+          primary_source_url?: string | null
+          resolved_at?: string | null
+          severity?: string
+          source_confidence?: string
+          source_count?: number
+          sources?: Json
+          summary?: string
+          title?: string
+          transport_modes?: string[]
+          updated_at?: string
         }
         Relationships: []
       }
