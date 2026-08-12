@@ -524,13 +524,40 @@ serve(async (req) => {
     // ---------- dashboard item ----------
     const dept = a.departments[0] ?? "operations";
     const cappedSeverity: Severity = dept === "it" && severity === "act_now" ? "this_week" : severity;
-    const { data: dupItem } = await db
-      .from("intelligence_items")
-      .select("id")
-      .eq("source_url", row.url)
-      .maybeSingle();
+    // One dashboard card per EVENT, never one per bulletin. Later, stronger
+    // reports refresh the existing card instead of stacking duplicates.
+    let dupItemId: string | null = null;
+    const { data: byUrl } = await db
+      .from("intelligence_items").select("id").eq("source_url", row.url).maybeSingle();
+    dupItemId = byUrl?.id ?? null;
+    if (!dupItemId) {
+      const { data: linked } = await db
+        .from("raw_items").select("intel_item_id")
+        .eq("event_id", eventId).not("intel_item_id", "is", null).limit(1);
+      dupItemId = linked?.[0]?.intel_item_id ?? null;
+    }
 
-    if (!dupItem) {
+    if (dupItemId) {
+      // Keep the best version: upgrade severity / summary when this report is
+      // stronger than what is already on the card.
+      const { data: cur } = await db
+        .from("intelligence_items").select("severity").eq("id", dupItemId).maybeSingle();
+      const rank = { awareness: 0, this_week: 1, act_now: 2 } as Record<string, number>;
+      if (cur && rank[cappedSeverity] > (rank[cur.severity] ?? 0)) {
+        await db.from("intelligence_items").update({
+          severity: cappedSeverity,
+          headline: a.event_name || row.original_title,
+          summary: `${a.what_happened || a.summary}`.slice(0, 2000),
+          impact: a.logistics_impact || a.summary,
+          action_required: a.next_watchpoint || "Monitor for further updates.",
+          suggested_action: a.next_watchpoint,
+          why_it_matters_to_hitek: a.logistics_impact,
+          action_required_bool: cappedSeverity !== "awareness",
+        }).eq("id", dupItemId);
+      }
+    }
+
+    if (!dupItemId) {
       const { data: item } = await db.from("intelligence_items").insert({
         headline: a.event_name || row.original_title,
         summary: `${a.what_happened || a.summary}`.slice(0, 2000),
@@ -565,7 +592,7 @@ serve(async (req) => {
         analysis_status: "analyzed", impact_score: finalScore, event_id: eventId, intel_item_id: item?.id ?? null,
       }).eq("id", row.id);
     } else {
-      await db.from("raw_items").update({ analysis_status: "analyzed", impact_score: finalScore, event_id: eventId, intel_item_id: dupItem.id }).eq("id", row.id);
+      await db.from("raw_items").update({ analysis_status: "analyzed", impact_score: finalScore, event_id: eventId, intel_item_id: dupItemId }).eq("id", row.id);
     }
 
     if (examples.length < 12) {
