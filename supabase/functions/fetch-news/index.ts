@@ -1282,20 +1282,23 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         (originalArticle as any).publishedDate || null;
       const headline = entry.headline || originalArticle.title;
       const sourceUrl = originalArticle.url || null;
-      const rejectionReason = classifyArticleRejection({
+      const auditCandidate = {
         title: headline,
         url: sourceUrl || "",
         description: entry.summary || originalArticle.description || "",
         markdown: originalArticle.markdown || "",
         publishedDate: sourcePubDate,
-      });
+      };
+      const rejectionReason = classifyArticleRejection(auditCandidate);
+      // classifyArticleRejection may date a trusted undated tier-1 article.
+      const resolvedPubDate = auditCandidate.publishedDate || sourcePubDate;
       const verificationStatus = rejectionReason === "title_url_mismatch"
         ? "source_mismatch"
         : rejectionReason === "outdated_or_missing_date"
           ? "outdated"
           : rejectionReason === "paywalled_or_unreadable"
             ? "broken_link"
-            : sourcePubDate ? "verified" : "date_not_verified";
+            : resolvedPubDate ? "verified" : "date_not_verified";
 
       return {
         headline,
