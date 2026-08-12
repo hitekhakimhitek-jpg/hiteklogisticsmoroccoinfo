@@ -85,6 +85,8 @@ const SEVERITY_ORDER: Record<IntelSeverity, number> = {
 // pins above softer trade press. Case-insensitive substring match on source_name.
 const SOURCE_TIER: Array<{ match: RegExp; weight: number }> = [
   { match: /joc|journal of commerce|loadstar|lloyd'?s list|reuters|bloomberg/i, weight: 3 },
+  { match: /maersk|msc|cma cgm|hapag-lloyd|seko logistics|kuehne|hillebrand/i, weight: 3 },
+  { match: /maritime executive|everstream|resilinc|project44|icis/i, weight: 2.5 },
   { match: /cisa|imo|iata|european commission|ec\.europa|customs|douane|adii|omc|wto/i, weight: 3 },
   { match: /medias?24|hespress|maroc|morocco world news|le\s?matin|tanger med|onda|ports?\.gov/i, weight: 2.5 },
   { match: /freightwaves|splash|shippingwatch|seatrade|american shipper|the maritime executive/i, weight: 2 },

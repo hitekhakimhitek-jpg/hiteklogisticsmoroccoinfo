@@ -24,6 +24,9 @@ const ALL_SOURCES = [
   "IT Security Guru", "SD Times", "ACM TechNews",
   "UNCTAD", "World Bank", "World Bank LPI", "ITC Trade Map", "ITC",
   "Voice of the Independent",
+  "SEKO Logistics", "Kuehne+Nagel", "Hillebrand Gori", "Maersk", "MSC", "CMA CGM", "Hapag-Lloyd",
+  "The Maritime Executive", "ICIS", "Supply Chain Brain", "Logistics Management", "Baird Maritime", "MarineLink",
+  "project44", "Everstream Analytics", "Resilinc",
 ];
 
 const SettingsPage = () => {

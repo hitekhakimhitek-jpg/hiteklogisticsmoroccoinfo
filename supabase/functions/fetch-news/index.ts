@@ -317,6 +317,28 @@ const SOURCE_QUERIES: Record<string, string[]> = {
   "ITC": ["ITC trade Morocco site:intracen.org"],
   // Independent news
   "Voice of the Independent": ["Morocco news economy trade logistics site:voiceoftheindependent.com"],
+  // TIER 1b — Carrier & forwarder operational advisories (highest operational value)
+  "SEKO Logistics": [
+    "port update terminal congestion advisory site:sekologistics.com",
+    "Asia supply chain weather center update site:sekologistics.com",
+  ],
+  "Kuehne+Nagel": ["customer advisory port terminal trucking warehouse disruption site:kuehne-nagel.com"],
+  "Hillebrand Gori": ["port update congestion trade lane disruption site:hillebrandgori.com"],
+  "Maersk": ["customer advisory port omission terminal closure schedule change site:maersk.com"],
+  "MSC": ["customer advisory port congestion terminal closure site:msc.com"],
+  "CMA CGM": ["customer advisory port terminal closure surcharge rerouting site:cma-cgm.com"],
+  "Hapag-Lloyd": ["customer advisory port terminal closure schedule change site:hapag-lloyd.com"],
+  // TIER 1c — Global maritime & logistics press
+  "The Maritime Executive": ["port operations maritime emergency storm closure site:maritime-executive.com"],
+  "ICIS": ["logistics shipping port disruption china petrochemical site:icis.com"],
+  "Supply Chain Brain": ["supply chain risk logistics disruption site:supplychainbrain.com"],
+  "Logistics Management": ["logistics delays freight transportation disruption site:logisticsmgmt.com"],
+  "Baird Maritime": ["shipping vessel operations maritime news site:bairdmaritime.com"],
+  "MarineLink": ["shipping port vessel maritime news site:marinelink.com"],
+  // TIER 1d — Supply chain risk & visibility platforms
+  "project44": ["port congestion vessel dwell time insights site:project44.com"],
+  "Everstream Analytics": ["supply chain risk alert weather strike disruption site:everstream.ai"],
+  "Resilinc": ["supply chain disruption event watch alert site:resilinc.com"],
 };
 
 // Fallback general queries that always run if no source-specific ones cover the topic
@@ -377,6 +399,22 @@ const PRIMARY_DIRECT_SOURCES: Array<{ name: string; homepage: string; mapKeyword
     homepage: "https://www.joc.com",
     mapKeywords: ["container", "ocean", "port", "trucking", "rail"],
   },
+];
+
+// Carrier / forwarder advisory hubs and risk platforms. Their advisory pages
+// are poorly covered by search engines, so we map + scrape them directly.
+// They rotate across runs to stay inside the Firecrawl budget.
+const ADVISORY_DIRECT_SOURCES: Array<{ name: string; homepage: string; mapKeywords?: string[] }> = [
+  { name: "Maersk", homepage: "https://www.maersk.com", mapKeywords: ["advisory", "news"] },
+  { name: "MSC", homepage: "https://www.msc.com", mapKeywords: ["advisory", "news"] },
+  { name: "CMA CGM", homepage: "https://www.cma-cgm.com", mapKeywords: ["advisory", "news"] },
+  { name: "Hapag-Lloyd", homepage: "https://www.hapag-lloyd.com", mapKeywords: ["advisory", "news"] },
+  { name: "SEKO Logistics", homepage: "https://www.sekologistics.com", mapKeywords: ["port-update", "advisory", "news"] },
+  { name: "Kuehne+Nagel", homepage: "https://newsroom.kuehne-nagel.com", mapKeywords: ["advisory", "news"] },
+  { name: "Hillebrand Gori", homepage: "https://www.hillebrandgori.com", mapKeywords: ["port-update", "insights"] },
+  { name: "Everstream Analytics", homepage: "https://www.everstream.ai", mapKeywords: ["risk-center", "insights"] },
+  { name: "Resilinc", homepage: "https://www.resilinc.com", mapKeywords: ["blog", "eventwatch"] },
+  { name: "project44", homepage: "https://www.project44.com", mapKeywords: ["blog", "insights"] },
 ];
 
 // Fetch with timeout — prevents one hung source from blocking the whole run.
@@ -557,6 +595,7 @@ serve(async (req) => {
     // so they stay out of the per-run search budget.
     const CORE_SOURCES = new Set<string>([
       "The Loadstar", "JOC", "FreightWaves", "Lloyd's List", "Splash247",
+      "The Maritime Executive", "Maersk", "MSC", "CMA CGM", "Hapag-Lloyd",
     ]);
     const ROTATION_PER_RUN = 4;
     const dayIndex = Math.floor(Date.now() / 86_400_000);
@@ -706,6 +745,48 @@ serve(async (req) => {
       }
       for (const [name, s] of Object.entries(primaryStats)) {
         console.log(`[primary-direct] ${name}: mapped=${s.mapped}, scraped=${s.scraped}`);
+      }
+    }
+
+    // ===== Direct scraping for carrier advisories & risk platforms =====
+    // Advisory pages are poorly indexed by search engines, so we map their
+    // hubs directly. Rotated per run to stay inside the Firecrawl budget.
+    {
+      const ADVISORY_PER_RUN = 3;
+      const advisoryToday = Array.from(
+        { length: Math.min(ADVISORY_PER_RUN, ADVISORY_DIRECT_SOURCES.length) },
+        (_, i) => ADVISORY_DIRECT_SOURCES[(dayIndex * ADVISORY_PER_RUN + i) % ADVISORY_DIRECT_SOURCES.length],
+      ).filter((src) => !enabledSources || enabledSources.includes(src.name));
+      for (const src of advisoryToday) {
+        if (budgetLeftMs() < 25_000) {
+          console.log(`[budget] skipping remaining advisory scrapes (${Math.round(budgetLeftMs() / 1000)}s left)`);
+          break;
+        }
+        try {
+          const keywords = (src.mapKeywords && src.mapKeywords.length > 0 ? src.mapKeywords : [undefined as unknown as string]).slice(0, 2);
+          const mapResults = await Promise.all(
+            keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
+          );
+          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 20);
+          const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 4);
+          const scraped = await Promise.all(toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)));
+          let count = 0;
+          for (const art of scraped) {
+            if (!art) continue;
+            allArticles.push({
+              title: art.title,
+              url: art.url,
+              description: art.description,
+              source: src.name,
+              markdown: art.markdown,
+              publishedDate: (art as any).publishedDate ?? null,
+            });
+            count += 1;
+          }
+          console.log(`[advisory-direct] ${src.name}: mapped=${candidateUrls.length}, scraped=${count}`);
+        } catch (e) {
+          console.error(`Advisory direct scrape failed for ${src.name}:`, e);
+        }
       }
     }
 
@@ -1391,6 +1472,23 @@ function extractSourceName(url: string): string {
       "technews.acm.org": "ACM TechNews",
       "cacm.acm.org": "ACM TechNews",
       "voiceoftheindependent.com": "Voice of the Independent",
+      "sekologistics.com": "SEKO Logistics",
+      "kuehne-nagel.com": "Kuehne+Nagel",
+      "newsroom.kuehne-nagel.com": "Kuehne+Nagel",
+      "hillebrandgori.com": "Hillebrand Gori",
+      "maersk.com": "Maersk",
+      "msc.com": "MSC",
+      "cma-cgm.com": "CMA CGM",
+      "hapag-lloyd.com": "Hapag-Lloyd",
+      "maritime-executive.com": "The Maritime Executive",
+      "icis.com": "ICIS",
+      "supplychainbrain.com": "Supply Chain Brain",
+      "logisticsmgmt.com": "Logistics Management",
+      "bairdmaritime.com": "Baird Maritime",
+      "marinelink.com": "MarineLink",
+      "project44.com": "project44",
+      "everstream.ai": "Everstream Analytics",
+      "resilinc.com": "Resilinc",
     };
     return sourceMap[hostname] || hostname;
   } catch {
