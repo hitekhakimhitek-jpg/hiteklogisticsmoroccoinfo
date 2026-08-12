@@ -213,20 +213,66 @@ serve(async (req) => {
   const infra: Infra[] = await loadInfrastructure(db);
   const cutoff = new Date(Date.now() - sinceHours * 3600_000).toISOString();
 
-  const { data: pending, error } = await db
+  // Pull a wider candidate pool than we can afford to send to the model, then
+  // rank deterministically so the most logistics-exposed items go first.
+  const { data: pool, error } = await db
     .from("raw_items")
     .select("*")
     .eq("analysis_status", "pending")
     .gte("collected_at", cutoff)
     .order("collected_at", { ascending: false })
-    .limit(limit);
+    .limit(Math.min(600, limit * 10));
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  const stats = { processed: 0, relevant: 0, rejected: 0, events_created: 0, events_updated: 0, items_written: 0, failed: 0 };
+
+  // ---------- deterministic pre-screen (keeps LLM spend sane) ----------
+  // Local weather warnings for places with no logistics infrastructure nearby
+  // and no strategic vocabulary can never clear the display threshold.
+  const STRATEGIC = /(port|terminal|harbou?r|airport|canal|strait|shipping|vessel|container|freight|cargo|rail|highway|customs|border|strike|typhoon|hurricane|cyclone|tsunami|earthquake|blockade|sanction|tariff|closure|closed|suspend|evacuat|red alert|orange alert|severe|extreme)/i;
+
+  type Ranked = { row: Record<string, unknown>; score: number; exp: ReturnType<typeof exposureFromText>; geo: Record<string, unknown> };
+  const ranked: Ranked[] = [];
+  const prescreened: string[] = [];
+
+  for (const row of pool ?? []) {
+    const payload = (row.payload ?? {}) as Record<string, unknown>;
+    const geoExposure = (payload.exposure ?? {}) as Record<string, unknown>;
+    const text = `${row.original_title} ${row.original_summary ?? ""}`;
+    const exp = exposureFromText(infra, text);
+    const importance = Math.max(Number(geoExposure.max_importance ?? 0), exp.maxImportance);
+    const hasExposure = importance > 0 ||
+      (geoExposure.ports as string[] ?? []).length > 0 ||
+      (geoExposure.airports as string[] ?? []).length > 0 ||
+      (geoExposure.lanes as string[] ?? []).length > 0;
+    if (!hasExposure && !STRATEGIC.test(text)) {
+      prescreened.push(row.id as string);
+      continue;
+    }
+    const tier = Number(payload.tier ?? 3);
+    ranked.push({
+      row,
+      exp,
+      geo: geoExposure,
+      score: importance * 2 + (STRATEGIC.test(text) ? 20 : 0) + (tier === 1 ? 15 : 0),
+    });
+  }
+
+  if (prescreened.length) {
+    for (let i = 0; i < prescreened.length; i += 200) {
+      await db.from("raw_items")
+        .update({ analysis_status: "rejected", rejection_reason: "no logistics infrastructure exposure (pre-screen)", impact_score: 0 })
+        .in("id", prescreened.slice(i, i + 200));
+    }
+  }
+
+  ranked.sort((a, b) => b.score - a.score);
+  const pending = ranked.slice(0, limit).map((r) => r.row);
+
+  const stats = { processed: 0, pre_screened: prescreened.length, relevant: 0, rejected: 0, events_created: 0, events_updated: 0, items_written: 0, failed: 0 };
   const examples: Array<Record<string, unknown>> = [];
   const deadline = Date.now() + 130_000;
 
