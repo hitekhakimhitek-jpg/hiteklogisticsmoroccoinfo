@@ -600,8 +600,11 @@ serve(async (req) => {
         status: "new",
         is_ai_draft: false,
         language: row.source_language ?? "en",
-        publication_date: row.published_at ? row.published_at.slice(0, 10) : null,
-        event_date: row.published_at ? row.published_at.slice(0, 10) : null,
+        // Live advisories (PAGASA, JTWC…) often carry no explicit timestamp.
+        // Falling back to the collection date keeps them inside the 14-day
+        // feed window instead of being dropped for a missing date.
+        publication_date: (row.published_at ?? row.collected_at ?? new Date().toISOString()).slice(0, 10),
+        event_date: (row.published_at ?? row.collected_at ?? new Date().toISOString()).slice(0, 10),
         verification_status: (payload.tier === 1 || row.source_type === "weather" || row.source_type === "hazard") ? "verified" : "partially_verified",
         category: a.event_type,
         country: a.countries[0] ?? null,

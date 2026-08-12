@@ -105,10 +105,17 @@ const BAD_URL_PATTERNS = [
   /\/categorie\//i, /\/topic\//i, /\/topics\//i, /\/author\//i, /\/authors\//i,
   /\/auteur\//i, /\/section\//i, /\/search\//i, /\/recherche\//i, /\/page\//i,
 ];
+// Official hazard / advisory publishers serve their live bulletins from a
+// landing page (or a very short path). Those are legitimate destinations, so
+// the "too shallow to be an article" heuristic must not drop them — that rule
+// was silently hiding every typhoon and heatwave alert from the feed.
+const OFFICIAL_LANDING_HOSTS =
+  /(^|\.)(wmo\.int|gdacs\.org|pagasa\.dost\.gov\.ph|metoc\.navy\.mil|jma\.go\.jp|noaa\.gov|usgs\.gov|copernicus\.eu|reliefweb\.int|who\.int|imo\.org|iata\.org|europa\.eu|douane\.gov\.ma|tangermed\.ma|portnet\.ma)$/i;
 export function isBadArticleUrl(u: string | null | undefined): boolean {
   if (!u) return false;
   try {
     const url = new URL(u);
+    if (OFFICIAL_LANDING_HOSTS.test(url.hostname)) return false;
     if (url.pathname.replace(/\/+$/, "").split("/").filter(Boolean).length <= 1) return true;
   } catch {
     return false;

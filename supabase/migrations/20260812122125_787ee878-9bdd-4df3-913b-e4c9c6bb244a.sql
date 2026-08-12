@@ -1,0 +1,1 @@
+update intelligence_items set publication_date = created_at::date, event_date = coalesce(event_date, created_at::date) where publication_date is null and status <> 'archived';
