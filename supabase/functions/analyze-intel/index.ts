@@ -148,7 +148,7 @@ function bandToSeverity(score: number): Severity {
   return "awareness";
 }
 
-function applyOverrides(a: Analysis, text: string, exposure: { maxImportance: number; ports: string[] }): OverrideResult {
+function applyOverrides(a: Analysis, text: string, exposure: { maxImportance: number; ports: string[]; airports: string[] }): OverrideResult {
   let score = a.global_logistics_impact_score;
   let reason: string | null = null;
   const t = text.toLowerCase();
@@ -160,6 +160,20 @@ function applyOverrides(a: Analysis, text: string, exposure: { maxImportance: nu
     [/(customs|border|clearance)/.test(t) && /(outage|down|failure|offline|suspend)/.test(t), "customs / border system failure"],
     [/(cyberattack|ransomware|hacked|cyber incident)/.test(t) && /(port|terminal|carrier|customs|airport|logistics)/.test(t), "cyberattack on logistics infrastructure"],
     [/(earthquake|tsunami)/.test(t) && exposure.maxImportance >= 80, "major earthquake near strategic infrastructure"],
+    // Anything that measurably degrades a real port / airport / terminal is
+    // actionable for a freight forwarder, not just "important".
+    [/(port|terminal|airport|berth|quay|container yard)/.test(t) &&
+      /(clos|suspend|halt|disrupt|delay|congest|backlog|divert|blocked|blockade|stoppage|shut)/.test(t) &&
+      (exposure.ports.length > 0 || exposure.airports.length > 0 || exposure.maxImportance >= 55),
+      "port / airport operations disrupted"],
+    // Protests, demonstrations and blockades stop trucks and gates.
+    [/(protest|demonstration|manifestation|blockade|roadblock|riot|civil unrest|general strike|strike)/.test(t) &&
+      /(port|terminal|airport|highway|motorway|road|border|rail|customs|truck|freight|logistic|nationwide|general)/.test(t),
+      "civil unrest / strike affecting freight movement"],
+    // Direct import/export impact: duties, embargoes, closures of trade routes.
+    [/(import|export|shipment|cargo|freight)/.test(t) &&
+      /(suspend|ban|halt|block|seiz|embargo|prohibit|stopped)/.test(t),
+      "direct import / export interruption"],
     [/(ban|prohibition|embargo|sanction)/.test(t) && /(immediate|with immediate effect|effective immediately)/.test(t), "immediate-effect regulatory prohibition"],
   ];
   for (const [hit, why] of hard) {
@@ -177,6 +191,17 @@ function applyOverrides(a: Analysis, text: string, exposure: { maxImportance: nu
   ) {
     score = Math.max(score, 80);
     reason = "early-warning override: high-confidence forecast against major infrastructure";
+  }
+  // An event already happening on top of real Hitek-relevant infrastructure
+  // requires an action today.
+  if (
+    !reason &&
+    a.event_status === "actual_disruption" &&
+    (exposure.ports.length > 0 || exposure.airports.length > 0) &&
+    a.global_logistics_impact_score >= 55
+  ) {
+    score = Math.max(score, 80);
+    reason = "active disruption on exposed logistics infrastructure";
   }
   return { score, severity: bandToSeverity(score), reason };
 }
@@ -205,6 +230,33 @@ function routineClusterKey(a: Analysis): string {
     ? "wind"
     : "rain";
   return `routine-weather:${country}:${family}`;
+}
+
+// ---------- deterministic clustering ----------
+// The model phrases the same event differently every time it sees a new
+// bulletin ("Very Hot Weather Warning - Hong Kong" vs "Hong Kong Extreme Heat
+// Warning"), so its own event_key cannot be trusted as an identity. We derive
+// a canonical key from hazard family + named storm + country + primary node.
+const STORM_NAME = /\b(typhoon|hurricane|tropical storm|tropical cyclone|cyclone|storm)\s+([a-z][a-z'\-]{2,})/i;
+
+function slug(v: string | null | undefined): string {
+  return (v ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function canonicalClusterKey(
+  a: Analysis,
+  routine: boolean,
+  text: string,
+  nodes: { ports: string[]; airports: string[] },
+): string {
+  if (routine) return routineClusterKey(a);
+  // Named storms are the same event everywhere they are reported.
+  const named = STORM_NAME.exec(`${a.event_name ?? ""} ${text.slice(0, 400)}`);
+  if (named) return `storm:${slug(named[2])}`;
+  const country = slug(a.countries?.[0]) || "global";
+  const node = slug(nodes.ports[0] ?? nodes.airports[0] ?? "");
+  const type = slug(a.event_type) || "other";
+  return node ? `${type}:${country}:${node}` : `${type}:${country}`;
 }
 
 function horizon(status: Analysis["event_status"]): string {
@@ -346,7 +398,7 @@ serve(async (req) => {
       continue;
     }
 
-    const ov = applyOverrides(a, text, { maxImportance, ports });
+    const ov = applyOverrides(a, text, { maxImportance, ports, airports });
     const routine = isRoutineWeather(a, text);
     // Routine advisories are capped below the display threshold unless they sit
     // on a top-tier node AND the override flagged a genuine disruption.
@@ -366,7 +418,7 @@ serve(async (req) => {
     stats.relevant++;
 
     // ---------- event clustering ----------
-    const clusterKey = routine ? routineClusterKey(a) : a.event_key;
+    const clusterKey = canonicalClusterKey(a, routine, text, { ports, airports });
     const { data: existing } = await db
       .from("supply_chain_events")
       .select("*")
