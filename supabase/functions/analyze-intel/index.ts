@@ -447,7 +447,9 @@ serve(async (req) => {
         logistics_impact: a.logistics_impact || existing.logistics_impact,
         next_watchpoint: a.next_watchpoint || existing.next_watchpoint,
         event_status: a.event_status,
-        severity: escalated ? severity : existing.severity,
+        severity: (({ awareness: 0, this_week: 1, act_now: 2 } as Record<string, number>)[severity] >=
+          ({ awareness: 0, this_week: 1, act_now: 2 } as Record<string, number>)[existing.severity ?? "awareness"]
+          ? severity : existing.severity),
         global_logistics_impact_score: Math.max(finalScore, existing.global_logistics_impact_score ?? 0),
         hitek_relevance_score: Math.max(hitekScore, existing.hitek_relevance_score ?? 0),
         departments: [...new Set([...(existing.departments ?? []), ...a.departments])],
