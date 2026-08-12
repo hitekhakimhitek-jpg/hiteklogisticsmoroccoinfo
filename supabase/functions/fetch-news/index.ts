@@ -749,6 +749,47 @@ serve(async (req) => {
     }
 
     // ===== Direct scraping for carrier advisories & risk platforms =====
+    // ===== Direct scraping for user-added custom sources =====
+    // Sources added by an admin in Settings are stored in `sources` with
+    // source_type = 'custom'. They are treated exactly like the built-in
+    // direct sources: map the homepage, then scrape the unseen articles.
+    {
+      const { data: customSources } = await supabase
+        .from("sources")
+        .select("name, homepage")
+        .eq("source_type", "custom")
+        .eq("enabled", true);
+      for (const src of (customSources ?? [])) {
+        if (!src.homepage) continue;
+        if (budgetLeftMs() < 25_000) {
+          console.log(`[budget] skipping remaining custom source scrapes (${Math.round(budgetLeftMs() / 1000)}s left)`);
+          break;
+        }
+        try {
+          const mapped = await firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage);
+          const candidateUrls = Array.from(new Set(mapped)).slice(0, 25);
+          const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 4);
+          const scraped = await Promise.all(toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)));
+          let count = 0;
+          for (const art of scraped) {
+            if (!art) continue;
+            allArticles.push({
+              title: art.title,
+              url: art.url,
+              description: art.description,
+              source: src.name,
+              markdown: art.markdown,
+              publishedDate: (art as any).publishedDate ?? null,
+            });
+            count += 1;
+          }
+          console.log(`[custom-direct] ${src.name}: mapped=${candidateUrls.length}, scraped=${count}`);
+        } catch (e) {
+          console.error(`Custom source scrape failed for ${src.name}:`, e);
+        }
+      }
+    }
+
     // Advisory pages are poorly indexed by search engines, so we map their
     // hubs directly. Rotated per run to stay inside the Firecrawl budget.
     {
