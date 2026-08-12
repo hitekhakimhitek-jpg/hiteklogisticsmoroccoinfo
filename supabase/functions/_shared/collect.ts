@@ -190,10 +190,41 @@ export function parseJsonFeed(json: unknown, baseUrl: string): CollectedItem[] {
       });
     }
   };
-  if (Array.isArray(json)) walk(json);
+  const normalize = (v: unknown[]) =>
+    v.map((f) => {
+      const fo = f as Record<string, unknown>;
+      return fo && typeof fo === "object" && fo.properties
+        ? { ...(fo.properties as Record<string, unknown>), geometry: fo.geometry }
+        : fo;
+    });
+
+  // Find the first array of objects anywhere in the document (handles
+  // wrappers such as {data:{page:{list:[...]}}} used by some agencies).
+  const findArray = (node: unknown, depth = 0): unknown[] | null => {
+    if (depth > 5 || !node || typeof node !== "object") return null;
+    if (Array.isArray(node)) {
+      return node.some((x) => x && typeof x === "object") ? node : null;
+    }
+    for (const key of ["items", "results", "data", "articles", "features", "alerts", "records", "entries", "list", "page"]) {
+      const v = (node as Record<string, unknown>)[key];
+      const found = findArray(v, depth + 1);
+      if (found) return found;
+    }
+    for (const v of Object.values(node as Record<string, unknown>)) {
+      const found = findArray(v, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  if (Array.isArray(json)) walk(normalize(json));
   else if (json && typeof json === "object") {
+    const found = findArray(json);
+    if (found) walk(normalize(found));
+  }
+  if (false) {
     const o = json as Record<string, unknown>;
-    for (const key of ["items", "results", "data", "articles", "features", "alerts", "records", "entries"]) {
+    for (const key of ["items"]) {
       const v = o[key];
       if (Array.isArray(v)) {
         // GeoJSON features carry the payload under .properties
