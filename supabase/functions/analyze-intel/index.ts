@@ -252,7 +252,8 @@ function canonicalClusterKey(
   if (routine) return routineClusterKey(a);
   // Named storms are the same event everywhere they are reported.
   const named = STORM_NAME.exec(`${a.event_name ?? ""} ${text.slice(0, 400)}`);
-  if (named) return `storm:${slug(named[2])}`;
+  const STOP = /^(warning|watch|advisory|alert|forecast|update|season|system|track|bulletin|signal|information|risk|threat|approach|hits?|nears?)$/i;
+  if (named && !STOP.test(named[2])) return `storm:${slug(named[2])}`;
   const country = slug(a.countries?.[0]) || "global";
   const node = slug(nodes.ports[0] ?? nodes.airports[0] ?? "");
   const type = slug(a.event_type) || "other";
