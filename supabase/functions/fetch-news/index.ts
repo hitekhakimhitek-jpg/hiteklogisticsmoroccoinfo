@@ -1508,7 +1508,11 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
 
 function extractSourceName(url: string): string {
   try {
-    const hostname = new URL(url).hostname.replace("www.", "");
+    // JOC serves some articles from a staging mirror (prod.int.joc.com);
+    // normalise it so those items are attributed to JOC.
+    const hostname = new URL(url).hostname
+      .replace(/^www\./, "")
+      .replace(/^prod\.int\.joc\.com$/, "joc.com");
     const sourceMap: Record<string, string> = {
       "freightwaves.com": "FreightWaves",
       "theloadstar.com": "The Loadstar",
