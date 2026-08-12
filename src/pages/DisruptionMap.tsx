@@ -184,7 +184,14 @@ export default function DisruptionMap() {
           body: { countryCode: country.a2 },
         });
         if (error) throw error;
-        if (!cancelled) setHolidays(((data as any)?.holidays ?? []) as Holiday[]);
+        let list = ((data as any)?.holidays ?? []) as Holiday[];
+        if (lang === "fr" && list.length > 0) {
+          // Holiday names come back in English / the local language — translate
+          // the English label so the panel reads fully in French.
+          const names = await translateDeep(list.map((h) => h.name_en), "fr");
+          list = list.map((h, i) => ({ ...h, name_en: names[i] ?? h.name_en }));
+        }
+        if (!cancelled) setHolidays(list);
       } catch (e) {
         console.error("holiday fetch failed", e);
         if (!cancelled) setHolidays([]);
@@ -193,7 +200,7 @@ export default function DisruptionMap() {
       }
     })();
     return () => { cancelled = true; };
-  }, [country]);
+  }, [country, lang]);
 
   // Sync markers with items.
   useEffect(() => {
