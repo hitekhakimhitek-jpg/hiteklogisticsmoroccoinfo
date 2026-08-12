@@ -28,128 +28,117 @@ interface HazardSource {
   homepage?: string;
   language?: string;
   hazard?: string;
+  /** Official warning-only feeds: every record is by definition a warning. */
+  alwaysHazard?: boolean;
 }
+
+/**
+ * WMO Alert Hub republishes national meteorological authorities' CAP warnings
+ * in a single normalized format. It is used for agencies that block direct
+ * scraping (Australian BoM) or publish only in a local format, which keeps us
+ * on an authorized feed instead of working around access restrictions.
+ */
+const WMO_HUB: Array<[string, string]> = [
+  ["China Meteorological Administration", "cn-cma-xx"],
+  ["Hong Kong Observatory (CAP)", "hk-hko-xx"],
+  ["PAGASA (CAP)", "ph-pagasa-en"],
+  ["India Meteorological Department", "in-imd-en"],
+  ["India NDMA", "in-ndma-xx"],
+  ["Australian Bureau of Meteorology", "au-bom-en"],
+  ["Korea Meteorological Administration", "kr-kma-weather-en"],
+  ["Thai Meteorological Department", "th-tmd-en"],
+  ["Singapore Meteorological Service", "sg-mss-en"],
+  ["NOAA NWS Marine", "us-noaa-nws-en-marine"],
+  ["Deutscher Wetterdienst", "de-dwd-en"],
+  ["AEMET Spain", "es-aemet-es"],
+  ["Meteo-France", "fr-meteofrance-xx"],
+  ["KNMI Netherlands", "nl-rnmi-xx"],
+  ["Meteo AM Italy", "it-meteoam-it"],
+  ["South African Weather Service", "za-saws-en"],
+  ["INMET Brazil", "br-inmet-pt"],
+  ["Egyptian Meteorological Authority", "eg-ema-ar"],
+  ["IMHPA Panama", "pa-imhpa-es"],
+  ["UK Met Office", "uk-metoffice-en"],
+  ["IPMA Portugal", "pt-ipma-pt"],
+];
+
+export const WMO_HUB_SOURCES: HazardSource[] = WMO_HUB.map(([label, id]) => ({
+  name: `WMO Alert Hub — ${label}`,
+  type: "weather" as const,
+  tier: 1 as const,
+  alwaysHazard: true,
+  urls: [`https://severeweather.wmo.int/v2/cap-alerts/${id}/rss.xml`],
+  homepage: "https://severeweather.wmo.int/",
+}));
 
 // Official RSMCs / TCWCs / national authorities and global hazard platforms.
 const HAZARD_SOURCES: HazardSource[] = [
   {
     name: "JTWC",
-    type: "weather", tier: 1, hazard: "tropical_cyclone",
+    type: "weather", tier: 1, hazard: "tropical_cyclone", alwaysHazard: true,
     urls: ["https://www.metoc.navy.mil/jtwc/rss/jtwc.rss?tropical"],
     homepage: "https://www.metoc.navy.mil/jtwc/jtwc.html",
   },
   {
     name: "NOAA National Hurricane Center",
-    type: "weather", tier: 1, hazard: "tropical_cyclone",
-    urls: [
-      "https://www.nhc.noaa.gov/index-at.xml",
-      "https://www.nhc.noaa.gov/index-ep.xml",
-    ],
+    type: "weather", tier: 1, hazard: "tropical_cyclone", alwaysHazard: true,
+    urls: ["https://www.nhc.noaa.gov/index-at.xml", "https://www.nhc.noaa.gov/index-ep.xml"],
     homepage: "https://www.nhc.noaa.gov/",
   },
   {
     name: "NOAA NWS Alerts",
-    type: "weather", tier: 1,
-    urls: ["https://api.weather.gov/alerts/active?severity=Extreme,Severe&limit=60"],
+    type: "weather", tier: 1, alwaysHazard: true,
+    urls: ["https://api.weather.gov/alerts/active?status=actual&message_type=alert&severity=Extreme,Severe"],
     homepage: "https://alerts.weather.gov/",
-  },
-  {
-    name: "WMO Severe Weather Information Centre",
-    type: "weather", tier: 1,
-    urls: [
-      "https://severeweather.wmo.int/feed/rss_en.xml",
-      "https://severeweather.wmo.int/rss.xml",
-    ],
-    homepage: "https://severeweather.wmo.int/",
   },
   {
     name: "JMA / RSMC Tokyo",
     type: "weather", tier: 1, hazard: "tropical_cyclone", language: "ja",
     urls: [
-      "https://www.data.jma.go.jp/developer/xml/feed/extra.xml",
       "https://www.jma.go.jp/bosai/typhoon/data/targetTc.json",
+      "https://www.data.jma.go.jp/developer/xml/feed/extra.xml",
     ],
     homepage: "https://www.jma.go.jp/bosai/map.html",
   },
   {
     name: "China NMC",
-    type: "weather", tier: 1, language: "zh",
-    urls: [
-      "https://www.nmc.cn/rest/findAlarm?pageNo=1&pageSize=40",
-      "https://www.nmc.cn/publish/alarm.html",
-    ],
+    type: "weather", tier: 1, language: "zh", alwaysHazard: true,
+    urls: ["https://www.nmc.cn/rest/findAlarm?pageNo=1&pageSize=40"],
     homepage: "https://www.nmc.cn/",
   },
   {
     name: "PAGASA",
     type: "weather", tier: 1, hazard: "tropical_cyclone",
-    urls: [
-      "https://www.pagasa.dost.gov.ph/tropical-cyclone/severe-weather-bulletin",
-      "https://www.pagasa.dost.gov.ph/regional-forecast/ncrprsd",
-    ],
+    urls: ["https://www.pagasa.dost.gov.ph/tropical-cyclone/severe-weather-bulletin"],
     homepage: "https://www.pagasa.dost.gov.ph/",
   },
   {
     name: "Hong Kong Observatory",
-    type: "weather", tier: 1,
+    type: "weather", tier: 1, alwaysHazard: true,
     urls: ["https://rss.weather.gov.hk/rss/WeatherWarningSummaryv2.xml"],
     homepage: "https://www.hko.gov.hk/",
   },
   {
     name: "Taiwan CWA",
-    type: "weather", tier: 1, language: "zh",
-    urls: [
-      "https://www.cwa.gov.tw/rss/Data/cwa_warning.xml",
-      "https://www.cwa.gov.tw/V8/E/index.html",
-    ],
+    type: "weather", tier: 1, language: "zh", alwaysHazard: true,
+    urls: ["https://www.cwa.gov.tw/rss/Data/cwa_warning.xml"],
     homepage: "https://www.cwa.gov.tw/",
   },
   {
-    name: "India Meteorological Department",
-    type: "weather", tier: 1,
-    urls: [
-      "https://mausam.imd.gov.in/responsive/rss/allIndiaWeatherWarning.xml",
-      "https://mausam.imd.gov.in/",
-    ],
-    homepage: "https://mausam.imd.gov.in/",
-  },
-  {
-    name: "Australian Bureau of Meteorology",
-    type: "weather", tier: 1,
-    urls: [
-      "http://www.bom.gov.au/fwo/IDZ00056.warnings_land_sea.xml",
-      "https://www.bom.gov.au/australia/warnings/",
-    ],
-    homepage: "https://www.bom.gov.au/",
-  },
-  {
-    name: "Meteo-France Vigilance",
-    type: "weather", tier: 1, language: "fr",
-    urls: [
-      "https://vigilance.meteofrance.fr/fr",
-      "https://meteofrance.com/avertissements",
-    ],
-    homepage: "https://vigilance.meteofrance.fr/",
-  },
-  {
     name: "GDACS",
-    type: "hazard", tier: 1,
+    type: "hazard", tier: 1, alwaysHazard: true,
     urls: ["https://www.gdacs.org/xml/rss.xml"],
     homepage: "https://www.gdacs.org/",
   },
   {
     name: "USGS Earthquakes",
-    type: "hazard", tier: 1, hazard: "earthquake",
+    type: "hazard", tier: 1, hazard: "earthquake", alwaysHazard: true,
     urls: ["https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson"],
     homepage: "https://earthquake.usgs.gov/",
   },
-  {
-    name: "Copernicus EMS Rapid Mapping",
-    type: "hazard", tier: 1,
-    urls: ["https://rapidmapping.emergency.copernicus.eu/backend/api/activations/?format=json"],
-    homepage: "https://emergency.copernicus.eu/",
-  },
+  ...WMO_HUB_SOURCES,
 ];
+
 
 const HAZARD_KEYWORDS =
   /(typhoon|hurricane|cyclone|tropical storm|tropical depression|storm surge|gale|flood|inundation|landslide|earthquake|tsunami|volcan|wildfire|blizzard|snowstorm|heavy rain|torrential|severe wind|drought|heat ?wave|marine warning|warning|advisory|alert|bulletin|台风|台風|颱風|暴雨|洪水|地震|警报|警報)/i;
@@ -221,7 +210,10 @@ serve(async (req) => {
     : HAZARD_SOURCES
   ).filter((s) => force || onlySource || isDue(lastAttempt.get(s.name), intervals.get(s.name) ?? 30));
 
+  const deadline = Date.now() + 220_000;
+
   for (const src of sources) {
+    if (Date.now() > deadline) break;
     const startedAt = Date.now();
     let outcome;
     try {
@@ -232,14 +224,14 @@ serve(async (req) => {
 
     // Keep only genuinely hazard-shaped records, but never on "supply chain"
     // wording — exposure is decided later by the risk engine.
-    const items = outcome.items.filter((i) =>
-      HAZARD_KEYWORDS.test(`${i.title} ${i.summary ?? ""}`)
-    );
+    const items = src.alwaysHazard
+      ? outcome.items
+      : outcome.items.filter((i) => HAZARD_KEYWORDS.test(`${i.title} ${i.summary ?? ""}`));
 
     let newCount = 0, dupes = 0;
     let latestPub: string | null = null;
 
-    for (const item of items.slice(0, 40)) {
+    for (const item of items.slice(0, 25)) {
       if (item.publishedAt && (!latestPub || item.publishedAt > latestPub)) latestPub = item.publishedAt;
       const blob = `${item.title} ${item.summary ?? ""} ${item.body ?? ""}`;
       const { lat, lon, track } = geoOf(item);
