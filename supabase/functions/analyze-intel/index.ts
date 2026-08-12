@@ -275,6 +275,27 @@ function confidenceScore(sourceCount: number, base: Analysis["confidence"]): num
   return Math.min(100, b + Math.max(0, sourceCount - 1) * 8);
 }
 
+// Hazard feeds (WMO CAP, GDACS, USGS…) expose raw XML/JSON documents. Those
+// are useless to a human clicking "View source", so we map them to the
+// publisher's readable landing page instead.
+const READABLE_LANDING: Array<[RegExp, string]> = [
+  [/severeweather\.wmo\.int/i, "https://severeweather.wmo.int/"],
+  [/gdacs\.org/i, "https://www.gdacs.org/"],
+  [/earthquake\.usgs\.gov/i, "https://earthquake.usgs.gov/earthquakes/map/"],
+  [/nhc\.noaa\.gov/i, "https://www.nhc.noaa.gov/"],
+  [/alerts\.weather\.gov|api\.weather\.gov/i, "https://alerts.weather.gov/"],
+  [/metoc\.navy\.mil/i, "https://www.metoc.navy.mil/jtwc/jtwc.html"],
+  [/jma\.go\.jp/i, "https://www.jma.go.jp/bosai/en/"],
+];
+
+function readableSourceUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const isRawFeed = /\.(xml|json|cap)(\?.*)?$/i.test(url) || /cap-alerts/i.test(url);
+  if (!isRawFeed) return url;
+  for (const [re, landing] of READABLE_LANDING) if (re.test(url)) return landing;
+  try { return new URL(url).origin + "/"; } catch { return url; }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const denied = await requireHitekAdmin(req);
