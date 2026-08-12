@@ -112,6 +112,45 @@ export type Database = {
           },
         ]
       }
+      country_holidays: {
+        Row: {
+          affects_operations: boolean
+          country_code: string
+          country_name: string | null
+          created_at: string
+          global: boolean
+          holiday_date: string
+          id: string
+          local_name: string
+          name_en: string
+          updated_at: string
+        }
+        Insert: {
+          affects_operations?: boolean
+          country_code: string
+          country_name?: string | null
+          created_at?: string
+          global?: boolean
+          holiday_date: string
+          id?: string
+          local_name: string
+          name_en: string
+          updated_at?: string
+        }
+        Update: {
+          affects_operations?: boolean
+          country_code?: string
+          country_name?: string | null
+          created_at?: string
+          global?: boolean
+          holiday_date?: string
+          id?: string
+          local_name?: string
+          name_en?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       disruption_events: {
         Row: {
           country_code: string | null

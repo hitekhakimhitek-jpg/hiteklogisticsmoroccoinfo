@@ -6,6 +6,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { translateDeep } from "@/lib/translateEntries";
 import { SEO } from "@/components/SEO";
 import { passesFeedFilter } from "@/hooks/useIntelligenceItems";
+import { ISO3 } from "@/data/iso3to2";
+import { CalendarDays, X, Loader2 } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -44,13 +46,24 @@ const SEV_LABEL: Record<Severity, string> = {
 };
 const SEV_SCALE: Record<Severity, number> = { act_now: 11, this_week: 9, awareness: 7 };
 
+type Holiday = {
+  holiday_date: string;
+  local_name: string;
+  name_en: string;
+  affects_operations: boolean;
+};
+
 export default function DisruptionMap() {
   const { lang } = useLanguage();
   const [items, setItems] = useState<MapItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [country, setCountry] = useState<{ a3: string; a2: string; name: string } | null>(null);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [holidaysLoading, setHolidaysLoading] = useState(false);
   const mapDivRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
+  const countryLayerRef = useRef<L.GeoJSON | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -116,6 +129,71 @@ export default function DisruptionMap() {
       mapRef.current = null;
     };
   }, []);
+
+  // Country boundary layer: clicking a country opens its holiday calendar.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || countryLayerRef.current) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/countries.geo.json");
+        const geo = await res.json();
+        if (cancelled || !mapRef.current) return;
+        const layer = L.geoJSON(geo, {
+          style: {
+            color: "#94a3b8",
+            weight: 0.5,
+            fillColor: "#0ea5e9",
+            fillOpacity: 0,
+          },
+          onEachFeature: (feature, lyr) => {
+            lyr.on("mouseover", () => (lyr as L.Path).setStyle({ fillOpacity: 0.12 }));
+            lyr.on("mouseout", () => (lyr as L.Path).setStyle({ fillOpacity: 0 }));
+            lyr.on("click", () => {
+              const a3 = String((feature as any).id || "");
+              const meta = ISO3[a3];
+              if (!meta) return;
+              setCountry({
+                a3,
+                a2: meta.a2,
+                name: lang === "fr" ? meta.fr : meta.name,
+              });
+            });
+          },
+        }).addTo(mapRef.current);
+        // Markers must stay clickable above the boundary layer.
+        layer.bringToBack();
+        countryLayerRef.current = layer;
+      } catch (e) {
+        console.error("country layer failed", e);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  // Load holidays for the selected country.
+  useEffect(() => {
+    if (!country) { setHolidays([]); return; }
+    let cancelled = false;
+    setHolidaysLoading(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("sync-holidays", {
+          body: { countryCode: country.a2 },
+        });
+        if (error) throw error;
+        if (!cancelled) setHolidays(((data as any)?.holidays ?? []) as Holiday[]);
+      } catch (e) {
+        console.error("holiday fetch failed", e);
+        if (!cancelled) setHolidays([]);
+      } finally {
+        if (!cancelled) setHolidaysLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [country]);
 
   // Sync markers with items.
   useEffect(() => {
@@ -240,8 +318,8 @@ export default function DisruptionMap() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {lang === "fr"
-              ? `Perturbations affectant les chaînes globales — synchronisé avec le tableau de bord (${items.length} éléments).`
-              : `Disruptions affecting global trade — synced with the dashboard feed (${items.length} items).`}
+              ? `Perturbations affectant les chaînes globales — synchronisé avec le tableau de bord (${items.length} éléments). Cliquez sur un pays pour voir ses jours fériés.`
+              : `Disruptions affecting global trade — synced with the dashboard feed (${items.length} items). Click a country to see its upcoming public holidays.`}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
@@ -256,6 +334,52 @@ export default function DisruptionMap() {
       <div className="rounded-xl border border-border overflow-hidden bg-card">
         <div ref={mapDivRef} className="h-[560px] w-full" />
       </div>
+
+      {country && (
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="font-semibold flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-primary" />
+              {lang === "fr" ? `Jours fériés — ${country.name}` : `Public holidays — ${country.name}`}
+            </h2>
+            <button
+              onClick={() => setCountry(null)}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label={lang === "fr" ? "Fermer" : "Close"}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {holidaysLoading ? (
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              {lang === "fr" ? "Chargement des jours fériés…" : "Loading holidays…"}
+            </p>
+          ) : holidays.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {lang === "fr"
+                ? "Aucun jour férié disponible pour les 120 prochains jours."
+                : "No holidays available for the next 120 days."}
+            </p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {holidays.map((h) => (
+                <li key={`${h.holiday_date}-${h.name_en}`} className="py-2 flex items-center gap-3 text-sm">
+                  <span className="w-28 shrink-0 text-muted-foreground">
+                    {format(new Date(h.holiday_date), "EEE, MMM d")}
+                  </span>
+                  <span className="font-medium">{lang === "fr" ? h.local_name : h.name_en}</span>
+                  {h.affects_operations && (
+                    <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-warning/15 text-warning border border-warning/30">
+                      {lang === "fr" ? "Ports / douane fermés" : "Ports / customs likely closed"}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {loading && (
         <p className="text-xs text-muted-foreground">{lang === "fr" ? "Chargement…" : "Loading…"}</p>
       )}
