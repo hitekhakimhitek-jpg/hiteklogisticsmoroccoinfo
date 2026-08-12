@@ -7,6 +7,8 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus, X } from "lucide-react";
+import { useCustomSources } from "@/hooks/useCustomSources";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ALL_PRIORITIES = ["critical", "important", "informational"] as const;
 const ALL_SOURCES = [
@@ -31,6 +33,8 @@ const ALL_SOURCES = [
 
 const SettingsPage = () => {
   const { pending, updatePending, applySettings, resetSettings, isUpdating, isDirty } = useSettings();
+  const { isAdmin } = useAuth();
+  const { sources: customSources, add: addSource, remove: removeSource } = useCustomSources(isAdmin);
 
   const togglePriority = (p: string) => {
     const current = pending.priorityFilter;
@@ -47,26 +51,28 @@ const SettingsPage = () => {
   };
 
   const [newSource, setNewSource] = useState("");
-  const addCustomSource = () => {
+  const [newSourceUrl, setNewSourceUrl] = useState("");
+  const addCustomSource = async () => {
     const name = newSource.trim();
+    const homepage = newSourceUrl.trim();
     if (!name) return;
-    const existing = [...ALL_SOURCES, ...(pending.customSources || [])];
+    if (!/^https?:\/\/\S+\.\S+/i.test(homepage)) {
+      toast.error("Enter the source website (https://…) so it can be scraped.");
+      return;
+    }
+    const existing = [...ALL_SOURCES, ...customSources.map((s) => s.name)];
     if (existing.some((s) => s.toLowerCase() === name.toLowerCase())) {
       toast.error("That source is already in the list.");
       return;
     }
-    updatePending({
-      customSources: [...(pending.customSources || []), name],
-      newsSourcesEnabled: [...pending.newsSourcesEnabled, name],
-    });
-    setNewSource("");
-    toast.success(`Added ${name}`);
-  };
-  const removeCustomSource = (name: string) => {
-    updatePending({
-      customSources: (pending.customSources || []).filter((s) => s !== name),
-      newsSourcesEnabled: pending.newsSourcesEnabled.filter((s) => s !== name),
-    });
+    try {
+      await addSource.mutateAsync({ name, homepage });
+      setNewSource("");
+      setNewSourceUrl("");
+      toast.success(`${name} added — it will be scraped on the next daily run.`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   };
 
   const handleReset = () => {
@@ -152,32 +158,43 @@ const SettingsPage = () => {
         <Section icon={Rss} title="Data Sources">
           <p className="text-sm text-muted-foreground mb-3">Enable/disable intelligence sources, or add your own.</p>
 
-          <div className="flex gap-2 mb-4">
-            <Input
-              placeholder="Add a new source (e.g. ShippingWatch)"
-              value={newSource}
-              onChange={(e) => setNewSource(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomSource(); } }}
-            />
-            <Button onClick={addCustomSource} size="sm">
-              <Plus className="w-4 h-4 mr-1" /> Add source
-            </Button>
-          </div>
-
-          {(pending.customSources || []).length > 0 && (
-            <div className="mb-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Your custom sources</p>
-              <div className="flex flex-wrap gap-2">
-                {pending.customSources.map((s) => (
-                  <span key={s} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full bg-secondary/10 border border-secondary/30 text-card-foreground">
-                    {s}
-                    <button onClick={() => removeCustomSource(s)} className="hover:text-destructive">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
+          {isAdmin ? (
+            <>
+              <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                <Input
+                  placeholder="Source name (e.g. ShippingWatch)"
+                  value={newSource}
+                  onChange={(e) => setNewSource(e.target.value)}
+                />
+                <Input
+                  placeholder="https://shippingwatch.com"
+                  value={newSourceUrl}
+                  onChange={(e) => setNewSourceUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomSource(); } }}
+                />
+                <Button onClick={addCustomSource} size="sm" disabled={addSource.isPending}>
+                  <Plus className="w-4 h-4 mr-1" /> Add source
+                </Button>
               </div>
-            </div>
+
+              {customSources.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Your custom sources</p>
+                  <div className="flex flex-wrap gap-2">
+                    {customSources.map((s) => (
+                      <span key={s.id} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full bg-secondary/10 border border-secondary/30 text-card-foreground">
+                        {s.name}
+                        <button onClick={() => removeSource.mutate(s.id)} className="hover:text-destructive">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground mb-4">Sign in with a Hitek account to add your own sources.</p>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
