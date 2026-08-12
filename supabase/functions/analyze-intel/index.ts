@@ -148,7 +148,7 @@ function bandToSeverity(score: number): Severity {
   return "awareness";
 }
 
-function applyOverrides(a: Analysis, text: string, exposure: { maxImportance: number; ports: string[] }): OverrideResult {
+function applyOverrides(a: Analysis, text: string, exposure: { maxImportance: number; ports: string[]; airports: string[] }): OverrideResult {
   let score = a.global_logistics_impact_score;
   let reason: string | null = null;
   const t = text.toLowerCase();
@@ -160,6 +160,20 @@ function applyOverrides(a: Analysis, text: string, exposure: { maxImportance: nu
     [/(customs|border|clearance)/.test(t) && /(outage|down|failure|offline|suspend)/.test(t), "customs / border system failure"],
     [/(cyberattack|ransomware|hacked|cyber incident)/.test(t) && /(port|terminal|carrier|customs|airport|logistics)/.test(t), "cyberattack on logistics infrastructure"],
     [/(earthquake|tsunami)/.test(t) && exposure.maxImportance >= 80, "major earthquake near strategic infrastructure"],
+    // Anything that measurably degrades a real port / airport / terminal is
+    // actionable for a freight forwarder, not just "important".
+    [/(port|terminal|airport|berth|quay|container yard)/.test(t) &&
+      /(clos|suspend|halt|disrupt|delay|congest|backlog|divert|blocked|blockade|stoppage|shut)/.test(t) &&
+      (exposure.ports.length > 0 || exposure.airports.length > 0 || exposure.maxImportance >= 55),
+      "port / airport operations disrupted"],
+    // Protests, demonstrations and blockades stop trucks and gates.
+    [/(protest|demonstration|manifestation|blockade|roadblock|riot|civil unrest|general strike|strike)/.test(t) &&
+      /(port|terminal|airport|highway|motorway|road|border|rail|customs|truck|freight|logistic|nationwide|general)/.test(t),
+      "civil unrest / strike affecting freight movement"],
+    // Direct import/export impact: duties, embargoes, closures of trade routes.
+    [/(import|export|shipment|cargo|freight)/.test(t) &&
+      /(suspend|ban|halt|block|seiz|embargo|prohibit|stopped)/.test(t),
+      "direct import / export interruption"],
     [/(ban|prohibition|embargo|sanction)/.test(t) && /(immediate|with immediate effect|effective immediately)/.test(t), "immediate-effect regulatory prohibition"],
   ];
   for (const [hit, why] of hard) {
@@ -177,6 +191,17 @@ function applyOverrides(a: Analysis, text: string, exposure: { maxImportance: nu
   ) {
     score = Math.max(score, 80);
     reason = "early-warning override: high-confidence forecast against major infrastructure";
+  }
+  // An event already happening on top of real Hitek-relevant infrastructure
+  // requires an action today.
+  if (
+    !reason &&
+    a.event_status === "actual_disruption" &&
+    (exposure.ports.length > 0 || exposure.airports.length > 0) &&
+    a.global_logistics_impact_score >= 55
+  ) {
+    score = Math.max(score, 80);
+    reason = "active disruption on exposed logistics infrastructure";
   }
   return { score, severity: bandToSeverity(score), reason };
 }
@@ -205,6 +230,34 @@ function routineClusterKey(a: Analysis): string {
     ? "wind"
     : "rain";
   return `routine-weather:${country}:${family}`;
+}
+
+// ---------- deterministic clustering ----------
+// The model phrases the same event differently every time it sees a new
+// bulletin ("Very Hot Weather Warning - Hong Kong" vs "Hong Kong Extreme Heat
+// Warning"), so its own event_key cannot be trusted as an identity. We derive
+// a canonical key from hazard family + named storm + country + primary node.
+const STORM_NAME = /\b(typhoon|hurricane|tropical storm|tropical cyclone|cyclone|storm)\s+([a-z][a-z'\-]{2,})/i;
+
+function slug(v: string | null | undefined): string {
+  return (v ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function canonicalClusterKey(
+  a: Analysis,
+  routine: boolean,
+  text: string,
+  nodes: { ports: string[]; airports: string[] },
+): string {
+  if (routine) return routineClusterKey(a);
+  // Named storms are the same event everywhere they are reported.
+  const named = STORM_NAME.exec(`${a.event_name ?? ""} ${text.slice(0, 400)}`);
+  const STOP = /^(warning|watch|advisory|alert|forecast|update|season|system|track|bulletin|signal|information|risk|threat|approach|hits?|nears?)$/i;
+  if (named && !STOP.test(named[2])) return `storm:${slug(named[2])}`;
+  const country = slug(a.countries?.[0]) || "global";
+  const node = slug(nodes.ports[0] ?? nodes.airports[0] ?? "");
+  const type = slug(a.event_type) || "other";
+  return node ? `${type}:${country}:${node}` : `${type}:${country}`;
 }
 
 function horizon(status: Analysis["event_status"]): string {
@@ -346,7 +399,7 @@ serve(async (req) => {
       continue;
     }
 
-    const ov = applyOverrides(a, text, { maxImportance, ports });
+    const ov = applyOverrides(a, text, { maxImportance, ports, airports });
     const routine = isRoutineWeather(a, text);
     // Routine advisories are capped below the display threshold unless they sit
     // on a top-tier node AND the override flagged a genuine disruption.
@@ -366,7 +419,7 @@ serve(async (req) => {
     stats.relevant++;
 
     // ---------- event clustering ----------
-    const clusterKey = routine ? routineClusterKey(a) : a.event_key;
+    const clusterKey = canonicalClusterKey(a, routine, text, { ports, airports });
     const { data: existing } = await db
       .from("supply_chain_events")
       .select("*")
@@ -395,7 +448,9 @@ serve(async (req) => {
         logistics_impact: a.logistics_impact || existing.logistics_impact,
         next_watchpoint: a.next_watchpoint || existing.next_watchpoint,
         event_status: a.event_status,
-        severity: escalated ? severity : existing.severity,
+        severity: (({ awareness: 0, this_week: 1, act_now: 2 } as Record<string, number>)[severity] >=
+          ({ awareness: 0, this_week: 1, act_now: 2 } as Record<string, number>)[existing.severity ?? "awareness"]
+          ? severity : existing.severity),
         global_logistics_impact_score: Math.max(finalScore, existing.global_logistics_impact_score ?? 0),
         hitek_relevance_score: Math.max(hitekScore, existing.hitek_relevance_score ?? 0),
         departments: [...new Set([...(existing.departments ?? []), ...a.departments])],
@@ -472,13 +527,40 @@ serve(async (req) => {
     // ---------- dashboard item ----------
     const dept = a.departments[0] ?? "operations";
     const cappedSeverity: Severity = dept === "it" && severity === "act_now" ? "this_week" : severity;
-    const { data: dupItem } = await db
-      .from("intelligence_items")
-      .select("id")
-      .eq("source_url", row.url)
-      .maybeSingle();
+    // One dashboard card per EVENT, never one per bulletin. Later, stronger
+    // reports refresh the existing card instead of stacking duplicates.
+    let dupItemId: string | null = null;
+    const { data: byUrl } = await db
+      .from("intelligence_items").select("id").eq("source_url", row.url).maybeSingle();
+    dupItemId = byUrl?.id ?? null;
+    if (!dupItemId) {
+      const { data: linked } = await db
+        .from("raw_items").select("intel_item_id")
+        .eq("event_id", eventId).not("intel_item_id", "is", null).limit(1);
+      dupItemId = linked?.[0]?.intel_item_id ?? null;
+    }
 
-    if (!dupItem) {
+    if (dupItemId) {
+      // Keep the best version: upgrade severity / summary when this report is
+      // stronger than what is already on the card.
+      const { data: cur } = await db
+        .from("intelligence_items").select("severity").eq("id", dupItemId).maybeSingle();
+      const rank = { awareness: 0, this_week: 1, act_now: 2 } as Record<string, number>;
+      if (cur && rank[cappedSeverity] > (rank[cur.severity] ?? 0)) {
+        await db.from("intelligence_items").update({
+          severity: cappedSeverity,
+          headline: a.event_name || row.original_title,
+          summary: `${a.what_happened || a.summary}`.slice(0, 2000),
+          impact: a.logistics_impact || a.summary,
+          action_required: a.next_watchpoint || "Monitor for further updates.",
+          suggested_action: a.next_watchpoint,
+          why_it_matters_to_hitek: a.logistics_impact,
+          action_required_bool: cappedSeverity !== "awareness",
+        }).eq("id", dupItemId);
+      }
+    }
+
+    if (!dupItemId) {
       const { data: item } = await db.from("intelligence_items").insert({
         headline: a.event_name || row.original_title,
         summary: `${a.what_happened || a.summary}`.slice(0, 2000),
@@ -513,7 +595,7 @@ serve(async (req) => {
         analysis_status: "analyzed", impact_score: finalScore, event_id: eventId, intel_item_id: item?.id ?? null,
       }).eq("id", row.id);
     } else {
-      await db.from("raw_items").update({ analysis_status: "analyzed", impact_score: finalScore, event_id: eventId, intel_item_id: dupItem.id }).eq("id", row.id);
+      await db.from("raw_items").update({ analysis_status: "analyzed", impact_score: finalScore, event_id: eventId, intel_item_id: dupItemId }).eq("id", row.id);
     }
 
     if (examples.length < 12) {
