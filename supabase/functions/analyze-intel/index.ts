@@ -181,6 +181,32 @@ function applyOverrides(a: Analysis, text: string, exposure: { maxImportance: nu
   return { score, severity: bandToSeverity(score), reason };
 }
 
+
+// ---------- routine local weather ----------
+// Met agencies publish hundreds of short-lived local advisories a day. They are
+// real, but they are business-as-usual: they must collapse into a single
+// recurring event per country and normally stay below the display threshold.
+const ROUTINE_WEATHER = /(heavy rain|extreme rainfall|thundery|thunderstorm|storm warning|severe weather warning|shower|lightning|wind advisory|strong wind|gale|fog|mist|haze|heat ?wave|canicule|extreme heat|heat (advisory|warning)|high temperature|frost|snow(fall)? warning|dust|hail|smog|air quality|cold wave|rainfall (yellow|blue|orange))/i;
+const NON_ROUTINE = /(typhoon|hurricane|tropical cyclone|storm surge|red (alert|warning)|black rainstorm|evacuat|state of emergency|port (closed|closure|suspend)|airport clos|flood emergency|tsunami|earthquake|landfall|signal no\.? ?[89]|super typhoon)/i;
+
+function isRoutineWeather(a: Analysis, text: string): boolean {
+  if (/(strike|cyber|sanction|tariff|customs|conflict|attack|closure)/i.test(a.event_type)) return false;
+  if (NON_ROUTINE.test(text)) return false;
+  return ROUTINE_WEATHER.test(text);
+}
+
+function routineClusterKey(a: Analysis): string {
+  const country = (a.countries?.[0] ?? "global").toLowerCase().replace(/[^a-z]+/g, "-");
+  const family = /heat ?wave|canicule|extreme heat|high temperature/i.test(a.summary ?? "")
+    ? "heat"
+    : /snow|frost|cold/i.test(a.summary ?? "")
+    ? "cold"
+    : /wind|gale|storm/i.test(a.summary ?? "")
+    ? "wind"
+    : "rain";
+  return `routine-weather:${country}:${family}`;
+}
+
 function horizon(status: Analysis["event_status"]): string {
   switch (status) {
     case "actual_disruption": return "today";
@@ -321,15 +347,18 @@ serve(async (req) => {
     }
 
     const ov = applyOverrides(a, text, { maxImportance, ports });
-    const finalScore = ov.score;
-    const severity = ov.severity;
+    const routine = isRoutineWeather(a, text);
+    // Routine advisories are capped below the display threshold unless they sit
+    // on a top-tier node AND the override flagged a genuine disruption.
+    const finalScore = routine && !ov.reason ? Math.min(ov.score, 30) : ov.score;
+    const severity = routine && !ov.reason ? "awareness" as Severity : ov.severity;
     const hitekScore = Math.max(a.hitek_relevance_score, Math.round(maxHitek * 0.6));
 
     if (!a.relevant || finalScore < 35) {
       stats.rejected++;
       await db.from("raw_items").update({
         analysis_status: "rejected",
-        rejection_reason: a.relevant ? `below display threshold (${finalScore})` : a.reasoning_short || "not logistics relevant",
+        rejection_reason: routine ? "routine local weather advisory (recurring)" : a.relevant ? `below display threshold (${finalScore})` : a.reasoning_short || "not logistics relevant",
         impact_score: finalScore,
       }).eq("id", row.id);
       continue;
@@ -337,7 +366,7 @@ serve(async (req) => {
     stats.relevant++;
 
     // ---------- event clustering ----------
-    const clusterKey = a.event_key;
+    const clusterKey = routine ? routineClusterKey(a) : a.event_key;
     const { data: existing } = await db
       .from("supply_chain_events")
       .select("*")
