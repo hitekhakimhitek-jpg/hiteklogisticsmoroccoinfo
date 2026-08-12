@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Globe2 } from "lucide-react";
 import { format } from "date-fns";
+import { fr as frLocale } from "date-fns/locale";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { translateDeep } from "@/lib/translateEntries";
 import { SEO } from "@/components/SEO";
@@ -372,9 +373,9 @@ export default function DisruptionMap() {
               {holidays.map((h) => (
                 <li key={`${h.holiday_date}-${h.name_en}`} className="py-2 flex items-center gap-3 text-sm">
                   <span className="w-24 shrink-0 text-muted-foreground text-xs">
-                    {format(new Date(h.holiday_date), "EEE, MMM d")}
+                    {format(new Date(h.holiday_date), "EEE d MMM", lang === "fr" ? { locale: frLocale } : undefined)}
                   </span>
-                  <span className="font-medium leading-tight">{lang === "fr" ? h.local_name : h.name_en}</span>
+                  <span className="font-medium leading-tight">{h.name_en}</span>
                   {h.affects_operations && (
                     <span className="ml-auto shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-warning/15 text-warning border border-warning/30">
                       {lang === "fr" ? "Fermé" : "Closed"}
