@@ -170,9 +170,28 @@ function titleMatchesUrlOrContent(article: { title: string; url: string; descrip
   return overlap >= Math.min(2, titleWords.length);
 }
 
+// Tier-1 freight publishers that frequently ship articles without any machine
+// readable publication date (JOC in particular). Dropping them for a missing
+// date silently removed the single most valuable worldwide source from the
+// dashboard, so for these hosts we accept the article and date it to the day
+// it was discovered — searches are already time-boxed to the last week and
+// `verify-dates` refines the date afterwards.
+const TRUSTED_UNDATED_HOSTS =
+  /(^|\.)(joc\.com|theloadstar\.com|lloydslist\.com|maritime-executive\.com|gcaptain\.com|splash247\.com)$/i;
+function isTrustedUndatedHost(url: string): boolean {
+  try { return TRUSTED_UNDATED_HOSTS.test(new URL(url).hostname.replace(/^www\.(prod\.int\.)?/, "").replace(/^prod\.int\./, "")); }
+  catch { return false; }
+}
+
 function classifyArticleRejection(article: { title: string; url: string; description: string; markdown?: string; publishedDate?: string | null }): string | null {
   if (!looksLikeArticleUrl(article.url)) return "non_article_url";
-  if (!isCurrentPublicationDate(article.publishedDate)) return "outdated_or_missing_date";
+  if (!isCurrentPublicationDate(article.publishedDate)) {
+    if (!article.publishedDate && isTrustedUndatedHost(article.url)) {
+      article.publishedDate = new Date().toISOString().split("T")[0];
+    } else {
+      return "outdated_or_missing_date";
+    }
+  }
   if (!contentLooksReadable(article.markdown, article.description, article.title)) return "paywalled_or_unreadable";
   if (!titleMatchesUrlOrContent(article)) return "title_url_mismatch";
   return null;
@@ -346,6 +365,8 @@ const GENERAL_QUERIES = [
   "Morocco trade port Tanger Med customs ADII shipping PortNet",
   "port disruption weather shipping delay Suez Canal Mediterranean Gibraltar",
   "freight forwarding OR shipping disruption OR port congestion OR customs regulation OR supply chain OR tariff update OR Suez Canal OR Mediterranean shipping",
+  "Red Sea Suez Canal transits vessel attack Houthi shipping impact",
+  "typhoon OR strike OR port closure disrupting global supply chain this week",
 ];
 
 // Morocco-specific search queries — always run when "Médias24" or any Morocco
@@ -398,6 +419,11 @@ const PRIMARY_DIRECT_SOURCES: Array<{ name: string; homepage: string; mapKeyword
     name: "JOC",
     homepage: "https://www.joc.com",
     mapKeywords: ["container", "ocean", "port", "trucking", "rail"],
+  },
+  {
+    name: "JOC",
+    homepage: "https://www.joc.com/maritime-news",
+    mapKeywords: ["container", "port", "red-sea", "suez"],
   },
 ];
 
@@ -492,6 +518,32 @@ async function firecrawlMapDomain(
 }
 
 // Direct Firecrawl /scrape call returning a normalized article shape.
+// Fallback discovery: some publishers (notably joc.com) return nothing from
+// Firecrawl /map because of their bot rules. Scraping the landing page for its
+// links still surfaces the current headlines, so a source is never silently
+// skipped just because /map came back empty.
+async function firecrawlHarvestLinks(apiKey: string, homepage: string): Promise<string[]> {
+  try {
+    const resp = await firecrawlFetch("https://api.firecrawl.dev/v2/scrape", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ url: homepage, formats: ["links"], onlyMainContent: false }),
+    }, 25000);
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    const links: string[] = data?.links || data?.data?.links || [];
+    const host = new URL(homepage).hostname.replace(/^www\./, "");
+    return Array.from(new Set(links))
+      .filter((l) => {
+        try {
+          return new URL(l).hostname.replace(/^www\./, "").endsWith(host) && looksLikeArticleUrl(l);
+        } catch { return false; }
+      });
+  } catch {
+    return [];
+  }
+}
+
 async function firecrawlScrapeUrl(
   apiKey: string,
   url: string,
@@ -597,7 +649,7 @@ serve(async (req) => {
       "The Loadstar", "JOC", "FreightWaves", "Lloyd's List", "Splash247",
       "The Maritime Executive", "Maersk", "MSC", "CMA CGM", "Hapag-Lloyd",
     ]);
-    const ROTATION_PER_RUN = 4;
+    const ROTATION_PER_RUN = 8;
     const dayIndex = Math.floor(Date.now() / 86_400_000);
 
     const sourceList = enabledSources
@@ -721,9 +773,13 @@ serve(async (req) => {
             keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
           );
           // Keep enough candidates to avoid repeatedly exhausting the same homepage links.
-          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 30);
+          let candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 30);
+          if (candidateUrls.length === 0) {
+            candidateUrls = (await firecrawlHarvestLinks(FIRECRAWL_API_KEY, src.homepage)).slice(0, 30);
+            console.log(`[primary-direct] ${src.name}: /map empty, harvested ${candidateUrls.length} links from page`);
+          }
           primaryStats[src.name].mapped = candidateUrls.length;
-          const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 6);
+          const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 8);
           const scraped = await Promise.all(
             toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
           );
