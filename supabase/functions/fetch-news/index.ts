@@ -1311,8 +1311,8 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         impact_assessment: entry.impact_assessment || null,
         action_required: entry.action_required || false,
         suggested_action: entry.suggested_action || null,
-        published_date: sourcePubDate ?? today, // legacy column — keep filled
-        publication_date: sourcePubDate,        // real source date or null
+        published_date: resolvedPubDate ?? today, // legacy column — keep filled
+        publication_date: resolvedPubDate,        // real source date (or discovery date for trusted undated tier-1)
         verification_status: verificationStatus,
         week_number: weekNumber,
         month: now.getMonth() + 1,
