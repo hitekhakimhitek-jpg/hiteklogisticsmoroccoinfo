@@ -551,9 +551,13 @@ serve(async (req) => {
     // One dashboard card per EVENT, never one per bulletin. Later, stronger
     // reports refresh the existing card instead of stacking duplicates.
     let dupItemId: string | null = null;
-    const { data: byUrl } = await db
-      .from("intelligence_items").select("id").eq("source_url", row.url).maybeSingle();
-    dupItemId = byUrl?.id ?? null;
+    // Only match on URL when it is the real article link; raw feed documents
+    // are rewritten to a shared landing page and would over-collapse cards.
+    if (readableSourceUrl(row.url) === row.url) {
+      const { data: byUrl } = await db
+        .from("intelligence_items").select("id").eq("source_url", row.url).maybeSingle();
+      dupItemId = byUrl?.id ?? null;
+    }
     if (!dupItemId) {
       const { data: linked } = await db
         .from("raw_items").select("intel_item_id")
