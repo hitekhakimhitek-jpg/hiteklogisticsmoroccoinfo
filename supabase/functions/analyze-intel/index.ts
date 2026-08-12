@@ -537,7 +537,7 @@ serve(async (req) => {
         event_name: a.event_name,
         sources: [sourceEntry],
         source_count: 1,
-        primary_source_url: row.url,
+        primary_source_url: readableSourceUrl(row.url),
         event_started_at: row.published_at,
       }).select("id").single();
       if (cErr) { stats.failed++; continue; }
@@ -592,7 +592,7 @@ serve(async (req) => {
         time_to_impact: horizon(a.event_status),
         affected_tags: [...new Set([...ports, ...lanes, ...a.countries])].slice(0, 8),
         source_name: row.source_name,
-        source_url: row.url,
+        source_url: readableSourceUrl(row.url),
         status: "new",
         is_ai_draft: false,
         language: row.source_language ?? "en",
