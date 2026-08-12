@@ -184,7 +184,7 @@ export function parseJsonFeed(json: unknown, baseUrl: string): CollectedItem[] {
         url: absolute(url, baseUrl),
         summary: pick(o, ["description", "summary", "content_text", "content", "text", "body"])?.slice(0, 4000),
         publishedAt: parseDateSafe(
-          pick(o, ["published", "date_published", "pubDate", "published_at", "issued", "sent", "updated", "date"]),
+          pick(o, ["published", "date_published", "pubDate", "published_at", "issued", "sent", "updated", "date", "issuetime", "pubtime", "time", "effective", "onset"]),
         ),
         raw: o as Record<string, unknown>,
       });
@@ -221,22 +221,6 @@ export function parseJsonFeed(json: unknown, baseUrl: string): CollectedItem[] {
   else if (json && typeof json === "object") {
     const found = findArray(json);
     if (found) walk(normalize(found));
-  }
-  if (false) {
-    const o = json as Record<string, unknown>;
-    for (const key of ["items"]) {
-      const v = o[key];
-      if (Array.isArray(v)) {
-        // GeoJSON features carry the payload under .properties
-        walk(v.map((f) => {
-          const fo = f as Record<string, unknown>;
-          return fo && typeof fo === "object" && fo.properties
-            ? { ...(fo.properties as Record<string, unknown>), geometry: fo.geometry }
-            : fo;
-        }));
-        if (out.length) break;
-      }
-    }
   }
   return out;
 }
