@@ -331,12 +331,11 @@ export default function DisruptionMap() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border overflow-hidden bg-card">
+      <div className="relative rounded-xl border border-border overflow-hidden bg-card">
         <div ref={mapDivRef} className="h-[560px] w-full" />
-      </div>
 
       {country && (
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="absolute top-3 right-3 z-[1000] w-[min(360px,calc(100%-1.5rem))] max-h-[calc(100%-1.5rem)] overflow-y-auto rounded-xl border border-border bg-card/95 backdrop-blur p-4 shadow-xl">
           <div className="flex items-center justify-between gap-3 mb-3">
             <h2 className="font-semibold flex items-center gap-2">
               <CalendarDays className="w-4 h-4 text-primary" />
@@ -365,13 +364,13 @@ export default function DisruptionMap() {
             <ul className="divide-y divide-border">
               {holidays.map((h) => (
                 <li key={`${h.holiday_date}-${h.name_en}`} className="py-2 flex items-center gap-3 text-sm">
-                  <span className="w-28 shrink-0 text-muted-foreground">
+                  <span className="w-24 shrink-0 text-muted-foreground text-xs">
                     {format(new Date(h.holiday_date), "EEE, MMM d")}
                   </span>
-                  <span className="font-medium">{lang === "fr" ? h.local_name : h.name_en}</span>
+                  <span className="font-medium leading-tight">{lang === "fr" ? h.local_name : h.name_en}</span>
                   {h.affects_operations && (
-                    <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-warning/15 text-warning border border-warning/30">
-                      {lang === "fr" ? "Ports / douane fermés" : "Ports / customs likely closed"}
+                    <span className="ml-auto shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-warning/15 text-warning border border-warning/30">
+                      {lang === "fr" ? "Fermé" : "Closed"}
                     </span>
                   )}
                 </li>
@@ -380,6 +379,8 @@ export default function DisruptionMap() {
           )}
         </div>
       )}
+      </div>
+
       {loading && (
         <p className="text-xs text-muted-foreground">{lang === "fr" ? "Chargement…" : "Loading…"}</p>
       )}

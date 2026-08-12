@@ -35,7 +35,7 @@ async function refreshCountry(supabase: ReturnType<typeof createClient>, code: s
   const year = new Date().getUTCFullYear();
   const holidays = [...(await fetchYear(code, year)), ...(await fetchYear(code, year + 1))];
   if (holidays.length === 0) return 0;
-  const rows = holidays.map((h) => ({
+  const all = holidays.map((h) => ({
     country_code: code,
     holiday_date: h.date,
     local_name: h.localName || h.name,
@@ -43,6 +43,17 @@ async function refreshCountry(supabase: ReturnType<typeof createClient>, code: s
     global: h.global ?? true,
     affects_operations: (h.types ?? ["Public"]).some((t) => OPERATIONAL_TYPES.has(t)),
   }));
+  // Some countries (e.g. US) repeat the same holiday once per subdivision.
+  // Postgres refuses an upsert that touches the same conflict key twice, so
+  // collapse duplicates on (country_code, holiday_date, name_en) first.
+  const seen = new Map<string, typeof all[number]>();
+  for (const r of all) {
+    const key = `${r.country_code}|${r.holiday_date}|${r.name_en}`;
+    const prev = seen.get(key);
+    if (!prev) seen.set(key, r);
+    else if (r.affects_operations) prev.affects_operations = true;
+  }
+  const rows = [...seen.values()];
   const { error } = await supabase
     .from("country_holidays")
     .upsert(rows, { onConflict: "country_code,holiday_date,name_en" });
