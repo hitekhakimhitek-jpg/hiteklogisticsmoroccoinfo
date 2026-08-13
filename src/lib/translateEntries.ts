@@ -127,7 +127,10 @@ export async function translateRecords<T extends Record<string, unknown>>(
       const v = r[f];
       if (typeof v !== "string" || !v.trim()) continue;
       const t = getCached(target, v);
-      if (!t) return r; // all-or-nothing: keep the record fully in English
+      if (!t) {
+        if (import.meta.env.DEV) console.warn("[i18n] untranslated field, keeping record in English:", String(f), v.slice(0, 60));
+        return r; // all-or-nothing: keep the record fully in English
+      }
       out[f as string] = t;
     }
     return out as T;
