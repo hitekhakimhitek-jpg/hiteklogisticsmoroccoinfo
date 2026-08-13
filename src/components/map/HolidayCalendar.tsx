@@ -7,6 +7,8 @@ import { translateRecords } from "@/lib/translateEntries";
 import { REGIONS, REGION_LABELS_FR, regionOf, type Region } from "@/data/regions";
 import { CalendarDays, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ISO3 } from "@/data/iso3to2";
+import { Button } from "@/components/ui/button";
 
 type Row = {
   country_code: string;
@@ -19,7 +21,15 @@ type Row = {
 
 const DAYS_AHEAD = 45;
 
-export function HolidayCalendar() {
+const COUNTRY_BY_A2 = new Map(
+  Object.values(ISO3).map((country) => [country.a2, country]),
+);
+
+type HolidayCalendarProps = {
+  onCountryClick?: (countryCode: string) => void;
+};
+
+export function HolidayCalendar({ onCountryClick }: HolidayCalendarProps) {
   const { lang } = useLanguage();
   const [region, setRegion] = useState<Region | "all">("all");
   const [rows, setRows] = useState<Row[]>([]);
@@ -71,6 +81,12 @@ export function HolidayCalendar() {
       ? lang === "fr" ? "Toutes les régions" : "All regions"
       : lang === "fr" ? REGION_LABELS_FR[r] : r;
 
+  const countryLabel = (row: Row) => {
+    const country = COUNTRY_BY_A2.get(row.country_code.toUpperCase());
+    if (country) return lang === "fr" ? country.fr : country.name;
+    return row.country_name || row.country_code;
+  };
+
   return (
     <section className="rounded-xl border border-border bg-card p-4 sm:p-5 space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -87,18 +103,21 @@ export function HolidayCalendar() {
 
       <div className="flex flex-wrap gap-2">
         {(["all", ...REGIONS] as (Region | "all")[]).map((r) => (
-          <button
+          <Button
             key={r}
+            type="button"
+            variant="outline"
+            size="sm"
             onClick={() => setRegion(r)}
             className={cn(
-              "text-xs px-3 py-1.5 rounded-full border transition-colors",
+              "h-8 rounded-full text-xs transition-colors",
               region === r
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-muted/50 text-muted-foreground border-border hover:text-foreground"
             )}
           >
             {label(r)}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -131,7 +150,14 @@ export function HolidayCalendar() {
                     {format(new Date(r.holiday_date), "EEE d MMM", lang === "fr" ? { locale: frLocale } : undefined)}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap font-medium">
-                    {r.country_name || r.country_code}
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto justify-start p-0 text-left font-medium"
+                      onClick={() => onCountryClick?.(r.country_code)}
+                    >
+                      {countryLabel(r)}
+                    </Button>
                   </td>
                   <td className="px-3 py-2">{r.name_en}</td>
                   <td className="px-3 py-2 text-right">
