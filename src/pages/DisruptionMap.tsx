@@ -4,7 +4,7 @@ import { Globe2 } from "lucide-react";
 import { format } from "date-fns";
 import { fr as frLocale } from "date-fns/locale";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { translateDeep } from "@/lib/translateEntries";
+import { translateDeep, translateRecords } from "@/lib/translateEntries";
 import { SEO } from "@/components/SEO";
 import { passesFeedFilter } from "@/hooks/useIntelligenceItems";
 import { ISO3 } from "@/data/iso3to2";
@@ -82,13 +82,7 @@ export default function DisruptionMap() {
     let rows = (((data || []) as any[]) as MapItem[]).filter(passesFeedFilter);
     if (lang === "fr" && rows.length > 0) {
       try {
-        const payload = rows.map((r) => ({ id: r.id, headline: r.headline, summary: r.summary }));
-        const translated = await translateDeep(payload, "fr");
-        const byId = new Map(translated.map((t: any) => [t.id, t]));
-        rows = rows.map((r) => {
-          const t = byId.get(r.id) as any;
-          return t ? { ...r, headline: t.headline ?? r.headline, summary: t.summary ?? r.summary } : r;
-        });
+        rows = await translateRecords(rows, ["headline", "summary"], "fr");
       } catch (e) { console.error("map translate failed", e); }
     }
     setItems(rows);
