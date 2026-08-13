@@ -16,19 +16,40 @@ function cacheKey(target: "fr" | "en", text: string) {
   return `tr:${CACHE_VERSION}:${target}:${text}`;
 }
 
+// In-memory cache is the source of truth for the session: localStorage can be
+// full (quota) or unavailable, and relying on it alone silently dropped every
+// translation, leaving cards in English.
+const memCache = new Map<string, string>();
+
 function getCached(target: "fr" | "en", text: string): string | null {
+  const key = cacheKey(target, text);
+  const hit = memCache.get(key);
+  if (hit) return hit;
   try {
-    return localStorage.getItem(cacheKey(target, text));
+    const v = localStorage.getItem(key);
+    if (v) memCache.set(key, v);
+    return v;
   } catch {
     return null;
   }
 }
 
 function setCached(target: "fr" | "en", text: string, value: string) {
+  const key = cacheKey(target, text);
+  memCache.set(key, value);
   try {
-    localStorage.setItem(cacheKey(target, text), value);
+    localStorage.setItem(key, value);
   } catch {
-    /* quota — ignore */
+    // Quota exceeded — drop old translation entries and retry once.
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("tr:") && !k.startsWith(`tr:${CACHE_VERSION}:`)) localStorage.removeItem(k);
+      }
+      localStorage.setItem(key, value);
+    } catch {
+      /* keep the in-memory copy only */
+    }
   }
 }
 
