@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { translateDeep } from "@/lib/translateEntries";
+import { translateRecords } from "@/lib/translateEntries";
 
 export type IntelDepartment = "operations" | "compliance" | "finance" | "commercial" | "it";
 export type IntelSeverity = "act_now" | "this_week" | "awareness";
@@ -206,34 +206,21 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
       });
       if (lang === "fr" && sorted.length > 0) {
         try {
-          // Translate only the user-facing text fields, preserve everything else.
-          const payload = sorted.map((r) => ({
-            id: r.id,
-            headline: r.headline,
-            summary: r.summary,
-            impact: r.impact,
-            action_required: r.action_required,
-            why_it_matters_to_hitek: r.why_it_matters_to_hitek,
-            affected_lanes_or_customers: r.affected_lanes_or_customers,
-            suggested_action: r.suggested_action,
-          }));
-          const translated = await translateDeep(payload, "fr");
-          const byId = new Map(translated.map((t: any) => [t.id, t]));
-          return sorted.map((r) => {
-            const t = byId.get(r.id) as any;
-            return t
-              ? {
-                  ...r,
-                  headline: t.headline ?? r.headline,
-                  summary: t.summary ?? r.summary,
-                  impact: t.impact ?? r.impact,
-                  action_required: t.action_required ?? r.action_required,
-                  why_it_matters_to_hitek: t.why_it_matters_to_hitek ?? r.why_it_matters_to_hitek,
-                  affected_lanes_or_customers: t.affected_lanes_or_customers ?? r.affected_lanes_or_customers,
-                  suggested_action: t.suggested_action ?? r.suggested_action,
-                }
-              : r;
-          });
+          // Per-card coherence: a card is either fully French or fully English,
+          // never a French headline with an English summary.
+          return await translateRecords(
+            sorted,
+            [
+              "headline",
+              "summary",
+              "impact",
+              "action_required",
+              "why_it_matters_to_hitek",
+              "affected_lanes_or_customers",
+              "suggested_action",
+            ],
+            "fr",
+          );
         } catch (e) {
           console.error("intel translate failed", e);
           return sorted;
