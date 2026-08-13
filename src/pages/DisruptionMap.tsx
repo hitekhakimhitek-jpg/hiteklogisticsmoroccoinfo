@@ -78,7 +78,7 @@ export default function DisruptionMap() {
     const countryLayer = countryLayerRef.current;
     if (map && countryLayer) {
       countryLayer.eachLayer((layer) => {
-        const featureId = String((layer as L.GeoJSON & { feature?: GeoJSON.Feature }).feature?.id ?? "");
+        const featureId = String((layer as L.GeoJSON & { feature?: { id?: string | number } }).feature?.id ?? "");
         if (featureId !== a3 || !(layer instanceof L.Path)) return;
         const bounds = (layer as L.Polygon).getBounds();
         if (bounds.isValid()) map.fitBounds(bounds, { padding: [28, 28], maxZoom: 5 });
