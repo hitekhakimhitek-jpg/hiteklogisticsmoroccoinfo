@@ -653,42 +653,28 @@ serve(async (req) => {
     // tripping the rate limit.
     // Morocco sources are covered every run by the direct-scrape pass below,
     // so they stay out of the per-run search budget.
-    const CORE_SOURCES = new Set<string>([
-      "The Loadstar", "JOC", "FreightWaves", "Lloyd's List", "Splash247",
-      "The Maritime Executive", "Maersk", "MSC", "CMA CGM", "Hapag-Lloyd",
-    ]);
-    const ROTATION_PER_RUN = 8;
     const dayIndex = Math.floor(Date.now() / 86_400_000);
-
+    const allRegisteredNames = NEWS_SOURCE_META
+      .map((source) => source.name)
+      .filter((name) => SOURCE_QUERIES[name]);
     const sourceList = enabledSources
-      ? enabledSources.filter((s) => SOURCE_QUERIES[s])
-      : Object.keys(SOURCE_QUERIES);
+      ? enabledSources.filter((source) => SOURCE_QUERIES[source])
+      : allRegisteredNames.filter((_, index) => index % batchCount === batch % batchCount);
+    const plannedSourceNames = new Set(sourceList);
     let runMoroccoPriority = false;
-    for (const s of (enabledSources ?? Object.keys(SOURCE_QUERIES))) {
+    for (const s of sourceList) {
       if (MOROCCO_SOURCE_NAMES.has(s)) runMoroccoPriority = true;
     }
-    if (!enabledSources) runMoroccoPriority = true;
 
-    const coreSources = sourceList.filter((s) => CORE_SOURCES.has(s));
-    const rotatingPool = sourceList
-      .filter((s) => !CORE_SOURCES.has(s) && !MOROCCO_SOURCE_NAMES.has(s))
-      .sort();
-    const rotatingSources: string[] = [];
-    for (let i = 0; i < Math.min(ROTATION_PER_RUN, rotatingPool.length); i++) {
-      rotatingSources.push(rotatingPool[(dayIndex * ROTATION_PER_RUN + i) % rotatingPool.length]);
+    // Each invocation owns one deterministic cohort. Scheduled invocations run
+    // all cohorts daily, avoiding a monolithic job that silently skips sources.
+    const searchPlans: Array<{ source: string; query: string }> = [];
+    for (const source of sourceList) {
+      const query = SOURCE_QUERIES[source]?.[0];
+      if (query) searchPlans.push({ source, query });
     }
-
-    // Hard search budget: the run has ~145s of wall clock and Firecrawl only
-    // tolerates ~10 requests/minute, so the search phase must leave room for
-    // the direct-scrape passes. One query per source keeps coverage broad.
-    const searchQueries: string[] = [];
-    for (const s of [...coreSources, ...rotatingSources]) {
-      searchQueries.push(...SOURCE_QUERIES[s].slice(0, 1));
-    }
-    searchQueries.push(...GENERAL_QUERIES.slice(0, 2));
-    if (runMoroccoPriority) searchQueries.push(...MOROCCO_PRIORITY_QUERIES.slice(0, 2));
     console.log(
-      `[query-plan] core=${coreSources.length} rotating=${rotatingSources.length} (${rotatingSources.join(", ")}) queries=${searchQueries.length}`,
+      `[query-plan] batch=${batch}/${batchCount} force=${force} sources=${sourceList.length} (${sourceList.join(", ")}) queries=${searchPlans.length}`,
     );
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -702,6 +688,41 @@ serve(async (req) => {
     runId = run?.id ?? null;
     const checkedAt = new Date().toISOString();
     const today = checkedAt.split("T")[0];
+    const sourceMeta = new Map(NEWS_SOURCE_META.map((source) => [source.name, source]));
+
+    const recordNewsHealth = async (
+      candidates: Array<{ source: string; publishedDate?: string | null }>,
+      accepted: Array<{ source: string }>,
+      inserted: Array<{ source_name?: string | null }>,
+      fallbackError: string | null = null,
+    ) => {
+      for (const sourceName of plannedSourceNames) {
+        const meta = sourceMeta.get(sourceName);
+        const found = candidates.filter((article) => article.source === sourceName);
+        const acceptedCount = accepted.filter((article) => article.source === sourceName).length;
+        const newCount = inserted.filter((row) => row.source_name === sourceName).length;
+        const latestPublicationAt = found
+          .map((article) => article.publishedDate)
+          .filter((date): date is string => Boolean(date))
+          .sort()
+          .at(-1) ?? null;
+        await recordSourceRun(supabase, runId, {
+          sourceName,
+          sourceUrl: meta?.homepage,
+          sourceType: meta?.source_type,
+          fetchMethod: "firecrawl_search_direct",
+          httpStatus: fallbackError ? 0 : 200,
+          pagesRequested: 1,
+          itemsDiscovered: found.length,
+          itemsNew: newCount,
+          itemsDuplicates: Math.max(0, acceptedCount - newCount),
+          itemsRejected: Math.max(0, found.length - acceptedCount),
+          latestPublicationAt,
+          startedAt: Date.now(),
+          error: fallbackError ?? (found.length === 0 ? "No parseable current articles found in this source cohort" : null),
+        });
+      }
+    };
 
     // Step 1: Scrape real news using Firecrawl Search API
     console.log("Scraping real news from web sources...");
@@ -716,7 +737,7 @@ serve(async (req) => {
     }> = [];
 
     const queryStats = { ok: 0, failed: 0, empty: 0 };
-    const searchPromises = searchQueries.map(async (query) => {
+    const searchPromises = searchPlans.map(async ({ source, query }) => {
       try {
         const response = await firecrawlFetch("https://api.firecrawl.dev/v2/search", {
           method: "POST",
@@ -746,7 +767,7 @@ serve(async (req) => {
           title: item.title || item.metadata?.title || "",
           url: item.url || item.metadata?.sourceURL || "",
           description: item.description || item.excerpt || "",
-          source: extractSourceName(item.url || ""),
+          source,
           markdown: item.markdown?.substring(0, 1000) || "",
             publishedDate: extractPublicationDate(item.metadata || {}, item.markdown || "") || extractDateFromUrl(item.url || ""),
         }));
