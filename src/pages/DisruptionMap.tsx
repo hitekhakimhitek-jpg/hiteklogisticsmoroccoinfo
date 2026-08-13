@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Globe2 } from "lucide-react";
 import { format } from "date-fns";
@@ -10,6 +10,7 @@ import { HolidayCalendar } from "@/components/map/HolidayCalendar";
 import { passesFeedFilter } from "@/hooks/useIntelligenceItems";
 import { ISO3 } from "@/data/iso3to2";
 import { CalendarDays, X, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -66,6 +67,25 @@ export default function DisruptionMap() {
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
   const countryLayerRef = useRef<L.GeoJSON | null>(null);
+
+  const selectCountry = useCallback((a2: string) => {
+    const entry = Object.entries(ISO3).find(([, meta]) => meta.a2 === a2.toUpperCase());
+    if (!entry) return;
+    const [a3, meta] = entry;
+    setCountry({ a3, a2: meta.a2, name: lang === "fr" ? meta.fr : meta.name });
+
+    const map = mapRef.current;
+    const countryLayer = countryLayerRef.current;
+    if (map && countryLayer) {
+      countryLayer.eachLayer((layer) => {
+        const featureId = String((layer as L.GeoJSON & { feature?: { id?: string | number } }).feature?.id ?? "");
+        if (featureId !== a3 || !(layer instanceof L.Path)) return;
+        const bounds = (layer as L.Polygon).getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds, { padding: [28, 28], maxZoom: 5 });
+      });
+    }
+    mapDivRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [lang]);
 
   const load = async () => {
     setLoading(true);
@@ -150,11 +170,7 @@ export default function DisruptionMap() {
               const a3 = String((feature as any).id || "");
               const meta = ISO3[a3];
               if (!meta) return;
-              setCountry({
-                a3,
-                a2: meta.a2,
-                name: lang === "fr" ? meta.fr : meta.name,
-              });
+              selectCountry(meta.a2);
             });
           },
         }).addTo(mapRef.current);
@@ -167,7 +183,7 @@ export default function DisruptionMap() {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
+  }, [loading, selectCountry]);
 
   // Load holidays for the selected country.
   useEffect(() => {
@@ -349,13 +365,16 @@ export default function DisruptionMap() {
               <CalendarDays className="w-4 h-4 text-primary" />
               {lang === "fr" ? `Jours fériés — ${country.name}` : `Public holidays — ${country.name}`}
             </h2>
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => setCountry(null)}
-              className="text-muted-foreground hover:text-foreground"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
               aria-label={lang === "fr" ? "Fermer" : "Close"}
             >
               <X className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
           {holidaysLoading ? (
             <p className="text-sm text-muted-foreground flex items-center gap-2">
@@ -393,7 +412,7 @@ export default function DisruptionMap() {
         <p className="text-xs text-muted-foreground">{lang === "fr" ? "Chargement…" : "Loading…"}</p>
       )}
 
-      <HolidayCalendar />
+      <HolidayCalendar onCountryClick={selectCountry} />
     </div>
   );
 }

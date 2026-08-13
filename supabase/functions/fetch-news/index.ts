@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, requireHitekAdmin } from "../_shared/auth.ts";
+import { recordSourceRun } from "../_shared/health.ts";
+import { NEWS_SOURCE_META, syncSourceRegistry } from "../_shared/registry.ts";
 
 const CATEGORIES = ["regulation", "weather", "port", "trade", "compliance", "market", "general"];
 const REGIONS = [
@@ -418,12 +420,7 @@ const PRIMARY_DIRECT_SOURCES: Array<{ name: string; homepage: string; mapKeyword
   {
     name: "JOC",
     homepage: "https://www.joc.com",
-    mapKeywords: ["container", "ocean", "port", "trucking", "rail"],
-  },
-  {
-    name: "JOC",
-    homepage: "https://www.joc.com/maritime-news",
-    mapKeywords: ["container", "port", "red-sea", "suez"],
+    mapKeywords: ["container", "port", "red-sea", "suez", "trucking", "rail"],
   },
 ];
 
@@ -630,11 +627,17 @@ serve(async (req) => {
 
     // Accept enabled sources from the request body
     let enabledSources: string[] | null = null;
+    let batch = 0;
+    let batchCount = 8;
+    let force = false;
     try {
       const body = await req.json();
       if (Array.isArray(body.sources) && body.sources.length > 0) {
         enabledSources = body.sources;
       }
+      batch = Number.isInteger(body.batch) ? Math.max(0, Number(body.batch)) : 0;
+      batchCount = Number.isInteger(body.batchCount) ? Math.min(12, Math.max(1, Number(body.batchCount))) : 8;
+      force = body.force === true;
     } catch { /* empty body is fine */ }
 
     // Build search queries.
@@ -645,46 +648,33 @@ serve(async (req) => {
     // tripping the rate limit.
     // Morocco sources are covered every run by the direct-scrape pass below,
     // so they stay out of the per-run search budget.
-    const CORE_SOURCES = new Set<string>([
-      "The Loadstar", "JOC", "FreightWaves", "Lloyd's List", "Splash247",
-      "The Maritime Executive", "Maersk", "MSC", "CMA CGM", "Hapag-Lloyd",
-    ]);
-    const ROTATION_PER_RUN = 8;
     const dayIndex = Math.floor(Date.now() / 86_400_000);
-
+    const allRegisteredNames = NEWS_SOURCE_META
+      .map((source) => source.name)
+      .filter((name) => SOURCE_QUERIES[name]);
     const sourceList = enabledSources
-      ? enabledSources.filter((s) => SOURCE_QUERIES[s])
-      : Object.keys(SOURCE_QUERIES);
+      ? enabledSources.filter((source) => SOURCE_QUERIES[source])
+      : allRegisteredNames.filter((_, index) => index % batchCount === batch % batchCount);
+    const plannedSourceNames = new Set(sourceList);
     let runMoroccoPriority = false;
-    for (const s of (enabledSources ?? Object.keys(SOURCE_QUERIES))) {
+    for (const s of sourceList) {
       if (MOROCCO_SOURCE_NAMES.has(s)) runMoroccoPriority = true;
     }
-    if (!enabledSources) runMoroccoPriority = true;
 
-    const coreSources = sourceList.filter((s) => CORE_SOURCES.has(s));
-    const rotatingPool = sourceList
-      .filter((s) => !CORE_SOURCES.has(s) && !MOROCCO_SOURCE_NAMES.has(s))
-      .sort();
-    const rotatingSources: string[] = [];
-    for (let i = 0; i < Math.min(ROTATION_PER_RUN, rotatingPool.length); i++) {
-      rotatingSources.push(rotatingPool[(dayIndex * ROTATION_PER_RUN + i) % rotatingPool.length]);
+    // Each invocation owns one deterministic cohort. Scheduled invocations run
+    // all cohorts daily, avoiding a monolithic job that silently skips sources.
+    const searchPlans: Array<{ source: string; query: string }> = [];
+    for (const source of sourceList) {
+      const query = SOURCE_QUERIES[source]?.[0];
+      if (query) searchPlans.push({ source, query });
     }
-
-    // Hard search budget: the run has ~145s of wall clock and Firecrawl only
-    // tolerates ~10 requests/minute, so the search phase must leave room for
-    // the direct-scrape passes. One query per source keeps coverage broad.
-    const searchQueries: string[] = [];
-    for (const s of [...coreSources, ...rotatingSources]) {
-      searchQueries.push(...SOURCE_QUERIES[s].slice(0, 1));
-    }
-    searchQueries.push(...GENERAL_QUERIES.slice(0, 2));
-    if (runMoroccoPriority) searchQueries.push(...MOROCCO_PRIORITY_QUERIES.slice(0, 2));
     console.log(
-      `[query-plan] core=${coreSources.length} rotating=${rotatingSources.length} (${rotatingSources.join(", ")}) queries=${searchQueries.length}`,
+      `[query-plan] batch=${batch}/${batchCount} force=${force} sources=${sourceList.length} (${sourceList.join(", ")}) queries=${searchPlans.length}`,
     );
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     telemetryClient = supabase;
+    await syncSourceRegistry(supabase, NEWS_SOURCE_META);
     const { data: run } = await supabase
       .from("ingestion_runs")
       .insert({ pipeline: "fetch-news", status: "running" })
@@ -693,6 +683,41 @@ serve(async (req) => {
     runId = run?.id ?? null;
     const checkedAt = new Date().toISOString();
     const today = checkedAt.split("T")[0];
+    const sourceMeta = new Map(NEWS_SOURCE_META.map((source) => [source.name, source]));
+
+    const recordNewsHealth = async (
+      candidates: Array<{ source: string; publishedDate?: string | null }>,
+      accepted: Array<{ source: string }>,
+      inserted: Array<{ source_name?: string | null }>,
+      fallbackError: string | null = null,
+    ) => {
+      for (const sourceName of plannedSourceNames) {
+        const meta = sourceMeta.get(sourceName);
+        const found = candidates.filter((article) => article.source === sourceName);
+        const acceptedCount = accepted.filter((article) => article.source === sourceName).length;
+        const newCount = inserted.filter((row) => row.source_name === sourceName).length;
+        const latestPublicationAt = found
+          .map((article) => article.publishedDate)
+          .filter((date): date is string => Boolean(date))
+          .sort()
+          .at(-1) ?? null;
+        await recordSourceRun(supabase, runId, {
+          sourceName,
+          sourceUrl: meta?.homepage,
+          sourceType: meta?.source_type,
+          fetchMethod: "firecrawl_search_direct",
+          httpStatus: fallbackError ? 0 : 200,
+          pagesRequested: 1,
+          itemsDiscovered: found.length,
+          itemsNew: newCount,
+          itemsDuplicates: Math.max(0, acceptedCount - newCount),
+          itemsRejected: Math.max(0, found.length - acceptedCount),
+          latestPublicationAt,
+          startedAt: Date.now(),
+          error: fallbackError ?? (found.length === 0 ? "No parseable current articles found in this source cohort" : null),
+        });
+      }
+    };
 
     // Step 1: Scrape real news using Firecrawl Search API
     console.log("Scraping real news from web sources...");
@@ -707,7 +732,7 @@ serve(async (req) => {
     }> = [];
 
     const queryStats = { ok: 0, failed: 0, empty: 0 };
-    const searchPromises = searchQueries.map(async (query) => {
+    const searchPromises = searchPlans.map(async ({ source, query }) => {
       try {
         const response = await firecrawlFetch("https://api.firecrawl.dev/v2/search", {
           method: "POST",
@@ -737,7 +762,7 @@ serve(async (req) => {
           title: item.title || item.metadata?.title || "",
           url: item.url || item.metadata?.sourceURL || "",
           description: item.description || item.excerpt || "",
-          source: extractSourceName(item.url || ""),
+          source,
           markdown: item.markdown?.substring(0, 1000) || "",
             publishedDate: extractPublicationDate(item.metadata || {}, item.markdown || "") || extractDateFromUrl(item.url || ""),
         }));
@@ -750,7 +775,7 @@ serve(async (req) => {
 
     const settled = await Promise.allSettled(searchPromises);
     const results = settled.map((s) => (s.status === "fulfilled" ? s.value : []));
-    console.log(`[search-stats] ok=${queryStats.ok} empty=${queryStats.empty} failed=${queryStats.failed} of ${searchQueries.length}`);
+    console.log(`[search-stats] ok=${queryStats.ok} empty=${queryStats.empty} failed=${queryStats.failed} of ${searchPlans.length}`);
     for (const batch of results) {
       allArticles.push(...batch);
     }
@@ -759,9 +784,10 @@ serve(async (req) => {
     // These run on every execution — they carry the most important global
     // freight-forwarding signal, so we want every run to capture them.
     {
-      console.log(`Running direct scrape for ${PRIMARY_DIRECT_SOURCES.length} primary global sources...`);
+      const primarySources = PRIMARY_DIRECT_SOURCES.filter((source) => plannedSourceNames.has(source.name));
+      console.log(`Running direct scrape for ${primarySources.length} primary global sources...`);
       const primaryStats: Record<string, { mapped: number; scraped: number }> = {};
-      for (const src of PRIMARY_DIRECT_SOURCES) {
+      for (const src of primarySources) {
         if (budgetLeftMs() < 25_000) {
           console.log(`[budget] skipping remaining primary direct scrapes (${Math.round(budgetLeftMs() / 1000)}s left)`);
           break;
@@ -779,7 +805,10 @@ serve(async (req) => {
             console.log(`[primary-direct] ${src.name}: /map empty, harvested ${candidateUrls.length} links from page`);
           }
           primaryStats[src.name].mapped = candidateUrls.length;
-          const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 8);
+          // One search + map/landing-page discovery + four article scrapes keeps
+          // a primary source inside one provider window. Larger batches used to
+          // stall until the worker was terminated, leaving the run unfinished.
+          const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 4);
           const scraped = await Promise.all(
             toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
           );
@@ -815,15 +844,20 @@ serve(async (req) => {
         .select("name, homepage")
         .eq("source_type", "custom")
         .eq("enabled", true);
-      for (const src of (customSources ?? [])) {
+      const customInThisBatch = enabledSources
+        ? (customSources ?? []).filter((source) => enabledSources?.includes(source.name))
+        : batch % batchCount === 0 ? (customSources ?? []) : [];
+      for (const src of customInThisBatch) {
         if (!src.homepage) continue;
+        plannedSourceNames.add(src.name);
         if (budgetLeftMs() < 25_000) {
           console.log(`[budget] skipping remaining custom source scrapes (${Math.round(budgetLeftMs() / 1000)}s left)`);
           break;
         }
         try {
           const mapped = await firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage);
-          const candidateUrls = Array.from(new Set(mapped)).slice(0, 25);
+          const discovered = mapped.length > 0 ? mapped : await firecrawlHarvestLinks(FIRECRAWL_API_KEY, src.homepage);
+          const candidateUrls = Array.from(new Set(discovered)).slice(0, 25);
           const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 4);
           const scraped = await Promise.all(toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)));
           let count = 0;
@@ -853,7 +887,7 @@ serve(async (req) => {
       const advisoryToday = Array.from(
         { length: Math.min(ADVISORY_PER_RUN, ADVISORY_DIRECT_SOURCES.length) },
         (_, i) => ADVISORY_DIRECT_SOURCES[(dayIndex * ADVISORY_PER_RUN + i) % ADVISORY_DIRECT_SOURCES.length],
-      ).filter((src) => !enabledSources || enabledSources.includes(src.name));
+      ).filter((src) => plannedSourceNames.has(src.name));
       for (const src of advisoryToday) {
         if (budgetLeftMs() < 25_000) {
           console.log(`[budget] skipping remaining advisory scrapes (${Math.round(budgetLeftMs() / 1000)}s left)`);
@@ -864,7 +898,10 @@ serve(async (req) => {
           const mapResults = await Promise.all(
             keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
           );
-          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 20);
+          let candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 20);
+          if (candidateUrls.length === 0) {
+            candidateUrls = (await firecrawlHarvestLinks(FIRECRAWL_API_KEY, src.homepage)).slice(0, 20);
+          }
           const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 4);
           const scraped = await Promise.all(toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)));
           let count = 0;
@@ -896,7 +933,7 @@ serve(async (req) => {
       const MOROCCO_PER_RUN = 2;
       const moroccoToday = Array.from({ length: Math.min(MOROCCO_PER_RUN, MOROCCO_DIRECT_SOURCES.length) }, (_, i) =>
         MOROCCO_DIRECT_SOURCES[(dayIndex * MOROCCO_PER_RUN + i) % MOROCCO_DIRECT_SOURCES.length],
-      );
+      ).filter((source) => plannedSourceNames.has(source.name));
       console.log(`Running direct scrape for ${moroccoToday.map((s) => s.name).join(", ")}`);
       const directScrapeStats: Record<string, { mapped: number; scraped: number }> = {};
 
@@ -913,7 +950,10 @@ serve(async (req) => {
           const mapResults = await Promise.all(
             keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
           );
-           const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 25);
+           let candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 25);
+           if (candidateUrls.length === 0) {
+             candidateUrls = (await firecrawlHarvestLinks(FIRECRAWL_API_KEY, src.homepage)).slice(0, 25);
+           }
           directScrapeStats[src.name].mapped = candidateUrls.length;
 
            const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 4);
@@ -1017,12 +1057,13 @@ serve(async (req) => {
       const updatedAt = await touchLatestRefresh(supabase, checkedAt);
       await finishRun({
         status: "partial",
-        queries_total: searchQueries.length,
+        queries_total: searchPlans.length,
         queries_failed: queryStats.failed,
         candidates_found: uniqueArticles.length,
         candidates_accepted: 0,
         rejection_counts: rejectionStats,
       });
+      await recordNewsHealth(uniqueArticles, [], [], "No articles passed source/date/link validation");
       return new Response(
         JSON.stringify({
           success: true,
@@ -1207,12 +1248,13 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       const updatedAt = await touchLatestRefresh(supabase, checkedAt);
       await finishRun({
         status: "partial",
-        queries_total: searchQueries.length,
+        queries_total: searchPlans.length,
         queries_failed: queryStats.failed,
         candidates_found: uniqueArticles.length,
         candidates_accepted: validatedArticles.length,
         rejection_counts: rejectionStats,
       });
+      await recordNewsHealth(uniqueArticles, validatedArticles, [], "AI relevance classification returned no logistics items");
       return new Response(
         JSON.stringify({
           success: true,
@@ -1357,12 +1399,13 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       const updatedAt = await touchLatestRefresh(supabase, checkedAt);
       await finishRun({
         status: "success",
-        queries_total: searchQueries.length,
+        queries_total: searchPlans.length,
         queries_failed: queryStats.failed,
         candidates_found: uniqueArticles.length,
         candidates_accepted: validatedArticles.length,
         rejection_counts: rejectionStats,
       });
+      await recordNewsHealth(uniqueArticles, validatedArticles, []);
       return new Response(
         JSON.stringify({
           success: true,
@@ -1411,7 +1454,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
     // stuck at "running" even though ingestion had succeeded.
     await finishRun({
       status: queryStats.failed > 0 ? "partial" : "success",
-      queries_total: searchQueries.length,
+      queries_total: searchPlans.length,
       queries_failed: queryStats.failed,
       candidates_found: uniqueArticles.length,
       candidates_accepted: validatedArticles.length,
@@ -1419,6 +1462,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       rejection_counts: rejectionStats,
       source_report: { scraped_by_source: scrapedBySource, inserted_by_source: insertedBySource },
     });
+    await recordNewsHealth(uniqueArticles, validatedArticles, newRows);
 
     // Step 4: Trigger AI classification for Finance/IT section relevance
     const newIds = data.map((d: any) => d.id);
@@ -1481,7 +1525,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         message: data.length > 0 ? "Refresh successful" : "Refresh successful: 0 new entries",
         sources: [...new Set(rows.map((r: any) => r.source_name))],
         source_report: {
-          queries: { total: searchQueries.length, ok: queryStats.ok, empty: queryStats.empty, failed: queryStats.failed },
+          queries: { total: searchPlans.length, ok: queryStats.ok, empty: queryStats.empty, failed: queryStats.failed },
           scraped_by_source: scrapedBySource,
           inserted_by_source: insertedBySource,
         },
