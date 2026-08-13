@@ -99,9 +99,12 @@ ${JSON.stringify(texts)}`;
     if (!resp.ok) {
       const t = await resp.text();
       console.error("AI gateway error", resp.status, t);
-      return new Response(JSON.stringify({ translations: texts }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      // Never echo the source back: the client would cache English as if it
+      // were a translation, producing permanently mixed-language cards.
+      return new Response(
+        JSON.stringify({ error: "translation_upstream_failed", status: resp.status }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
     const data = await resp.json();
     let content: string = data?.choices?.[0]?.message?.content ?? "[]";
@@ -116,10 +119,16 @@ ${JSON.stringify(texts)}`;
       translations = JSON.parse(content);
     } catch (e) {
       console.error("Parse error", e, content.slice(0, 200));
-      translations = texts;
+      return new Response(JSON.stringify({ error: "translation_parse_failed" }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
     if (!Array.isArray(translations) || translations.length !== texts.length) {
-      translations = texts;
+      return new Response(JSON.stringify({ error: "translation_length_mismatch" }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify({ translations }), {
