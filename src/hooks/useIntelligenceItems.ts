@@ -205,7 +205,6 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
         return scoreOf(b) - scoreOf(a);
       });
       if (lang === "fr" && sorted.length > 0) {
-        console.log("[i18n] translating intel items", sorted.length);
         try {
           // Per-card coherence: a card is either fully French or fully English,
           // never a French headline with an English summary.
