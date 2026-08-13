@@ -780,7 +780,7 @@ serve(async (req) => {
 
     const settled = await Promise.allSettled(searchPromises);
     const results = settled.map((s) => (s.status === "fulfilled" ? s.value : []));
-    console.log(`[search-stats] ok=${queryStats.ok} empty=${queryStats.empty} failed=${queryStats.failed} of ${searchQueries.length}`);
+    console.log(`[search-stats] ok=${queryStats.ok} empty=${queryStats.empty} failed=${queryStats.failed} of ${searchPlans.length}`);
     for (const batch of results) {
       allArticles.push(...batch);
     }
@@ -789,9 +789,10 @@ serve(async (req) => {
     // These run on every execution — they carry the most important global
     // freight-forwarding signal, so we want every run to capture them.
     {
-      console.log(`Running direct scrape for ${PRIMARY_DIRECT_SOURCES.length} primary global sources...`);
+      const primarySources = PRIMARY_DIRECT_SOURCES.filter((source) => plannedSourceNames.has(source.name));
+      console.log(`Running direct scrape for ${primarySources.length} primary global sources...`);
       const primaryStats: Record<string, { mapped: number; scraped: number }> = {};
-      for (const src of PRIMARY_DIRECT_SOURCES) {
+      for (const src of primarySources) {
         if (budgetLeftMs() < 25_000) {
           console.log(`[budget] skipping remaining primary direct scrapes (${Math.round(budgetLeftMs() / 1000)}s left)`);
           break;
@@ -845,8 +846,12 @@ serve(async (req) => {
         .select("name, homepage")
         .eq("source_type", "custom")
         .eq("enabled", true);
-      for (const src of (customSources ?? [])) {
+      const customInThisBatch = enabledSources
+        ? (customSources ?? []).filter((source) => enabledSources?.includes(source.name))
+        : batch % batchCount === 0 ? (customSources ?? []) : [];
+      for (const src of customInThisBatch) {
         if (!src.homepage) continue;
+        plannedSourceNames.add(src.name);
         if (budgetLeftMs() < 25_000) {
           console.log(`[budget] skipping remaining custom source scrapes (${Math.round(budgetLeftMs() / 1000)}s left)`);
           break;
@@ -883,7 +888,7 @@ serve(async (req) => {
       const advisoryToday = Array.from(
         { length: Math.min(ADVISORY_PER_RUN, ADVISORY_DIRECT_SOURCES.length) },
         (_, i) => ADVISORY_DIRECT_SOURCES[(dayIndex * ADVISORY_PER_RUN + i) % ADVISORY_DIRECT_SOURCES.length],
-      ).filter((src) => !enabledSources || enabledSources.includes(src.name));
+      ).filter((src) => plannedSourceNames.has(src.name));
       for (const src of advisoryToday) {
         if (budgetLeftMs() < 25_000) {
           console.log(`[budget] skipping remaining advisory scrapes (${Math.round(budgetLeftMs() / 1000)}s left)`);
@@ -926,7 +931,7 @@ serve(async (req) => {
       const MOROCCO_PER_RUN = 2;
       const moroccoToday = Array.from({ length: Math.min(MOROCCO_PER_RUN, MOROCCO_DIRECT_SOURCES.length) }, (_, i) =>
         MOROCCO_DIRECT_SOURCES[(dayIndex * MOROCCO_PER_RUN + i) % MOROCCO_DIRECT_SOURCES.length],
-      );
+      ).filter((source) => plannedSourceNames.has(source.name));
       console.log(`Running direct scrape for ${moroccoToday.map((s) => s.name).join(", ")}`);
       const directScrapeStats: Record<string, { mapped: number; scraped: number }> = {};
 
@@ -1047,12 +1052,13 @@ serve(async (req) => {
       const updatedAt = await touchLatestRefresh(supabase, checkedAt);
       await finishRun({
         status: "partial",
-        queries_total: searchQueries.length,
+        queries_total: searchPlans.length,
         queries_failed: queryStats.failed,
         candidates_found: uniqueArticles.length,
         candidates_accepted: 0,
         rejection_counts: rejectionStats,
       });
+      await recordNewsHealth(uniqueArticles, [], [], "No articles passed source/date/link validation");
       return new Response(
         JSON.stringify({
           success: true,
@@ -1237,12 +1243,13 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       const updatedAt = await touchLatestRefresh(supabase, checkedAt);
       await finishRun({
         status: "partial",
-        queries_total: searchQueries.length,
+        queries_total: searchPlans.length,
         queries_failed: queryStats.failed,
         candidates_found: uniqueArticles.length,
         candidates_accepted: validatedArticles.length,
         rejection_counts: rejectionStats,
       });
+      await recordNewsHealth(uniqueArticles, validatedArticles, [], "AI relevance classification returned no logistics items");
       return new Response(
         JSON.stringify({
           success: true,
@@ -1387,12 +1394,13 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       const updatedAt = await touchLatestRefresh(supabase, checkedAt);
       await finishRun({
         status: "success",
-        queries_total: searchQueries.length,
+        queries_total: searchPlans.length,
         queries_failed: queryStats.failed,
         candidates_found: uniqueArticles.length,
         candidates_accepted: validatedArticles.length,
         rejection_counts: rejectionStats,
       });
+      await recordNewsHealth(uniqueArticles, validatedArticles, []);
       return new Response(
         JSON.stringify({
           success: true,
@@ -1441,7 +1449,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
     // stuck at "running" even though ingestion had succeeded.
     await finishRun({
       status: queryStats.failed > 0 ? "partial" : "success",
-      queries_total: searchQueries.length,
+      queries_total: searchPlans.length,
       queries_failed: queryStats.failed,
       candidates_found: uniqueArticles.length,
       candidates_accepted: validatedArticles.length,
@@ -1449,6 +1457,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       rejection_counts: rejectionStats,
       source_report: { scraped_by_source: scrapedBySource, inserted_by_source: insertedBySource },
     });
+    await recordNewsHealth(uniqueArticles, validatedArticles, newRows);
 
     // Step 4: Trigger AI classification for Finance/IT section relevance
     const newIds = data.map((d: any) => d.id);
@@ -1511,7 +1520,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         message: data.length > 0 ? "Refresh successful" : "Refresh successful: 0 new entries",
         sources: [...new Set(rows.map((r: any) => r.source_name))],
         source_report: {
-          queries: { total: searchQueries.length, ok: queryStats.ok, empty: queryStats.empty, failed: queryStats.failed },
+          queries: { total: searchPlans.length, ok: queryStats.ok, empty: queryStats.empty, failed: queryStats.failed },
           scraped_by_source: scrapedBySource,
           inserted_by_source: insertedBySource,
         },
