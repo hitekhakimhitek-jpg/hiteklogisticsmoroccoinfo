@@ -420,12 +420,7 @@ const PRIMARY_DIRECT_SOURCES: Array<{ name: string; homepage: string; mapKeyword
   {
     name: "JOC",
     homepage: "https://www.joc.com",
-    mapKeywords: ["container", "ocean", "port", "trucking", "rail"],
-  },
-  {
-    name: "JOC",
-    homepage: "https://www.joc.com/maritime-news",
-    mapKeywords: ["container", "port", "red-sea", "suez"],
+    mapKeywords: ["container", "port", "red-sea", "suez", "trucking", "rail"],
   },
 ];
 
@@ -810,7 +805,10 @@ serve(async (req) => {
             console.log(`[primary-direct] ${src.name}: /map empty, harvested ${candidateUrls.length} links from page`);
           }
           primaryStats[src.name].mapped = candidateUrls.length;
-          const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 8);
+          // One search + map/landing-page discovery + four article scrapes keeps
+          // a primary source inside one provider window. Larger batches used to
+          // stall until the worker was terminated, leaving the run unfinished.
+          const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 4);
           const scraped = await Promise.all(
             toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)),
           );
