@@ -4,8 +4,9 @@ import { Globe2 } from "lucide-react";
 import { format } from "date-fns";
 import { fr as frLocale } from "date-fns/locale";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { translateDeep } from "@/lib/translateEntries";
+import { translateDeep, translateRecords } from "@/lib/translateEntries";
 import { SEO } from "@/components/SEO";
+import { HolidayCalendar } from "@/components/map/HolidayCalendar";
 import { passesFeedFilter } from "@/hooks/useIntelligenceItems";
 import { ISO3 } from "@/data/iso3to2";
 import { CalendarDays, X, Loader2 } from "lucide-react";
@@ -82,13 +83,7 @@ export default function DisruptionMap() {
     let rows = (((data || []) as any[]) as MapItem[]).filter(passesFeedFilter);
     if (lang === "fr" && rows.length > 0) {
       try {
-        const payload = rows.map((r) => ({ id: r.id, headline: r.headline, summary: r.summary }));
-        const translated = await translateDeep(payload, "fr");
-        const byId = new Map(translated.map((t: any) => [t.id, t]));
-        rows = rows.map((r) => {
-          const t = byId.get(r.id) as any;
-          return t ? { ...r, headline: t.headline ?? r.headline, summary: t.summary ?? r.summary } : r;
-        });
+        rows = await translateRecords(rows, ["headline", "summary"], "fr");
       } catch (e) { console.error("map translate failed", e); }
     }
     setItems(rows);
@@ -315,19 +310,24 @@ export default function DisruptionMap() {
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
       <SEO
-        title="Disruption Map"
-        description="Live geocoded map of freight and logistics disruptions affecting Morocco and global trade lanes, refreshed daily."
+        title="Disruption / Holiday Map"
+        description="Live map of freight and logistics disruptions plus public holidays worldwide — click any country for its upcoming holidays."
       />
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Globe2 className="w-6 h-6 text-primary" />
-            {lang === "fr" ? "Carte des perturbations" : "Disruption Map"}
+            {lang === "fr" ? "Carte perturbations / jours fériés" : "Disruption / Holiday Map"}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {lang === "fr"
-              ? `Perturbations affectant les chaînes globales — synchronisé avec le tableau de bord (${items.length} éléments). Cliquez sur un pays pour voir ses jours fériés.`
-              : `Disruptions affecting global trade — synced with the dashboard feed (${items.length} items). Click a country to see its upcoming public holidays.`}
+              ? `Perturbations et jours fériés au même endroit — synchronisé avec le tableau de bord (${items.length} éléments).`
+              : `Disruptions and public holidays in one view — synced with the dashboard feed (${items.length} items).`}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {lang === "fr"
+              ? "Astuce : cliquez sur n'importe quel pays de la carte pour afficher ses jours fériés à venir."
+              : "Tip: click any country on the map to see its upcoming public holidays."}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
@@ -392,6 +392,8 @@ export default function DisruptionMap() {
       {loading && (
         <p className="text-xs text-muted-foreground">{lang === "fr" ? "Chargement…" : "Loading…"}</p>
       )}
+
+      <HolidayCalendar />
     </div>
   );
 }

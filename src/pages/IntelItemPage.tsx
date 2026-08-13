@@ -6,7 +6,7 @@ import { IntelCard } from "@/components/intel/IntelCard";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Home } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { translateDeep } from "@/lib/translateEntries";
+import { translateRecords } from "@/lib/translateEntries";
 
 export default function IntelItemPage() {
   const { id } = useParams<{ id: string }>();
@@ -25,16 +25,12 @@ export default function IntelItemPage() {
       const row = data as IntelligenceItem | null;
       if (!row || lang !== "fr") return row;
       try {
-        const t = await translateDeep(
-          {
-            headline: row.headline,
-            summary: row.summary,
-            impact: row.impact,
-            action_required: row.action_required,
-          },
+        const [t] = await translateRecords(
+          [row],
+          ["headline", "summary", "impact", "action_required"],
           "fr",
         );
-        return { ...row, ...t } as IntelligenceItem;
+        return t as IntelligenceItem;
       } catch {
         return row;
       }

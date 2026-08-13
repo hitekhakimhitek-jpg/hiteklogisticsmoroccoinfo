@@ -6,7 +6,7 @@
 
 - [Dashboard](/): Live intelligence feed with severity (Critical, Important, To be aware of) across Operations, Compliance, Finance, Commercial, and IT.
 - [Weekly Digest](/digest): Auto-generated Monday recap grouped by Operational, Financial, and Global categories.
-- [Disruption Map](/map): Geocoded map of active freight and logistics disruptions, refreshed daily.
+- [Disruption / Holiday Map](/map): Geocoded map of active freight and logistics disruptions plus worldwide public holidays, refreshed daily.
 - [Regulatory Changes](/regulatory): Compliance and regulatory updates affecting Morocco freight.
 - [Finance Regulation](/finance-regulation): Tariffs, customs, and financial regulation updates.
 - [IT News](/it-news): Logistics-relevant IT and cybersecurity news.

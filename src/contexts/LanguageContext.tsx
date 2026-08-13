@@ -22,6 +22,7 @@ const EXACT: Record<string, string> = {
   Alerts: "Alertes",
   "Compliance Register": "Registre de conformité",
   "Disruption Map": "Carte des perturbations",
+  "Disruption / Holiday Map": "Carte perturbations / jours fériés",
   "Disruption map": "Carte des perturbations",
   "Add disruption": "Ajouter une perturbation",
   "Show resolved": "Afficher les résolus",

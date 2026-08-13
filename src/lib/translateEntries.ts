@@ -11,24 +11,45 @@ const FIELDS: (keyof DbNewsEntry)[] = [
 
 // Bump version to invalidate stale cached translations (e.g. when the
 // edge function previously echoed English back unchanged).
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 function cacheKey(target: "fr" | "en", text: string) {
   return `tr:${CACHE_VERSION}:${target}:${text}`;
 }
 
+// In-memory cache is the source of truth for the session: localStorage can be
+// full (quota) or unavailable, and relying on it alone silently dropped every
+// translation, leaving cards in English.
+const memCache = new Map<string, string>();
+
 function getCached(target: "fr" | "en", text: string): string | null {
+  const key = cacheKey(target, text);
+  const hit = memCache.get(key);
+  if (hit) return hit;
   try {
-    return localStorage.getItem(cacheKey(target, text));
+    const v = localStorage.getItem(key);
+    if (v) memCache.set(key, v);
+    return v;
   } catch {
     return null;
   }
 }
 
 function setCached(target: "fr" | "en", text: string, value: string) {
+  const key = cacheKey(target, text);
+  memCache.set(key, value);
   try {
-    localStorage.setItem(cacheKey(target, text), value);
+    localStorage.setItem(key, value);
   } catch {
-    /* quota — ignore */
+    // Quota exceeded — drop old translation entries and retry once.
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("tr:") && !k.startsWith(`tr:${CACHE_VERSION}:`)) localStorage.removeItem(k);
+      }
+      localStorage.setItem(key, value);
+    } catch {
+      /* keep the in-memory copy only */
+    }
   }
 }
 
@@ -46,16 +67,71 @@ async function translateChunk(
       ? data.translations
       : [];
     if (translations.length !== slice.length) return slice.map(() => null);
-    return translations;
+    // Guard against the model echoing the source back: an unchanged string that
+    // still looks English must be treated as a failure, never cached as French.
+    return translations.map((t, i) =>
+      typeof t === "string" && t.trim() && !(target === "fr" && t.trim() === slice[i].trim() && looksEnglish(t))
+        ? t
+        : null,
+    );
   } catch (e) {
-    if (attempt < 2) {
-      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    if (attempt < 3) {
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
       return translateChunk(slice, target, attempt + 1);
     }
     console.error("translate batch failed", e);
     // Return nulls so failures are NOT cached as if they were translations.
     return slice.map(() => null);
   }
+}
+
+// Cheap English detector — used only to reject echoed source strings.
+const EN_WORDS =
+  /\b(the|and|of|to|for|with|from|after|new|will|is|are|as|by|has|have|says|amid|over|into|per|shipping|port|freight|customs|week|strike|market|rates?)\b/i;
+function looksEnglish(s: string): boolean {
+  return EN_WORDS.test(s);
+}
+
+/**
+ * Translate a list of records field-by-field with *per-record coherence*:
+ * if any translatable field of a record fails to translate, the whole record
+ * is returned untouched in English. This prevents cards that mix a French
+ * headline with an English summary.
+ */
+export async function translateRecords<T extends Record<string, unknown>>(
+  rows: T[],
+  fields: (keyof T)[],
+  target: "fr" | "en",
+): Promise<T[]> {
+  if (target === "en" || rows.length === 0) return rows;
+
+  const need = new Set<string>();
+  for (const r of rows) {
+    for (const f of fields) {
+      const v = r[f];
+      if (typeof v === "string" && v.trim() && !getCached(target, v)) need.add(v);
+    }
+  }
+  const uniques = Array.from(need);
+  if (uniques.length > 0) {
+    const translated = await batchTranslate(uniques, target);
+    uniques.forEach((src, i) => {
+      const t = translated[i];
+      if (t) setCached(target, src, t);
+    });
+  }
+
+  return rows.map((r) => {
+    const out: Record<string, unknown> = { ...r };
+    for (const f of fields) {
+      const v = r[f];
+      if (typeof v !== "string" || !v.trim()) continue;
+      const t = getCached(target, v);
+      if (!t) return r; // all-or-nothing: keep the record fully in English
+      out[f as string] = t;
+    }
+    return out as T;
+  });
 }
 
 async function batchTranslate(
@@ -87,39 +163,12 @@ export async function translateEntries(
   target: "fr" | "en",
 ): Promise<DbNewsEntry[]> {
   if (target === "en" || entries.length === 0) return entries;
-
-  // Collect unique strings needing translation.
-  const need = new Set<string>();
-  for (const e of entries) {
-    for (const f of FIELDS) {
-      const v = e[f] as unknown;
-      if (typeof v === "string" && v.trim() && !getCached(target, v)) {
-        need.add(v);
-      }
-    }
-  }
-
-  const uniques = Array.from(need);
-  if (uniques.length > 0) {
-    const translated = await batchTranslate(uniques, target);
-    uniques.forEach((src, i) => {
-      const t = translated[i];
-      if (t) setCached(target, src, t);
-    });
-  }
-
-  // Build translated copies.
-  return entries.map((e) => {
-    const copy: DbNewsEntry = { ...e };
-    for (const f of FIELDS) {
-      const v = e[f] as unknown;
-      if (typeof v === "string" && v.trim()) {
-        const t = getCached(target, v);
-        if (t) (copy as Record<string, unknown>)[f as string] = t;
-      }
-    }
-    return copy;
-  });
+  // All-or-nothing per entry so a card never mixes French and English.
+  return translateRecords(
+    entries as unknown as Record<string, unknown>[],
+    FIELDS as unknown as string[],
+    target,
+  ) as unknown as Promise<DbNewsEntry[]>;
 }
 
 /**
