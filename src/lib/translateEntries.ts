@@ -142,39 +142,12 @@ export async function translateEntries(
   target: "fr" | "en",
 ): Promise<DbNewsEntry[]> {
   if (target === "en" || entries.length === 0) return entries;
-
-  // Collect unique strings needing translation.
-  const need = new Set<string>();
-  for (const e of entries) {
-    for (const f of FIELDS) {
-      const v = e[f] as unknown;
-      if (typeof v === "string" && v.trim() && !getCached(target, v)) {
-        need.add(v);
-      }
-    }
-  }
-
-  const uniques = Array.from(need);
-  if (uniques.length > 0) {
-    const translated = await batchTranslate(uniques, target);
-    uniques.forEach((src, i) => {
-      const t = translated[i];
-      if (t) setCached(target, src, t);
-    });
-  }
-
-  // Build translated copies.
-  return entries.map((e) => {
-    const copy: DbNewsEntry = { ...e };
-    for (const f of FIELDS) {
-      const v = e[f] as unknown;
-      if (typeof v === "string" && v.trim()) {
-        const t = getCached(target, v);
-        if (t) (copy as Record<string, unknown>)[f as string] = t;
-      }
-    }
-    return copy;
-  });
+  // All-or-nothing per entry so a card never mixes French and English.
+  return translateRecords(
+    entries as unknown as Record<string, unknown>[],
+    FIELDS as unknown as string[],
+    target,
+  ) as unknown as Promise<DbNewsEntry[]>;
 }
 
 /**
