@@ -858,7 +858,8 @@ serve(async (req) => {
         }
         try {
           const mapped = await firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage);
-          const candidateUrls = Array.from(new Set(mapped)).slice(0, 25);
+          const discovered = mapped.length > 0 ? mapped : await firecrawlHarvestLinks(FIRECRAWL_API_KEY, src.homepage);
+          const candidateUrls = Array.from(new Set(discovered)).slice(0, 25);
           const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 4);
           const scraped = await Promise.all(toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)));
           let count = 0;
@@ -899,7 +900,10 @@ serve(async (req) => {
           const mapResults = await Promise.all(
             keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
           );
-          const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 20);
+          let candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 20);
+          if (candidateUrls.length === 0) {
+            candidateUrls = (await firecrawlHarvestLinks(FIRECRAWL_API_KEY, src.homepage)).slice(0, 20);
+          }
           const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 4);
           const scraped = await Promise.all(toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)));
           let count = 0;
@@ -948,7 +952,10 @@ serve(async (req) => {
           const mapResults = await Promise.all(
             keywords.map((kw) => firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage, kw)),
           );
-           const candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 25);
+           let candidateUrls = Array.from(new Set(mapResults.flat())).slice(0, 25);
+           if (candidateUrls.length === 0) {
+             candidateUrls = (await firecrawlHarvestLinks(FIRECRAWL_API_KEY, src.homepage)).slice(0, 25);
+           }
           directScrapeStats[src.name].mapped = candidateUrls.length;
 
            const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 4);
