@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, requireHitekAdmin } from "../_shared/auth.ts";
+import { recordSourceRun } from "../_shared/health.ts";
+import { NEWS_SOURCE_META, syncSourceRegistry } from "../_shared/registry.ts";
 
 const CATEGORIES = ["regulation", "weather", "port", "trade", "compliance", "market", "general"];
 const REGIONS = [
@@ -630,11 +632,17 @@ serve(async (req) => {
 
     // Accept enabled sources from the request body
     let enabledSources: string[] | null = null;
+    let batch = 0;
+    let batchCount = 8;
+    let force = false;
     try {
       const body = await req.json();
       if (Array.isArray(body.sources) && body.sources.length > 0) {
         enabledSources = body.sources;
       }
+      batch = Number.isInteger(body.batch) ? Math.max(0, Number(body.batch)) : 0;
+      batchCount = Number.isInteger(body.batchCount) ? Math.min(12, Math.max(1, Number(body.batchCount))) : 8;
+      force = body.force === true;
     } catch { /* empty body is fine */ }
 
     // Build search queries.
@@ -685,6 +693,7 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     telemetryClient = supabase;
+    await syncSourceRegistry(supabase, NEWS_SOURCE_META);
     const { data: run } = await supabase
       .from("ingestion_runs")
       .insert({ pipeline: "fetch-news", status: "running" })
