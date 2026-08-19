@@ -116,7 +116,13 @@ export function isBadArticleUrl(u: string | null | undefined): boolean {
   try {
     const url = new URL(u);
     if (OFFICIAL_LANDING_HOSTS.test(url.hostname)) return false;
-    if (url.pathname.replace(/\/+$/, "").split("/").filter(Boolean).length <= 1) return true;
+    const segments = url.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+    if (segments.length <= 1) {
+      // Publishers like The Loadstar serve real articles at a single long slug.
+      const slug = segments[0] || "";
+      const looksLikeSlug = slug.length >= 15 && (slug.match(/-/g) || []).length >= 2;
+      if (!looksLikeSlug) return true;
+    }
   } catch {
     return false;
   }
