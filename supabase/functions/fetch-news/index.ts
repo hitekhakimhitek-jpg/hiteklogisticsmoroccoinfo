@@ -1200,35 +1200,35 @@ ${articleSummaries}
 
 Return ONLY the JSON array. No markdown fences, no commentary.`;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [{ role: "user", content: classifyPrompt }],
-        max_tokens: 12000,
-      }),
-    });
-
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error("AI classification error:", aiResponse.status, errText);
-      throw new Error(`AI classification error: ${aiResponse.status}`);
-    }
-
-    const aiData = await aiResponse.json();
-    let content = aiData.choices?.[0]?.message?.content || "";
-    content = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-
-    let classifiedEntries;
+    let classifiedEntries: any;
     try {
-      classifiedEntries = JSON.parse(content);
-    } catch (e) {
-      console.warn("Initial JSON parse failed, attempting to salvage truncated response...");
+      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: [{ role: "user", content: classifyPrompt }],
+          max_tokens: 12000,
+        }),
+      });
+
+      if (!aiResponse.ok) {
+        const errText = await aiResponse.text();
+        console.error("AI classification error:", aiResponse.status, errText);
+        throw new Error(`AI classification error: ${aiResponse.status}`);
+      }
+
+      const aiData = await aiResponse.json();
+      let content = aiData.choices?.[0]?.message?.content || "";
+      content = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+
       try {
+        classifiedEntries = JSON.parse(content);
+      } catch (e) {
+        console.warn("Initial JSON parse failed, attempting to salvage truncated response...");
         const lastCompleteObj = content.lastIndexOf("}");
         if (lastCompleteObj > 0) {
           const salvaged = content.substring(0, lastCompleteObj + 1) + "]";
@@ -1237,10 +1237,13 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         } else {
           throw new Error("No salvageable JSON found");
         }
-      } catch (e2) {
-        console.error("Failed to parse AI classification:", content.substring(0, 500));
-        throw new Error("Failed to parse AI classification response");
       }
+    } catch (aiErr) {
+      // Ingestion must never stop because the AI gateway is unavailable, rate
+      // limited or out of credits. Fall back to deterministic keyword rules so
+      // the daily scrape still lands in the database.
+      console.error("Falling back to heuristic classification:", aiErr);
+      classifiedEntries = heuristicClassify(classificationBatch);
     }
 
     if (!Array.isArray(classifiedEntries) || classifiedEntries.length === 0) {
@@ -1642,4 +1645,65 @@ function extractSourceName(url: string): string {
   } catch {
     return "Unknown Source";
   }
+}
+
+/**
+ * Deterministic, AI-free classifier used when the AI gateway is unavailable
+ * (rate limit, outage, exhausted credits). Keeps the daily scrape flowing.
+ */
+function heuristicClassify(
+  articles: Array<{ title: string; url: string; description?: string; markdown?: string; source?: string }>,
+) {
+  const out: any[] = [];
+  articles.forEach((a, index) => {
+    const text = `${a.title || ""} ${a.description || ""}`.toLowerCase();
+
+    let category = "general";
+    if (/customs|tariff|regulation|sanction|compliance|law|directive|rule/.test(text)) category = "regulation";
+    else if (/storm|typhoon|cyclone|hurricane|flood|heat|snow|weather|fog/.test(text)) category = "weather";
+    else if (/port|terminal|berth|quay|congestion|canal|strait/.test(text)) category = "port";
+    else if (/tariff|export|import|trade|wto/.test(text)) category = "trade";
+    else if (/rate|freight rate|market|capacity|demand|index/.test(text)) category = "market";
+
+    let priority = "informational";
+    if (/strike|closure|closed|blockade|shutdown|attack|suspend|halt|force majeure|emergency/.test(text)) {
+      priority = "critical";
+    } else if (/delay|congestion|disrupt|surcharge|diversion|backlog|warning|restriction/.test(text)) {
+      priority = "important";
+    }
+
+    let primaryRegion = "global";
+    if (/morocco|maroc|casablanca|tanger med|tangier/.test(text)) primaryRegion = "morocco";
+    else if (/europe|eu |european|spain|france|germany|rotterdam|antwerp|hamburg/.test(text)) primaryRegion = "europe";
+    else if (/china|asia|singapore|japan|korea|india|vietnam|shanghai/.test(text)) primaryRegion = "asia";
+    else if (/united states|u\.s\.|usa|canada|mexico|los angeles|new york/.test(text)) primaryRegion = "north_america";
+    else if (/brazil|argentina|chile|peru|colombia/.test(text)) primaryRegion = "south_america";
+    else if (/africa|nigeria|egypt|kenya|south africa/.test(text)) primaryRegion = "africa";
+    else if (/middle east|red sea|suez|hormuz|uae|dubai|saudi|iran|israel/.test(text)) primaryRegion = "middle_east";
+    else if (/australia|new zealand|oceania/.test(text)) primaryRegion = "oceania";
+
+    out.push({
+      index,
+      relevant: true,
+      headline: a.title,
+      summary: (a.description || a.title || "").slice(0, 600),
+      category,
+      priority,
+      primary_region: primaryRegion,
+      display_regions: primaryRegion === "morocco"
+        ? ["morocco"]
+        : primaryRegion === "global"
+          ? ["global"]
+          : [primaryRegion, "global"],
+      affected_countries: [],
+      content_type: "general_news",
+      impact_score: priority === "critical" ? 75 : priority === "important" ? 55 : 30,
+      region_confidence: 0.5,
+      classification_notes: "Heuristic classification (AI gateway unavailable).",
+      impact_assessment: null,
+      action_required: priority === "critical",
+      suggested_action: null,
+    });
+  });
+  return out;
 }
