@@ -27,7 +27,12 @@ function looksLikeArticleUrl(url: string | null | undefined): boolean {
     if (!path || path === "/" || path.length < 8) return false;
     if (BAD_ARTICLE_PATH.test(path)) return false;
     if (/\.(jpg|jpeg|png|gif|pdf|mp4|css|js|xml)$/i.test(path)) return false;
-    return path.split("/").filter(Boolean).length >= 2;
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length >= 2) return true;
+    // Many publishers (The Loadstar, etc.) serve articles at a single slug:
+    // /seven-msc-box-ships-go-dark. Accept long hyphenated slugs as articles.
+    const slug = segments[0] || "";
+    return slug.length >= 15 && (slug.match(/-/g) || []).length >= 2;
   } catch {
     return false;
   }
