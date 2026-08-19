@@ -27,7 +27,12 @@ function looksLikeArticleUrl(url: string | null | undefined): boolean {
     if (!path || path === "/" || path.length < 8) return false;
     if (BAD_ARTICLE_PATH.test(path)) return false;
     if (/\.(jpg|jpeg|png|gif|pdf|mp4|css|js|xml)$/i.test(path)) return false;
-    return path.split("/").filter(Boolean).length >= 2;
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length >= 2) return true;
+    // Many publishers (The Loadstar, etc.) serve articles at a single slug:
+    // /seven-msc-box-ships-go-dark. Accept long hyphenated slugs as articles.
+    const slug = segments[0] || "";
+    return slug.length >= 15 && (slug.match(/-/g) || []).length >= 2;
   } catch {
     return false;
   }
@@ -228,6 +233,44 @@ function coerce(d: any): Drafted {
       ? d.action_required_bool
       : sev !== "awareness",
   };
+}
+
+/**
+ * Deterministic drafter used when the AI gateway is unavailable (outage, rate
+ * limit, exhausted credits) so the daily pipeline keeps producing feed items.
+ */
+function heuristicDraft(input: {
+  headline?: string | null;
+  summary?: string | null;
+  full_content?: string | null;
+  source_name?: string | null;
+  category?: string | null;
+  publication_date?: string | null;
+}): Drafted {
+  const text = `${input.headline || ""} ${input.summary || ""}`.toLowerCase();
+  let department: string = "operations";
+  if (/customs|tariff|regulation|sanction|compliance|law|directive/.test(text)) department = "compliance";
+  else if (/rate|price|cost|surcharge|currency|fuel|inflation|tax/.test(text)) department = "finance";
+  else if (/cyber|software|it |platform|system outage|hack|ransomware|data breach/.test(text)) department = "it";
+  else if (/market|contract|customer|demand|volume|acquisition/.test(text)) department = "commercial";
+
+  let severity: string = "awareness";
+  if (/strike|closure|closed|blockade|shutdown|attack|suspend|halt|force majeure/.test(text)) severity = "act_now";
+  else if (/delay|congestion|disrupt|surcharge|diversion|backlog|warning|restriction/.test(text)) severity = "this_week";
+
+  return coerce({
+    headline: input.headline,
+    summary: input.summary || input.headline,
+    impact: "Automatic summary unavailable — review the source for full impact.",
+    action_required: severity === "awareness" ? "Monitor only." : "Review affected shipments and notify concerned customers.",
+    department,
+    severity,
+    time_to_impact: severity === "act_now" ? "today" : severity === "this_week" ? "this_week" : "horizon",
+    affected_tags: [],
+    category: input.category,
+    event_date: input.publication_date || null,
+    why_it_matters_to_hitek: "Flagged by keyword rules while AI analysis was unavailable.",
+  });
 }
 
 async function callAI(LOVABLE_API_KEY: string, userContent: string): Promise<Drafted> {
@@ -444,18 +487,31 @@ serve(async (req) => {
           console.log("Skipping stale or non-article news entry:", entry.headline, entry.source_url);
           continue;
         }
-        const drafted = await callAI(
-          LOVABLE_API_KEY,
-          buildUserPrompt({
+        let drafted: Drafted;
+        try {
+          drafted = await callAI(
+            LOVABLE_API_KEY,
+            buildUserPrompt({
+              headline: entry.headline,
+              summary: entry.summary,
+              full_content: entry.full_content,
+              source_name: entry.source_name,
+              source_url: entry.source_url,
+              region: entry.region,
+              category: entry.category,
+            })
+          );
+        } catch (aiErr) {
+          console.error("AI drafting unavailable, using heuristic draft:", aiErr);
+          drafted = heuristicDraft({
             headline: entry.headline,
             summary: entry.summary,
             full_content: entry.full_content,
             source_name: entry.source_name,
-            source_url: entry.source_url,
-            region: entry.region,
             category: entry.category,
-          })
-        );
+            publication_date: (entry as any).publication_date,
+          });
+        }
         const { error: insErr } = await supabase.from("intelligence_items").insert({
           headline: drafted.headline || entry.headline,
           summary: drafted.summary || entry.summary,
