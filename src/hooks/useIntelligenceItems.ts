@@ -199,6 +199,7 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
       let rows = (data || []) as IntelligenceItem[];
       // Hard filter shared with useIntelCounts so the KPI numbers always match the visible feed.
       rows = rows.filter(passesFeedFilter);
+      rows = rows.map(clampSeverity);
       // Sort blend: recency + severity + learned predicted_relevance.
       // HARD SAFETY FLOOR: critical (act_now) and action_required items are pinned
       // to the top regardless of preference signal. Learning tunes noise, not alerts.
