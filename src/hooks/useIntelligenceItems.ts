@@ -266,6 +266,7 @@ export function useIntelCounts() {
       const { data, error } = await supabase
         .from("intelligence_items")
         .select("severity,department,status,is_ai_draft,publication_date,event_date,source_url,created_at,verification_status");
+      // headline/summary omitted for size — clamp falls back to the safe cap.
       if (error) throw error;
       const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
       const counts = {
@@ -280,7 +281,7 @@ export function useIntelCounts() {
         // Match the visible feed: recent candidates AND passes the shared verified/current filter.
         if (((r as any).created_at || "") < cutoff) continue;
         if (!passesFeedFilter(r as any)) continue;
-        const sev = (r as any).severity as IntelSeverity;
+        const sev = clampSeverity(r as any).severity as IntelSeverity;
         if (sev in counts) (counts as any)[sev]++;
         const d = (r as any).department as string;
         counts.by_dept[d] = (counts.by_dept[d] || 0) + 1;
