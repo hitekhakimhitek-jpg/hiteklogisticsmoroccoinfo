@@ -186,6 +186,21 @@ function jsonOnly(s: string): string {
   return s.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
 }
 
+// Core business software Hitek depends on. A major outage / breaking update to
+// one of these is the only case where an IT item may stay Critical.
+const CORE_SOFTWARE =
+  /(microsoft\s*teams|onedrive|sharepoint|outlook|exchange online|microsoft\s*365|office\s*365|\bm365\b|windows|azure ad|entra id|cargowise|\bsap\b|portnet|badr|customs platform)/i;
+const MAJOR_DISRUPTION =
+  /(outage|down|offline|unavailable|disruption|migration|end of (life|support)|forced upgrade|major update|breaking change|deprecat)/i;
+// Security news (hacks, breaches, CVEs, flaws) is never Critical.
+const SECURITY_ONLY =
+  /(hack|hacked|breach|ransomware|malware|phish|vulnerab|\bcve\b|exploit|flaw|zero-?day|patch tuesday|leak)/i;
+function isCoreSoftwareIncident(d: any): boolean {
+  const text = `${d?.headline || ""} ${d?.summary || ""} ${d?.impact || ""}`;
+  if (SECURITY_ONLY.test(text)) return false;
+  return CORE_SOFTWARE.test(text) && MAJOR_DISRUPTION.test(text);
+}
+
 function coerce(d: any): Drafted {
   const dept = DEPARTMENTS.includes(d?.department) ? d.department : "operations";
   let sev = SEVERITIES.includes(d?.severity) ? d.severity : "awareness";
