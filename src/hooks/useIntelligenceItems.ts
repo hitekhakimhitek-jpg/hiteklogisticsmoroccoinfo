@@ -148,6 +148,23 @@ export function passesFeedFilter(r: {
   return true;
 }
 
+// Display rule: IT news is capped at "Important". Only a major outage or
+// breaking change to the core software Hitek runs on (Teams, OneDrive,
+// Microsoft 365, CargoWise, SAP…) may stay Critical. Hacks, breaches and
+// software flaws are always Important at most.
+const CORE_SOFTWARE_RE =
+  /(microsoft\s*teams|onedrive|sharepoint|outlook|exchange online|microsoft\s*365|office\s*365|\bm365\b|windows|azure ad|entra id|cargowise|\bsap\b|portnet|badr)/i;
+const MAJOR_DISRUPTION_RE =
+  /(outage|down|offline|unavailable|disruption|migration|end of (life|support)|forced upgrade|major update|breaking change|deprecat)/i;
+const SECURITY_ONLY_RE =
+  /(hack|hacked|breach|ransomware|malware|phish|vulnerab|\bcve\b|exploit|flaw|zero-?day|patch tuesday|leak)/i;
+export function clampSeverity<T extends { department?: string | null; severity: IntelSeverity; headline?: string | null; summary?: string | null; impact?: string | null }>(r: T): T {
+  if (r.department !== "it" || r.severity !== "act_now") return r;
+  const text = `${r.headline || ""} ${r.summary || ""} ${r.impact || ""}`;
+  const majorSoftware = !SECURITY_ONLY_RE.test(text) && CORE_SOFTWARE_RE.test(text) && MAJOR_DISRUPTION_RE.test(text);
+  return majorSoftware ? r : { ...r, severity: "this_week" as IntelSeverity };
+}
+
 export function useIntelligenceItems(filters: IntelFilters = {}) {
   const { lang } = useLanguage();
   return useQuery({
@@ -182,6 +199,7 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
       let rows = (data || []) as IntelligenceItem[];
       // Hard filter shared with useIntelCounts so the KPI numbers always match the visible feed.
       rows = rows.filter(passesFeedFilter);
+      rows = rows.map(clampSeverity);
       // Sort blend: recency + severity + learned predicted_relevance.
       // HARD SAFETY FLOOR: critical (act_now) and action_required items are pinned
       // to the top regardless of preference signal. Learning tunes noise, not alerts.
@@ -248,6 +266,7 @@ export function useIntelCounts() {
       const { data, error } = await supabase
         .from("intelligence_items")
         .select("severity,department,status,is_ai_draft,publication_date,event_date,source_url,created_at,verification_status");
+      // headline/summary omitted for size — clamp falls back to the safe cap.
       if (error) throw error;
       const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
       const counts = {
@@ -262,7 +281,7 @@ export function useIntelCounts() {
         // Match the visible feed: recent candidates AND passes the shared verified/current filter.
         if (((r as any).created_at || "") < cutoff) continue;
         if (!passesFeedFilter(r as any)) continue;
-        const sev = (r as any).severity as IntelSeverity;
+        const sev = clampSeverity(r as any).severity as IntelSeverity;
         if (sev in counts) (counts as any)[sev]++;
         const d = (r as any).department as string;
         counts.by_dept[d] = (counts.by_dept[d] || 0) + 1;

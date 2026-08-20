@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Globe2 } from "lucide-react";
 import { format } from "date-fns";
 import { fr as frLocale } from "date-fns/locale";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { translateDeep, translateRecords } from "@/lib/translateEntries";
+import { translateDeep } from "@/lib/translateEntries";
 import { SEO } from "@/components/SEO";
 import { HolidayCalendar } from "@/components/map/HolidayCalendar";
-import { passesFeedFilter } from "@/hooks/useIntelligenceItems";
+import { useIntelligenceItems } from "@/hooks/useIntelligenceItems";
 import { ISO3 } from "@/data/iso3to2";
 import { CalendarDays, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -58,8 +58,17 @@ type Holiday = {
 
 export default function DisruptionMap() {
   const { lang } = useLanguage();
-  const [items, setItems] = useState<MapItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Single source of truth: the map renders exactly the dashboard intelligence
+  // feed (same query, same filters, same severity clamp), limited to items
+  // that carry coordinates.
+  const { data: feed, isLoading: loading } = useIntelligenceItems({ limit: 500 });
+  const items = useMemo(
+    () =>
+      ((feed || []) as unknown as MapItem[]).filter(
+        (d) => d.latitude != null && d.longitude != null,
+      ),
+    [feed],
+  );
   const [country, setCountry] = useState<{ a3: string; a2: string; name: string } | null>(null);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [holidaysLoading, setHolidaysLoading] = useState(false);
@@ -85,39 +94,6 @@ export default function DisruptionMap() {
       });
     }
     mapDivRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [lang]);
-
-  const load = async () => {
-    setLoading(true);
-    // Same current, verified article window as the dashboard feed.
-    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
-    const { data, error } = await supabase
-      .from("intelligence_items")
-      .select("id, headline, summary, latitude, longitude, country, port_affected, airport_affected, severity, department, category, event_date, publication_date, created_at, source_url, source_name, verification_status")
-      .gte("created_at", fourteenDaysAgo)
-      .neq("status", "archived")
-      .not("latitude", "is", null)
-      .not("longitude", "is", null)
-      .order("created_at", { ascending: false });
-    if (error) console.error(error);
-    let rows = (((data || []) as any[]) as MapItem[]).filter(passesFeedFilter);
-    if (lang === "fr" && rows.length > 0) {
-      try {
-        rows = await translateRecords(rows, ["headline", "summary"], "fr");
-      } catch (e) { console.error("map translate failed", e); }
-    }
-    setItems(rows);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    load();
-    const channel = supabase
-      .channel("intel-items-rt-map")
-      .on("postgres_changes", { event: "*", schema: "public", table: "intelligence_items" }, () => load())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
 
   // Initialize the Leaflet map once the container is mounted. Uses Carto

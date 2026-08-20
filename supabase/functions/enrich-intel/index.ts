@@ -156,7 +156,7 @@ Severity (be strict):
 - this_week: must be handled this week; affects upcoming shipments, near-term costs, or compliance reviews.
 - awareness: horizon scanning, trends, background context. No immediate action.
 
-IMPORTANT RULE: Items classified as department "it" can NEVER be "act_now" (Critical). Only operations, compliance, finance, and commercial may be act_now. If an IT item seems urgent, cap it at "this_week" (Important).
+IMPORTANT RULE (IT severity): Items in department "it" are capped at "this_week" (Important). Cybersecurity incidents, hacks, ransomware, data breaches, CVEs and software flaws are ALWAYS at most "this_week" — never "act_now". The ONLY exception allowing "act_now" for IT is a major outage, breaking change or forced migration of core business software Hitek actually operates on (Microsoft Teams, OneDrive, SharePoint, Outlook/Exchange, Microsoft 365/Windows, CargoWise, SAP, or the customs/port declaration platforms) that stops people working today.
 
 time_to_impact: today | this_week | this_month | horizon.
 
@@ -186,12 +186,27 @@ function jsonOnly(s: string): string {
   return s.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
 }
 
+// Core business software Hitek depends on. A major outage / breaking update to
+// one of these is the only case where an IT item may stay Critical.
+const CORE_SOFTWARE =
+  /(microsoft\s*teams|onedrive|sharepoint|outlook|exchange online|microsoft\s*365|office\s*365|\bm365\b|windows|azure ad|entra id|cargowise|\bsap\b|portnet|badr|customs platform)/i;
+const MAJOR_DISRUPTION =
+  /(outage|down|offline|unavailable|disruption|migration|end of (life|support)|forced upgrade|major update|breaking change|deprecat)/i;
+// Security news (hacks, breaches, CVEs, flaws) is never Critical.
+const SECURITY_ONLY =
+  /(hack|hacked|breach|ransomware|malware|phish|vulnerab|\bcve\b|exploit|flaw|zero-?day|patch tuesday|leak)/i;
+function isCoreSoftwareIncident(d: any): boolean {
+  const text = `${d?.headline || ""} ${d?.summary || ""} ${d?.impact || ""}`;
+  if (SECURITY_ONLY.test(text)) return false;
+  return CORE_SOFTWARE.test(text) && MAJOR_DISRUPTION.test(text);
+}
+
 function coerce(d: any): Drafted {
   const dept = DEPARTMENTS.includes(d?.department) ? d.department : "operations";
   let sev = SEVERITIES.includes(d?.severity) ? d.severity : "awareness";
-  // Rule: IT items can never be auto-classified as critical (act_now).
-  // Downgrade to "this_week" (Important). Manual user overrides bypass this in scrape_create.
-  if (dept === "it" && sev === "act_now") sev = "this_week";
+  // Rule: IT items are capped at "this_week" (Important). The only exception is a
+  // major outage / breaking change of the core software Hitek runs on.
+  if (dept === "it" && sev === "act_now" && !isCoreSoftwareIncident(d)) sev = "this_week";
   const hor = HORIZONS.includes(d?.time_to_impact) ? d.time_to_impact : "horizon";
   const tags = Array.isArray(d?.affected_tags)
     ? d.affected_tags.filter((x: any) => typeof x === "string").slice(0, 6)
