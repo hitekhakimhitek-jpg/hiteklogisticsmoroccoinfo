@@ -156,7 +156,7 @@ Severity (be strict):
 - this_week: must be handled this week; affects upcoming shipments, near-term costs, or compliance reviews.
 - awareness: horizon scanning, trends, background context. No immediate action.
 
-IMPORTANT RULE: Items classified as department "it" can NEVER be "act_now" (Critical). Only operations, compliance, finance, and commercial may be act_now. If an IT item seems urgent, cap it at "this_week" (Important).
+IMPORTANT RULE (IT severity): Items in department "it" are capped at "this_week" (Important). Cybersecurity incidents, hacks, ransomware, data breaches, CVEs and software flaws are ALWAYS at most "this_week" — never "act_now". The ONLY exception allowing "act_now" for IT is a major outage, breaking change or forced migration of core business software Hitek actually operates on (Microsoft Teams, OneDrive, SharePoint, Outlook/Exchange, Microsoft 365/Windows, CargoWise, SAP, or the customs/port declaration platforms) that stops people working today.
 
 time_to_impact: today | this_week | this_month | horizon.
 
