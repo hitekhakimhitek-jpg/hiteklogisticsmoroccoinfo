@@ -4,7 +4,7 @@ import { Globe2 } from "lucide-react";
 import { format } from "date-fns";
 import { fr as frLocale } from "date-fns/locale";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { translateDeep, translateRecords } from "@/lib/translateEntries";
+import { translateDeep } from "@/lib/translateEntries";
 import { SEO } from "@/components/SEO";
 import { HolidayCalendar } from "@/components/map/HolidayCalendar";
 import { useIntelligenceItems } from "@/hooks/useIntelligenceItems";
