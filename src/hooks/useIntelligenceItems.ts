@@ -148,6 +148,23 @@ export function passesFeedFilter(r: {
   return true;
 }
 
+// Display rule: IT news is capped at "Important". Only a major outage or
+// breaking change to the core software Hitek runs on (Teams, OneDrive,
+// Microsoft 365, CargoWise, SAP…) may stay Critical. Hacks, breaches and
+// software flaws are always Important at most.
+const CORE_SOFTWARE_RE =
+  /(microsoft\s*teams|onedrive|sharepoint|outlook|exchange online|microsoft\s*365|office\s*365|\bm365\b|windows|azure ad|entra id|cargowise|\bsap\b|portnet|badr)/i;
+const MAJOR_DISRUPTION_RE =
+  /(outage|down|offline|unavailable|disruption|migration|end of (life|support)|forced upgrade|major update|breaking change|deprecat)/i;
+const SECURITY_ONLY_RE =
+  /(hack|hacked|breach|ransomware|malware|phish|vulnerab|\bcve\b|exploit|flaw|zero-?day|patch tuesday|leak)/i;
+export function clampSeverity<T extends { department?: string | null; severity: IntelSeverity; headline?: string | null; summary?: string | null; impact?: string | null }>(r: T): T {
+  if (r.department !== "it" || r.severity !== "act_now") return r;
+  const text = `${r.headline || ""} ${r.summary || ""} ${r.impact || ""}`;
+  const majorSoftware = !SECURITY_ONLY_RE.test(text) && CORE_SOFTWARE_RE.test(text) && MAJOR_DISRUPTION_RE.test(text);
+  return majorSoftware ? r : { ...r, severity: "this_week" as IntelSeverity };
+}
+
 export function useIntelligenceItems(filters: IntelFilters = {}) {
   const { lang } = useLanguage();
   return useQuery({
