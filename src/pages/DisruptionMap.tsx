@@ -7,7 +7,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { translateDeep } from "@/lib/translateEntries";
 import { SEO } from "@/components/SEO";
 import { HolidayCalendar } from "@/components/map/HolidayCalendar";
-import { useIntelligenceItems } from "@/hooks/useIntelligenceItems";
+import { useIntelligenceItems, FEED_LIMIT } from "@/hooks/useIntelligenceItems";
 import { ISO3 } from "@/data/iso3to2";
 import { buildCentroids, inferPoint, type Centroids, type Place } from "@/lib/geoInfer";
 import { CalendarDays, X, Loader2 } from "lucide-react";
@@ -63,7 +63,7 @@ export default function DisruptionMap() {
   // Single source of truth: the map renders exactly the dashboard intelligence
   // feed (same query, same filters, same severity clamp), limited to items
   // that carry coordinates.
-  const { data: feed, isLoading: loading } = useIntelligenceItems({ limit: 500 });
+  const { data: feed, isLoading: loading } = useIntelligenceItems({ limit: FEED_LIMIT });
   const [centroids, setCentroids] = useState<Centroids>({});
   const [places, setPlaces] = useState<Place[]>([]);
   const items = useMemo(() => {

@@ -174,19 +174,28 @@ export function clampSeverity<T extends { department?: string | null; severity: 
   return majorSoftware ? r : { ...r, severity: "this_week" as IntelSeverity };
 }
 
+// Single shared page size for every surface (feed, map, counts) so the
+// dashboard and the disruption map can never render different item sets.
+export const FEED_LIMIT = 500;
+// Shared 14-day rolling window (inclusive of today).
+export function feedWindow() {
+  const end = new Date().toISOString().slice(0, 10);
+  const start = new Date(Date.now() - 13 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return { start, end };
+}
+
 export function useIntelligenceItems(filters: IntelFilters = {}) {
   const { lang } = useLanguage();
   return useQuery({
     queryKey: ["intel_items", filters, lang],
     queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const start = new Date(Date.now() - 13 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const { start, end } = feedWindow();
       const { data, error } = await supabase.rpc("canonical_intelligence", {
         _start_date: start,
-        _end_date: today,
+        _end_date: end,
         _department: filters.department && filters.department !== "all" ? filters.department : undefined,
         _severity: filters.severity && filters.severity !== "all" ? filters.severity : undefined,
-        _limit: filters.limit || 200,
+        _limit: filters.limit || FEED_LIMIT,
       });
       if (error) throw error;
       let rows = (data || []) as IntelligenceItem[];
@@ -258,21 +267,26 @@ export function useIntelCounts() {
   return useQuery({
     queryKey: ["intel_counts"],
     queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const start = new Date(Date.now() - 13 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const { data, error } = await supabase.rpc("canonical_intelligence_counts", {
+      const { start, end } = feedWindow();
+      // Counts are computed from the exact same rows the feed and map render
+      // (including the IT severity clamp), so the summary strip, the pills and
+      // the visible cards always agree.
+      const { data, error } = await supabase.rpc("canonical_intelligence", {
         _start_date: start,
-        _end_date: today,
+        _end_date: end,
+        _limit: FEED_LIMIT,
       });
       if (error) throw error;
-      const counts = (data || {}) as Record<string, unknown>;
-      return {
-        act_now: Number(counts.act_now || 0),
-        this_week: Number(counts.this_week || 0),
-        awareness: Number(counts.awareness || 0),
-        by_dept: (counts.by_dept || {}) as Record<string, number>,
-        review_pending: 0,
-      };
+      const rows = ((data || []) as IntelligenceItem[]).map(clampSeverity);
+      const by_dept: Record<string, number> = {};
+      let act_now = 0, this_week = 0, awareness = 0;
+      for (const r of rows) {
+        by_dept[r.department] = (by_dept[r.department] || 0) + 1;
+        if (r.severity === "act_now") act_now++;
+        else if (r.severity === "this_week") this_week++;
+        else awareness++;
+      }
+      return { act_now, this_week, awareness, by_dept, review_pending: 0 };
     },
     refetchInterval: 60_000,
   });
