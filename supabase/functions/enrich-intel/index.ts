@@ -7,7 +7,7 @@ import {
   departmentAction,
   deterministicSummary,
 } from "../_shared/intel-quality.ts";
-import { canonicalizeUrl, cleanSummary, cleanTitle, nonArticleReason } from "../_shared/intel-article.ts";
+import { areLikelyDuplicateTitles, canonicalizeUrl, cleanSummary, cleanTitle, nonArticleReason } from "../_shared/intel-article.ts";
 
 const DEPARTMENTS = ["operations", "compliance", "finance", "commercial", "it"] as const;
 const SEVERITIES = ["act_now", "this_week", "awareness"] as const;
@@ -213,6 +213,24 @@ function hardenDraft(
     decision_reasons: articleFailure ? [...quality.decisionReasons, articleFailure] : quality.decisionReasons,
     enrichment_version: "hitek-v2",
   };
+}
+
+async function findRecentDuplicate(supabase: any, headline: string, sourceUrl: string | null): Promise<string | null> {
+  const cutoff = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+  const canonical = canonicalizeUrl(sourceUrl);
+  const { data, error } = await supabase
+    .from("intelligence_items")
+    .select("id,headline,clean_title,canonical_url,source_url")
+    .gte("publication_date", cutoff)
+    .neq("processing_status", "duplicate")
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error) throw new Error(error.message);
+  const duplicate = (data || []).find((row: any) => {
+    const existingUrl = row.canonical_url || canonicalizeUrl(row.source_url);
+    return (canonical && existingUrl === canonical) || areLikelyDuplicateTitles(row.clean_title || row.headline, headline);
+  });
+  return duplicate?.id ?? null;
 }
 
 const SYSTEM_PROMPT = `You triage external signals for Hitek Logistic Morocco, a freight-forwarding company at Tanger Med. Convert a raw news item into one actionable Intelligence Item. Write plainly. No marketing. No hedging.
@@ -658,6 +676,12 @@ serve(async (req) => {
       const drafted = hardenDraft(baseDraft, { headline: pageTitle, content: markdown, sourceName, sourceUrl: url }, technologyUsage);
 
       const finalSeverity = severityOverride ?? drafted.severity;
+      const duplicateOf = await findRecentDuplicate(supabase, drafted.clean_title, url);
+      if (duplicateOf) {
+        return new Response(JSON.stringify({ success: true, duplicate: true, existing_item_id: duplicateOf }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
       const { data: inserted, error: insErr } = await supabase
         .from("intelligence_items")
@@ -675,6 +699,7 @@ serve(async (req) => {
           owner: drafted.owner,
           status: "new",
           is_ai_draft: false,
+          language: "en",
           publication_date: pubDate,
           verification_status: "verified",
           category: drafted.category,
@@ -803,6 +828,7 @@ serve(async (req) => {
           status: "new",
           is_ai_draft: true,
           source_entry_id: entry.id,
+          language: "en",
           publication_date: (entry as any).publication_date ?? null,
           updated_date: (entry as any).updated_date ?? null,
           effective_date: (entry as any).effective_date ?? null,
@@ -835,6 +861,40 @@ serve(async (req) => {
           processing_error: drafted.relevance_status === "accept" ? null : drafted.classification_reason,
           canonical_url: canonicalizeUrl(entry.source_url),
         });
+        const duplicateOf = await findRecentDuplicate(supabase, drafted.clean_title, entry.source_url);
+        if (duplicateOf) {
+          const { error: duplicateError } = await supabase.from("intelligence_items").insert({
+            headline: drafted.headline || entry.headline,
+            summary: drafted.summary || entry.summary,
+            impact: drafted.impact,
+            action_required: drafted.action_required,
+            department: drafted.department,
+            severity: drafted.severity,
+            time_to_impact: drafted.time_to_impact,
+            affected_tags: drafted.affected_tags,
+            source_name: entry.source_name,
+            source_url: entry.source_url,
+            status: "archived",
+            is_ai_draft: false,
+            source_entry_id: entry.id,
+            language: "en",
+            publication_date: entry.publication_date,
+            verification_status: "duplicate",
+            relevance_score: 0,
+            department_confidence: drafted.department_confidence,
+            severity_score: 0,
+            processing_status: "duplicate",
+            relevance_status: "reject",
+            clean_title: drafted.clean_title,
+            clean_summary: drafted.clean_summary,
+            decision_reasons: [...drafted.decision_reasons, `duplicate of ${duplicateOf}`],
+            enrichment_version: drafted.enrichment_version,
+            processing_error: `duplicate of ${duplicateOf}`,
+            canonical_url: canonicalizeUrl(entry.source_url),
+          });
+          if (duplicateError) throw new Error(duplicateError.message);
+          continue;
+        }
         if (insErr) {
           failed++;
           console.error("insert error:", insErr.message);

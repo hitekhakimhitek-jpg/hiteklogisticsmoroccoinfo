@@ -244,7 +244,9 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
       });
       const rowsNeedingTranslation = sorted.filter((row) => {
         const sourceLanguage = (row.language || "").toLowerCase();
-        return lang === "fr" || (lang === "en" && sourceLanguage && !sourceLanguage.startsWith("en"));
+        const visibleText = `${row.headline} ${row.summary} ${row.impact} ${row.action_required}`;
+        const looksFrench = /\b(le|la|les|des|du|de|et|pour|avec|dans|sur|une|un|est|sont|sera|ont|aux|par|depuis|importations?|transport|marché|grève|portuaire|bientôt|reprendront)\b/i.test(visibleText);
+        return lang === "fr" || (lang === "en" && ((!sourceLanguage.startsWith("en") && sourceLanguage !== "") || looksFrench));
       });
       if (rowsNeedingTranslation.length > 0) {
         try {
