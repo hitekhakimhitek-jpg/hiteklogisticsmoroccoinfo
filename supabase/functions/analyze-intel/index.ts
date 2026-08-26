@@ -428,6 +428,7 @@ serve(async (req) => {
     const rowBody = String(row.body ?? "");
     const rowSource = String(row.source_name ?? "Official hazard authority");
     const rowUrl = typeof row.url === "string" ? row.url : null;
+    const rowDate = String(row.published_at ?? row.collected_at ?? new Date().toISOString()).slice(0, 10);
     const text = `${rowTitle} ${rowSummary} ${rowBody}`.slice(0, 12000);
     const geoExposure = (payload.exposure ?? {}) as Record<string, unknown>;
     const textExposure = exposureFromText(infra, text);
@@ -687,8 +688,8 @@ serve(async (req) => {
         // Live advisories (PAGASA, JTWC…) often carry no explicit timestamp.
         // Falling back to the collection date keeps them inside the 14-day
         // feed window instead of being dropped for a missing date.
-        publication_date: (row.published_at ?? row.collected_at ?? new Date().toISOString()).slice(0, 10),
-        event_date: (row.published_at ?? row.collected_at ?? new Date().toISOString()).slice(0, 10),
+        publication_date: rowDate,
+        event_date: rowDate,
         verification_status: a.confidence === "high" ? "verified" : "partially_verified",
         category: a.event_type,
         country: a.countries[0] ?? null,
@@ -726,8 +727,8 @@ serve(async (req) => {
 
     if (examples.length < 12) {
       examples.push({
-        source: row.source_name,
-        headline: row.original_title.slice(0, 140),
+        source: rowSource,
+        headline: rowTitle.slice(0, 140),
         event_status: a.event_status,
         global_score: finalScore,
         hitek_score: hitekScore,
