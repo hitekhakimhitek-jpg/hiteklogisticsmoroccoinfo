@@ -90,7 +90,10 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
       </h3>
 
       {item.summary && (
-        <p className="text-sm text-muted-foreground leading-relaxed">{item.summary}</p>
+        <div className="text-sm leading-relaxed">
+          <span className="font-semibold text-foreground">{lang === "fr" ? "Récap\u00A0: " : "Recap: "}</span>
+          <span className="text-muted-foreground">{item.summary}</span>
+        </div>
       )}
 
       {/* Impact + Action — the core value */}
