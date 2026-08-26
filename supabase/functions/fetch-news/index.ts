@@ -1391,7 +1391,6 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         classification_notes: typeof entry.classification_notes === "string"
           ? entry.classification_notes.slice(0, 500)
           : null,
-      };
         _quality: quality,
       };
     }).filter((row: any) =>

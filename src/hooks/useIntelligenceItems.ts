@@ -50,6 +50,15 @@ export type IntelligenceItem = {
   why_it_matters_to_hitek: string | null;
   affected_lanes_or_customers: string | null;
   suggested_action: string | null;
+  relevance_score: number;
+  department_confidence: number;
+  severity_score: number;
+  classification_reason: string | null;
+  processing_status: "discovered" | "rejected_irrelevant" | "rejected_non_article" | "duplicate" | "processing" | "enriched" | "published" | "failed" | "review_required";
+  processing_error: string | null;
+  canonical_url: string | null;
+  source_tier: number;
+  ingested_at: string;
 };
 
 export type VerificationStatus =
@@ -170,35 +179,21 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
   return useQuery({
     queryKey: ["intel_items", filters, lang],
     queryFn: async () => {
-      let q = supabase.from("intelligence_items").select("*");
-      // Pull a wider candidate set, then enforce the shared verified/current article filter below.
-      const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-      q = q.gte("created_at", fourteenDaysAgo);
-      if (filters.department && filters.department !== "all") {
-        q = q.eq("department", filters.department);
-      }
-      if (filters.severity && filters.severity !== "all") {
-        q = q.eq("severity", filters.severity);
-      }
-      if (filters.status && filters.status !== "all") {
-        q = q.eq("status", filters.status);
-      } else if (!filters.reviewQueue) {
-        q = q.neq("status", "archived");
-      }
-      if (filters.reviewQueue) {
-        q = q.eq("is_ai_draft", true).eq("status", "new");
-      }
-      if (filters.search) {
-        q = q.or(
-          `headline.ilike.%${filters.search}%,summary.ilike.%${filters.search}%,impact.ilike.%${filters.search}%`
-        );
-      }
-      q = q.order("created_at", { ascending: false }).limit(filters.limit || 200);
-      const { data, error } = await q;
+      const today = new Date().toISOString().slice(0, 10);
+      const start = new Date(Date.now() - 13 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const { data, error } = await supabase.rpc("canonical_intelligence", {
+        _start_date: start,
+        _end_date: today,
+        _department: filters.department && filters.department !== "all" ? filters.department : undefined,
+        _severity: filters.severity && filters.severity !== "all" ? filters.severity : undefined,
+        _limit: filters.limit || 200,
+      });
       if (error) throw error;
       let rows = (data || []) as IntelligenceItem[];
-      // Hard filter shared with useIntelCounts so the KPI numbers always match the visible feed.
-      rows = rows.filter(passesFeedFilter);
+      if (filters.search) {
+        const needle = filters.search.toLocaleLowerCase();
+        rows = rows.filter((row) => `${row.headline} ${row.summary} ${row.impact}`.toLocaleLowerCase().includes(needle));
+      }
       rows = rows.map(clampSeverity);
       // Sort blend: recency + severity + learned predicted_relevance.
       // HARD SAFETY FLOOR: critical (act_now) and action_required items are pinned
@@ -263,31 +258,21 @@ export function useIntelCounts() {
   return useQuery({
     queryKey: ["intel_counts"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("intelligence_items")
-        .select("severity,department,status,is_ai_draft,publication_date,event_date,source_url,created_at,verification_status");
-      // headline/summary omitted for size — clamp falls back to the safe cap.
+      const today = new Date().toISOString().slice(0, 10);
+      const start = new Date(Date.now() - 13 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const { data, error } = await supabase.rpc("canonical_intelligence_counts", {
+        _start_date: start,
+        _end_date: today,
+      });
       if (error) throw error;
-      const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-      const counts = {
-        act_now: 0,
-        this_week: 0,
-        awareness: 0,
-        by_dept: {} as Record<string, number>,
+      const counts = (data || {}) as Record<string, unknown>;
+      return {
+        act_now: Number(counts.act_now || 0),
+        this_week: Number(counts.this_week || 0),
+        awareness: Number(counts.awareness || 0),
+        by_dept: (counts.by_dept || {}) as Record<string, number>,
         review_pending: 0,
       };
-      for (const r of data || []) {
-        if ((r as any).status === "archived") continue;
-        // Match the visible feed: recent candidates AND passes the shared verified/current filter.
-        if (((r as any).created_at || "") < cutoff) continue;
-        if (!passesFeedFilter(r as any)) continue;
-        const sev = clampSeverity(r as any).severity as IntelSeverity;
-        if (sev in counts) (counts as any)[sev]++;
-        const d = (r as any).department as string;
-        counts.by_dept[d] = (counts.by_dept[d] || 0) + 1;
-        if ((r as any).is_ai_draft && (r as any).status === "new") counts.review_pending++;
-      }
-      return counts;
     },
     refetchInterval: 60_000,
   });
