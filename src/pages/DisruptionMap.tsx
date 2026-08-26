@@ -336,7 +336,7 @@ export default function DisruptionMap() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {lang === "fr"
-              ? `Perturbations et jours fériés au même endroit — synchronisé avec le tableau de bord (${items.length} éléments).`
+              ? `Perturbations et jours fériés au même endroit — ${items.length} éléments cartographiables sur ${feed?.length ?? 0} éléments du tableau de bord.`
               : `Disruptions and public holidays in one view — ${items.length} of ${feed?.length ?? 0} dashboard items have a mappable location.`}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
