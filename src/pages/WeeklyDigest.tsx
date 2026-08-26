@@ -57,9 +57,9 @@ const WeeklyDigest = () => {
   const { data, isLoading } = useLatestDigests(lang);
   const [dept, setDept] = useState<string>("global");
 
-  // Latest week first
-  const latest = data?.[0];
-  const filtered = data?.filter((d: any) => d.category === dept);
+  const selected = data?.filter((d: any) => d.category === dept) ?? [];
+  const latestKey = selected[0] ? `${selected[0].year}-${selected[0].week_number}` : null;
+  const filtered = selected.filter((d: any) => `${d.year}-${d.week_number}` === latestKey);
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-8">
@@ -78,8 +78,8 @@ const WeeklyDigest = () => {
         </h1>
         <p className="text-sm text-muted-foreground mt-2 max-w-2xl">
           {lang === "fr"
-            ? "Généré automatiquement chaque lundi à 8 h, heure du Maroc. Résumés par département des 14 derniers jours."
-            : "Auto-generated every Monday at 8 AM Morocco time. Per-department summaries from the last 14 days."}
+            ? "Généré automatiquement chaque lundi à 8 h, heure du Maroc, à partir du même flux vérifié que le tableau de bord."
+            : "Auto-generated every Monday at 8 AM Morocco time from the same verified feed as the dashboard."}
         </p>
       </header>
 
@@ -130,6 +130,9 @@ const WeeklyDigest = () => {
                   <span className="inline-flex items-center gap-1">
                     <FileText className="w-3.5 h-3.5" /> {d.item_count} {lang === "fr" ? "éléments" : "items"}
                   </span>
+                  {d.period_start && d.period_end && (
+                    <span>{d.period_start} — {d.period_end}</span>
+                  )}
                   {d.act_now_count > 0 && (
                     <span className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 font-semibold">
                       {d.act_now_count} {lang === "fr" ? "Critique" : "Critical"}
