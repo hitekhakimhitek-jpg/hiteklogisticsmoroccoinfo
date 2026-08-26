@@ -242,12 +242,14 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
         }
         return scoreOf(b) - scoreOf(a);
       });
-      if (lang === "fr" && sorted.length > 0) {
+      const rowsNeedingTranslation = sorted.filter((row) => {
+        const sourceLanguage = (row.language || "").toLowerCase();
+        return lang === "fr" || (lang === "en" && sourceLanguage && !sourceLanguage.startsWith("en"));
+      });
+      if (rowsNeedingTranslation.length > 0) {
         try {
-          // Per-card coherence: a card is either fully French or fully English,
-          // never a French headline with an English summary.
-          return await translateRecords(
-            sorted,
+          const translated = await translateRecords(
+            rowsNeedingTranslation,
             [
               "headline",
               "summary",
@@ -257,8 +259,10 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
               "affected_lanes_or_customers",
               "suggested_action",
             ],
-            "fr",
+            lang,
           );
+          const byId = new Map(translated.map((row) => [row.id, row]));
+          return sorted.map((row) => byId.get(row.id) ?? row);
         } catch (e) {
           console.error("intel translate failed", e);
           return sorted;

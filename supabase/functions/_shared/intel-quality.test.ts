@@ -1,6 +1,6 @@
 import { assertEquals, assertMatch } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { assessIntelligenceQuality, buildHitekImpactAction } from "./intel-quality.ts";
-import { nonArticleReason } from "./intel-article.ts";
+import { areLikelyDuplicateTitles, cleanSummary, nonArticleReason } from "./intel-article.ts";
 
 const cases = [
   ["If you're not using AI to attack your own systems, your adversaries will", "it", "awareness", "review"],
@@ -38,4 +38,32 @@ Deno.test("Elementor marked used and actively exploited can become critical only
 
 Deno.test("JOC white papers is rejected as a non-article", () => {
   assertMatch(nonArticleReason({ title: "White Papers | Journal of Commerce", url: "https://www.joc.com/resources/white-papers", content: "Resources" }) || "", /non_article/);
+});
+
+Deno.test("global port congestion is always critical Operations", () => {
+  const result = assessIntelligenceQuality({
+    headline: "Global port congestion at new high as more typhoons hit China",
+    summary: "Container backlogs are reducing available capacity across major Chinese ports.",
+  });
+  assertEquals(result.department, "operations");
+  assertEquals(result.severity, "act_now");
+  assertEquals(result.severityScore >= 80, true);
+});
+
+Deno.test("JOC section labels are rejected", () => {
+  for (const title of ["Air Cargo News | Journal of Commerce", "Rail News | Journal of Commerce", "Container Shipping News | Journal of Commerce"]) {
+    assertMatch(nonArticleReason({ title, url: "https://www.joc.com/surface/rail-news", content: "Latest stories" }) || "", /non_article/);
+  }
+});
+
+Deno.test("canonical duplicate headlines match", () => {
+  assertEquals(
+    areLikelyDuplicateTitles("Global port congestion at new high as more typhoons hit China", "Global port congestion at new high as more typhoons hit China"),
+    true,
+  );
+});
+
+Deno.test("summary cleanup removes URLs hashtags and promotional copy", () => {
+  const value = cleanSummary("Houthis escalated their shipping campaign with a VLCC strike. Get the daily insights that power maritime professionals worldwide ### https://example.com/story");
+  assertEquals(value, "Houthis escalated their shipping campaign with a VLCC strike.");
 });
