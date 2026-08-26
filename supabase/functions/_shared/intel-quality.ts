@@ -124,7 +124,7 @@ export function assessIntelligenceQuality(input: QualityInput): QualityAssessmen
   if (DEVELOPING.test(text)) severityScore = Math.max(severityScore, 60);
   if (IMMEDIATE.test(text) && (direct || GEO_PRIORITY.test(text))) severityScore = Math.max(severityScore, 72);
   if (IMMEDIATE.test(text) && direct) severityScore = Math.max(severityScore, 84);
-  if (isMaritime && /hit|attack|hijack|piracy|pirates/i.test(text) && !/route (?:closed|blocked)|carriers? suspend|rerouting begins|shipments? affected/i.test(text)) severityScore = 58;
+  if (!PORT_CONGESTION.test(text) && isMaritime && /hit|attack|hijack|piracy|pirates/i.test(text) && !/route (?:closed|blocked)|carriers? suspend|rerouting begins|shipments? affected/i.test(text)) severityScore = 58;
   if (department === "commercial") severityScore = Math.min(severityScore, 70);
   if (department === "it") {
     const activelyExploited = /actively exploited|exploitation in the wild|actual compromise/i.test(text);

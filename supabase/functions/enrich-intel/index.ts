@@ -772,6 +772,7 @@ serve(async (req) => {
 
     let created = 0;
     let failed = 0;
+    let skipped = 0;
     let aiAvailable = Boolean(LOVABLE_API_KEY);
     for (const entry of todo) {
       try {
