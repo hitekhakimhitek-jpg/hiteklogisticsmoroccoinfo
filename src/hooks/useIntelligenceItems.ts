@@ -174,6 +174,16 @@ export function clampSeverity<T extends { department?: string | null; severity: 
   return majorSoftware ? r : { ...r, severity: "this_week" as IntelSeverity };
 }
 
+// Single shared page size for every surface (feed, map, counts) so the
+// dashboard and the disruption map can never render different item sets.
+export const FEED_LIMIT = 500;
+// Shared 14-day rolling window (inclusive of today).
+export function feedWindow() {
+  const end = new Date().toISOString().slice(0, 10);
+  const start = new Date(Date.now() - 13 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return { start, end };
+}
+
 export function useIntelligenceItems(filters: IntelFilters = {}) {
   const { lang } = useLanguage();
   return useQuery({
