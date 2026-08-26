@@ -423,7 +423,12 @@ serve(async (req) => {
     if (Date.now() > deadline) break;
     stats.processed++;
     const payload = (row.payload ?? {}) as Record<string, unknown>;
-    const text = `${row.original_title} ${row.original_summary ?? ""} ${row.body ?? ""}`.slice(0, 12000);
+    const rowTitle = String(row.original_title ?? "Logistics hazard advisory");
+    const rowSummary = String(row.original_summary ?? "");
+    const rowBody = String(row.body ?? "");
+    const rowSource = String(row.source_name ?? "Official hazard authority");
+    const rowUrl = typeof row.url === "string" ? row.url : null;
+    const text = `${rowTitle} ${rowSummary} ${rowBody}`.slice(0, 12000);
     const geoExposure = (payload.exposure ?? {}) as Record<string, unknown>;
     const textExposure = exposureFromText(infra, text);
     const ports = [...new Set([...(geoExposure.ports as string[] ?? []), ...textExposure.ports])];
@@ -436,10 +441,10 @@ serve(async (req) => {
     let a: Analysis | null = null;
     try {
       a = await analyze({
-        headline: row.original_title,
-        description: row.original_summary,
-        body: (row.body ?? "").slice(0, 6000),
-        source: row.source_name,
+        headline: rowTitle,
+        description: rowSummary,
+        body: rowBody.slice(0, 6000),
+        source: rowSource,
         source_type: row.source_type,
         source_tier: payload.tier ?? 3,
         publication_time: row.published_at,
@@ -488,10 +493,10 @@ serve(async (req) => {
       .maybeSingle();
 
     const sourceEntry = {
-      source_name: row.source_name,
+      source_name: rowSource,
       source_type: row.source_type,
-      url: row.url,
-      title: row.original_title,
+      url: rowUrl,
+      title: rowTitle,
       published_at: row.published_at,
     };
 
@@ -577,7 +582,7 @@ serve(async (req) => {
         event_name: a.event_name,
         sources: [sourceEntry],
         source_count: 1,
-        primary_source_url: readableSourceUrl(row.url),
+        primary_source_url: readableSourceUrl(rowUrl),
         event_started_at: row.published_at,
       }).select("id").single();
       if (cErr) { stats.failed++; continue; }
@@ -587,19 +592,19 @@ serve(async (req) => {
 
     // ---------- dashboard item ----------
     const dept = a.departments[0] ?? "operations";
-    const sourceUrl = readableSourceUrl(row.url);
+    const sourceUrl = readableSourceUrl(rowUrl);
     const quality = assessIntelligenceQuality({
-      headline: a.event_name || row.original_title,
+      headline: a.event_name || rowTitle,
       summary: a.what_happened || a.summary,
       content: `${a.logistics_impact} ${ports.join(" ")} ${airports.join(" ")} ${lanes.join(" ")}`,
-      sourceName: row.source_name,
+      sourceName: rowSource,
       sourceUrl,
       country: a.countries.join(" "),
       department: dept,
       directHitekExposure: hitekScore >= 70,
     });
     const finalRelevance = Math.max(quality.relevanceScore, hitekScore);
-    const finalRelevanceStatus = finalRelevance >= 55 ? "accept" : finalRelevance >= 35 ? "review" : "reject";
+    const finalRelevanceStatus: "accept" | "review" | "reject" = finalRelevance >= 55 ? "accept" : finalRelevance >= 35 ? "review" : "reject";
     const hazardSeverityScore = Math.min(100, Math.round(finalScore * 0.55 + hitekScore * 0.45));
     const hazardSeverity: Severity = hazardSeverityScore >= 80 && hitekScore >= 65
       ? "act_now"
@@ -611,18 +616,18 @@ serve(async (req) => {
       severity: quality.department === "it" && hazardSeverity === "act_now" ? "this_week" as Severity : hazardSeverity,
       severityScore: hazardSeverityScore,
     };
-    const hitekCopy = buildHitekImpactAction({ headline: a.event_name || row.original_title, summary: a.what_happened || a.summary, assessment: finalAssessment });
+    const hitekCopy = buildHitekImpactAction({ headline: a.event_name || rowTitle, summary: a.what_happened || a.summary, assessment: finalAssessment });
     const cappedSeverity: Severity = finalAssessment.severity;
-    const cleanHeadline = cleanTitle(a.event_name || row.original_title, row.source_name);
+    const cleanHeadline = cleanTitle(a.event_name || rowTitle, rowSource);
     const cleanItemSummary = cleanSummary(a.what_happened || a.summary);
     // One dashboard card per EVENT, never one per bulletin. Later, stronger
     // reports refresh the existing card instead of stacking duplicates.
     let dupItemId: string | null = null;
     // Only match on URL when it is the real article link; raw feed documents
     // are rewritten to a shared landing page and would over-collapse cards.
-    if (readableSourceUrl(row.url) === row.url) {
+    if (rowUrl && readableSourceUrl(rowUrl) === rowUrl) {
       const { data: byUrl } = await db
-        .from("intelligence_items").select("id").eq("source_url", row.url).maybeSingle();
+        .from("intelligence_items").select("id").eq("source_url", rowUrl).maybeSingle();
       dupItemId = byUrl?.id ?? null;
     }
     if (!dupItemId) {
@@ -674,7 +679,7 @@ serve(async (req) => {
         severity: cappedSeverity,
         time_to_impact: horizon(a.event_status),
         affected_tags: [...new Set([...ports, ...lanes, ...a.countries])].slice(0, 8),
-        source_name: row.source_name,
+        source_name: rowSource,
         source_url: sourceUrl,
         status: "new",
         is_ai_draft: false,
