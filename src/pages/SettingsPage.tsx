@@ -1,4 +1,4 @@
-import { Settings as SettingsIcon, RotateCcw, Bell, Rss, RefreshCw } from "lucide-react";
+import { Settings as SettingsIcon, RotateCcw, Bell, Rss, RefreshCw, ServerCog } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, X } from "lucide-react";
 import { useCustomSources } from "@/hooks/useCustomSources";
 import { useAuth } from "@/contexts/AuthContext";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -37,6 +37,7 @@ const ALL_SOURCES = [
 const SettingsPage = () => {
   const { pending, updatePending, applySettings, resetSettings, isUpdating, isDirty } = useSettings();
   const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
   const { sources: customSources, add: addSource, remove: removeSource } = useCustomSources(isAdmin);
   const { data: quality } = useQuery({
     queryKey: ["admin-quality-health"],
@@ -52,6 +53,22 @@ const SettingsPage = () => {
       return { runs: runs.data || [], health: health.data || [], pipeline: pipeline.data || [] };
     },
     refetchInterval: 60_000,
+  });
+  const { data: technologies = [] } = useQuery({
+    queryKey: ["hitek-technologies"],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("hitek_technologies").select("id,name,aliases,usage_status,notes").order("name");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+  const updateTechnology = useMutation({
+    mutationFn: async ({ id, usage_status }: { id: string; usage_status: "used" | "not_used" | "unknown" }) => {
+      const { error } = await supabase.from("hitek_technologies").update({ usage_status }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["hitek-technologies"] }),
   });
 
   const togglePriority = (p: string) => {
@@ -231,6 +248,34 @@ const SettingsPage = () => {
             })}
           </div>
         </Section>
+
+        {isAdmin && (
+          <Section icon={ServerCog} title="Hitek Technologies / Systems">
+            <p className="text-sm text-muted-foreground">Applicability used by cybersecurity relevance and urgency decisions.</p>
+            <Table>
+              <TableHeader><TableRow><TableHead>Technology</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {technologies.map((technology) => (
+                  <TableRow key={technology.id}>
+                    <TableCell className="font-medium">{technology.name}</TableCell>
+                    <TableCell>
+                      <select
+                        value={technology.usage_status}
+                        onChange={(event) => updateTechnology.mutate({ id: technology.id, usage_status: event.target.value as "used" | "not_used" | "unknown" })}
+                        className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                        aria-label={`Usage status for ${technology.name}`}
+                      >
+                        <option value="used">Used</option>
+                        <option value="not_used">Not used</option>
+                        <option value="unknown">Unknown</option>
+                      </select>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Section>
+        )}
 
         {isAdmin && (
           <Section icon={RefreshCw} title="Data Quality & Pipeline Health">
