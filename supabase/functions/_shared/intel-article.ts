@@ -1,5 +1,8 @@
 const NON_ARTICLE_PATH = /\/(white-papers?|special-reports?|magazine|director(?:y|ies)|categor(?:y|ies)|tags?|topics?|media-kit|newsletters?|release-notes?|search|authors?|feedback-from)(?:\/|$|\?)/i;
-const NON_ARTICLE_TITLE = /^(?:page not found|404|white papers?|special reports?|magazine|rail directories|logistics technology news|feedback from)(?:\s*[|:\-–—].*)?$/i;
+const NON_ARTICLE_TITLE = /^(?:page not found|404|white papers?|special reports?|magazine|rail directories|logistics technology news|feedback from|(?:air cargo|rail|container shipping|maritime|trucking|logistics|shipping|freight|ports?) news)(?:\s*[|:\-–—].*)?$/i;
+
+const PROMOTIONAL_SENTENCE = /(?:get the daily insights|insights that power|subscribe(?: now)?|sign up|register now|read more|click here|follow us|join our newsletter|all rights reserved|advertisement|related articles?|recommended for you|share this article|download the app)/i;
+const NAVIGATION_FRAGMENT = /^(?:home|news|latest news|markets?|topics?|sections?|menu|search|login|sign in|subscribe)$/i;
 
 export function canonicalizeUrl(value?: string | null): string | null {
   if (!value) return null;
@@ -35,17 +38,29 @@ export function cleanTitle(value?: string | null, sourceName?: string | null): s
 }
 
 export function cleanSummary(value?: string | null): string {
-  return String(value || "")
+  const cleaned = String(value || "")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/gi, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\(?/g, "$1")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/(?:www\.)?[a-z0-9-]+\.(?:com|net|org|io|ma|fr|co\.uk)\/\S*/gi, " ")
     .replace(/^\s{0,3}#{1,6}\s*/gm, "")
+    .replace(/#{2,}\w*/g, " ")
+    .replace(/[*_`~|>{}\[\]#]+/g, " ")
+    .replace(/\b(?:Sergiu Gatlan|Bill Toulas)\b/gi, " ")
     .replace(/^\s*\|.*\|\s*$/gm, " ")
     .replace(/^\s*(?:by|author)\s+[\p{L} .'-]{2,60}\s*$/gimu, " ")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 1200);
+    .trim();
+  const sentences = cleaned
+    .split(/(?<=[.!?])\s+|\s*[•·]\s*/u)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length >= 20 && !PROMOTIONAL_SENTENCE.test(sentence) && !NAVIGATION_FRAGMENT.test(sentence));
+  return sentences.join(" ").slice(0, 900).trim();
 }
 
 export function nonArticleReason(input: { title?: string | null; url?: string | null; content?: string | null }): string | null {
@@ -63,4 +78,29 @@ export function nonArticleReason(input: { title?: string | null; url?: string | 
 
 export function normalizedTitle(value?: string | null): string {
   return cleanTitle(value).toLowerCase().replace(/[^a-z0-9\p{L}]+/gu, " ").trim();
+}
+
+const DUPLICATE_STOP_WORDS = new Set([
+  "the", "and", "for", "with", "from", "into", "after", "amid", "over", "new", "news", "update", "updates",
+  "a", "an", "of", "to", "in", "on", "at", "as", "is", "are", "de", "la", "le", "les", "des", "du", "et", "en",
+]);
+
+export function titleFingerprint(value?: string | null): string {
+  return normalizedTitle(value)
+    .split(/\s+/)
+    .filter((word) => word.length > 2 && !DUPLICATE_STOP_WORDS.has(word))
+    .sort()
+    .join(" ");
+}
+
+export function areLikelyDuplicateTitles(a?: string | null, b?: string | null): boolean {
+  const left = titleFingerprint(a);
+  const right = titleFingerprint(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const A = new Set(left.split(" "));
+  const B = new Set(right.split(" "));
+  let overlap = 0;
+  for (const word of A) if (B.has(word)) overlap++;
+  return overlap >= 4 && overlap / Math.min(A.size, B.size) >= 0.82;
 }

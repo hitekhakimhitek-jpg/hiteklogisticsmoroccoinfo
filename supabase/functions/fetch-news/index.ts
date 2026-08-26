@@ -4,7 +4,7 @@ import { corsHeaders, requireHitekAdmin } from "../_shared/auth.ts";
 import { recordSourceRun } from "../_shared/health.ts";
 import { NEWS_SOURCE_META, syncSourceRegistry } from "../_shared/registry.ts";
 import { assessIntelligenceQuality } from "../_shared/intel-quality.ts";
-import { canonicalizeUrl, cleanSummary, cleanTitle, nonArticleReason } from "../_shared/intel-article.ts";
+import { areLikelyDuplicateTitles, canonicalizeUrl, cleanSummary, cleanTitle, nonArticleReason } from "../_shared/intel-article.ts";
 
 const CATEGORIES = ["regulation", "weather", "port", "trade", "compliance", "market", "general"];
 const REGIONS = [
@@ -998,14 +998,22 @@ serve(async (req) => {
       }
     }
 
-    // Deduplicate by URL
-    const uniqueArticles = Array.from(
+    // Deduplicate canonical URLs (tracking parameters and trailing slashes do
+    // not make a new article), then collapse near-identical headlines found by
+    // different discovery queries during the same run.
+    const byCanonicalUrl = Array.from(
       new Map(
         allArticles
           .filter(a => a.url && a.title)
-          .map(a => [a.url, a])
+          .map(a => [canonicalizeUrl(a.url) || a.url, { ...a, url: canonicalizeUrl(a.url) || a.url }])
       ).values()
     );
+    const uniqueArticles: typeof byCanonicalUrl = [];
+    for (const article of byCanonicalUrl) {
+      if (!uniqueArticles.some((existing) => areLikelyDuplicateTitles(existing.title, article.title))) {
+        uniqueArticles.push(article);
+      }
+    }
 
     const rejectionStats: Record<string, number> = {};
     const auditedArticles = uniqueArticles.filter((article) => {
@@ -1431,12 +1439,14 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
 
     if (existing) {
       for (const e of existing) {
-        if (e.source_url) existingUrls.add(e.source_url);
+        const canonical = canonicalizeUrl(e.source_url);
+        if (canonical) existingUrls.add(canonical);
       }
     }
 
     const newRows = rows.filter((r: any) => {
-      if (r.source_url && existingUrls.has(r.source_url)) return false;
+      const canonical = canonicalizeUrl(r.source_url);
+      if (canonical && existingUrls.has(canonical)) return false;
       return true;
     });
 

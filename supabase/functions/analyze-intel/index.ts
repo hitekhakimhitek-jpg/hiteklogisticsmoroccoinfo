@@ -199,6 +199,7 @@ function applyOverrides(a: Analysis, text: string, exposure: { maxImportance: nu
   const hard: Array<[boolean, string]> = [
     [CHOKEPOINTS.test(t) && /(closed|closure|blocked|suspend|halt|attack|struck|restrict)/.test(t), "strategic chokepoint disruption"],
     [/(port|terminal)/.test(t) && /(closed|closure|shut|suspend operations|halt operations)/.test(t) && exposure.maxImportance >= 75, "major port closure"],
+    [/(?:global\s+)?port congestion|congestion.{0,50}(?:port|terminal)|(?:port|terminal).{0,50}congestion/.test(t), "port congestion"],
     [/(strike|industrial action|walkout)/.test(t) && /(day|week|indefinite|multi)/.test(t) && exposure.maxImportance >= 70, "large multi-day transport strike"],
     [/(customs|border|clearance)/.test(t) && /(outage|down|failure|offline|suspend)/.test(t), "customs / border system failure"],
     [/(cyberattack|ransomware|hacked|cyber incident)/.test(t) && /(port|terminal|carrier|customs|airport|logistics)/.test(t), "cyberattack on logistics infrastructure"],

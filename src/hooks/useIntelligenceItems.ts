@@ -242,12 +242,16 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
         }
         return scoreOf(b) - scoreOf(a);
       });
-      if (lang === "fr" && sorted.length > 0) {
+      const rowsNeedingTranslation = sorted.filter((row) => {
+        const sourceLanguage = (row.language || "").toLowerCase();
+        const visibleText = `${row.headline} ${row.summary} ${row.impact} ${row.action_required}`;
+        const looksFrench = /\b(le|la|les|des|du|de|et|pour|avec|dans|sur|une|un|est|sont|sera|ont|aux|par|depuis|importations?|transport|marché|grève|portuaire|bientôt|reprendront)\b/i.test(visibleText);
+        return lang === "fr" || (lang === "en" && ((!sourceLanguage.startsWith("en") && sourceLanguage !== "") || looksFrench));
+      });
+      if (rowsNeedingTranslation.length > 0) {
         try {
-          // Per-card coherence: a card is either fully French or fully English,
-          // never a French headline with an English summary.
-          return await translateRecords(
-            sorted,
+          const translated = await translateRecords(
+            rowsNeedingTranslation,
             [
               "headline",
               "summary",
@@ -257,8 +261,10 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
               "affected_lanes_or_customers",
               "suggested_action",
             ],
-            "fr",
+            lang,
           );
+          const byId = new Map(translated.map((row) => [row.id, row]));
+          return sorted.map((row) => byId.get(row.id) ?? row);
         } catch (e) {
           console.error("intel translate failed", e);
           return sorted;

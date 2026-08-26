@@ -11,7 +11,7 @@ const FIELDS: (keyof DbNewsEntry)[] = [
 
 // Bump version to invalidate stale cached translations (e.g. when the
 // edge function previously echoed English back unchanged).
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 function cacheKey(target: "fr" | "en", text: string) {
   return `tr:${CACHE_VERSION}:${target}:${text}`;
 }
@@ -69,11 +69,12 @@ async function translateChunk(
     if (translations.length !== slice.length) return slice.map(() => null);
     // Guard against the model echoing the source back: an unchanged string that
     // still looks English must be treated as a failure, never cached as French.
-    return translations.map((t, i) =>
-      typeof t === "string" && t.trim() && !(target === "fr" && t.trim() === slice[i].trim() && looksEnglish(t))
-        ? t
-        : null,
-    );
+    return translations.map((t, i) => {
+      if (typeof t !== "string" || !t.trim()) return null;
+      if (target === "fr" && t.trim() === slice[i].trim() && looksEnglish(t)) return null;
+      if (target === "en" && t.trim() === slice[i].trim() && looksFrench(t)) return null;
+      return t;
+    });
   } catch (e) {
     if (attempt < 3) {
       await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
@@ -92,6 +93,11 @@ function looksEnglish(s: string): boolean {
   return EN_WORDS.test(s);
 }
 
+const FR_WORDS = /\b(le|la|les|des|du|de|et|pour|avec|dans|sur|une|un|est|sont|sera|ont|aux|par|depuis|importations?|transport|marché|grève|portuaire|bientôt|reprendront)\b/i;
+function looksFrench(s: string): boolean {
+  return FR_WORDS.test(s);
+}
+
 /**
  * Translate a list of records field-by-field with *per-record coherence*:
  * if any translatable field of a record fails to translate, the whole record
@@ -103,7 +109,7 @@ export async function translateRecords<T extends Record<string, unknown>>(
   fields: (keyof T)[],
   target: "fr" | "en",
 ): Promise<T[]> {
-  if (target === "en" || rows.length === 0) return rows;
+  if (rows.length === 0) return rows;
 
   const need = new Set<string>();
   for (const r of rows) {
@@ -162,7 +168,7 @@ export async function translateEntries(
   entries: DbNewsEntry[],
   target: "fr" | "en",
 ): Promise<DbNewsEntry[]> {
-  if (target === "en" || entries.length === 0) return entries;
+  if (entries.length === 0) return entries;
   // All-or-nothing per entry so a card never mixes French and English.
   return translateRecords(
     entries as unknown as Record<string, unknown>[],

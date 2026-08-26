@@ -49,6 +49,7 @@ const DIRECT_HITEK = /hitek|tanger med|tangier med|morocco.spain|spain.morocco|a
 const IMMEDIATE = /closed|closure|blocked|shutdown|halted|suspended routes?|carrier suspension|force majeure|effective immediately|within 24 hours|active disruption|currently disrupted|actual compromise/i;
 const DEVELOPING = /upcoming strike|planned strike|worsening congestion|delay|diversion|backlog|actively exploited|mandatory|effective (?:on|from)|deadline|significant freight rate/i;
 const SOURCE_ALARM = /\bcritical\b|urgent|severe|catastrophic|major|emergency|maximum severity|dangerous|warning|alert/i;
+const PORT_CONGESTION = /(?:global\s+)?port congestion|congestion.{0,50}(?:port|terminal)|(?:port|terminal).{0,50}congestion/i;
 
 function technologyMatch(text: string, usage: QualityInput["technologyUsage"] = {}) {
   for (const [name, state] of Object.entries(usage)) {
@@ -113,10 +114,17 @@ export function assessIntelligenceQuality(input: QualityInput): QualityAssessmen
 
   let severityScore = 38;
   const direct = Boolean(input.directHitekExposure || DIRECT_HITEK.test(text));
-  if (DEVELOPING.test(text)) severityScore = 60;
-  if (IMMEDIATE.test(text) && (direct || GEO_PRIORITY.test(text))) severityScore = 72;
-  if (IMMEDIATE.test(text) && direct) severityScore = 84;
-  if (isMaritime && /hit|attack|hijack|piracy|pirates/i.test(text) && !/route (?:closed|blocked)|carriers? suspend|rerouting begins|shipments? affected/i.test(text)) severityScore = 58;
+  // Port congestion immediately removes usable capacity and propagates delays
+  // across bookings and connections. Hitek treats any confirmed port congestion
+  // signal as an operational Critical item, including worldwide aggregates.
+  if (PORT_CONGESTION.test(text)) {
+    severityScore = 85;
+    reasons.push("confirmed port congestion forces Critical Operations severity");
+  }
+  if (DEVELOPING.test(text)) severityScore = Math.max(severityScore, 60);
+  if (IMMEDIATE.test(text) && (direct || GEO_PRIORITY.test(text))) severityScore = Math.max(severityScore, 72);
+  if (IMMEDIATE.test(text) && direct) severityScore = Math.max(severityScore, 84);
+  if (!PORT_CONGESTION.test(text) && isMaritime && /hit|attack|hijack|piracy|pirates/i.test(text) && !/route (?:closed|blocked)|carriers? suspend|rerouting begins|shipments? affected/i.test(text)) severityScore = 58;
   if (department === "commercial") severityScore = Math.min(severityScore, 70);
   if (department === "it") {
     const activelyExploited = /actively exploited|exploitation in the wild|actual compromise/i.test(text);
