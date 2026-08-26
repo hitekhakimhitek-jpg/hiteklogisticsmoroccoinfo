@@ -1271,6 +1271,12 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         rejection_counts: rejectionStats,
       });
       await recordNewsHealth(uniqueArticles, validatedArticles, [], "AI relevance classification returned no logistics items");
+      if (leaseToken) {
+        await supabase.rpc("release_pipeline_lease", {
+          _pipeline: "fetch-news", _token: leaseToken, _succeeded: true, _stage: "classified_empty", _error: null,
+        });
+        leaseToken = null;
+      }
       return new Response(
         JSON.stringify({
           success: true,
@@ -1434,6 +1440,12 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         rejection_counts: rejectionStats,
       });
       await recordNewsHealth(uniqueArticles, validatedArticles, []);
+      if (leaseToken) {
+        await supabase.rpc("release_pipeline_lease", {
+          _pipeline: "fetch-news", _token: leaseToken, _succeeded: true, _stage: "no_new_rows", _error: null,
+        });
+        leaseToken = null;
+      }
       return new Response(
         JSON.stringify({
           success: true,

@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Plus, X } from "lucide-react";
 import { useCustomSources } from "@/hooks/useCustomSources";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const ALL_PRIORITIES = ["critical", "important", "informational"] as const;
 const ALL_SOURCES = [
@@ -35,6 +38,21 @@ const SettingsPage = () => {
   const { pending, updatePending, applySettings, resetSettings, isUpdating, isDirty } = useSettings();
   const { isAdmin } = useAuth();
   const { sources: customSources, add: addSource, remove: removeSource } = useCustomSources(isAdmin);
+  const { data: quality } = useQuery({
+    queryKey: ["admin-quality-health"],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const [runs, health, pipeline] = await Promise.all([
+        supabase.from("ingestion_runs").select("id,status,started_at,finished_at,candidates_found,candidates_accepted,inserted_count,enriched_count,error_message").order("started_at", { ascending: false }).limit(5),
+        supabase.from("source_health").select("source_name,status,last_attempt_at,last_success_at,items_found_last_run,consecutive_failures,last_error").order("status").order("source_name").limit(100),
+        supabase.from("pipeline_control").select("pipeline,status,last_started_at,last_success_at,last_stage,paused_reason").order("pipeline"),
+      ]);
+      const error = runs.error || health.error || pipeline.error;
+      if (error) throw error;
+      return { runs: runs.data || [], health: health.data || [], pipeline: pipeline.data || [] };
+    },
+    refetchInterval: 60_000,
+  });
 
   const togglePriority = (p: string) => {
     const current = pending.priorityFilter;
@@ -213,6 +231,36 @@ const SettingsPage = () => {
             })}
           </div>
         </Section>
+
+        {isAdmin && (
+          <Section icon={RefreshCw} title="Data Quality & Pipeline Health">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <Metric label="Sources healthy" value={quality?.health.filter((s) => s.status === "healthy").length ?? 0} />
+              <Metric label="Sources degraded" value={quality?.health.filter((s) => s.status !== "healthy").length ?? 0} />
+              <Metric label="Last run inserted" value={quality?.runs[0]?.inserted_count ?? 0} />
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Source</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Found</TableHead>
+                  <TableHead>Last attempt</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(quality?.health ?? []).filter((s) => s.status !== "healthy").slice(0, 12).map((source) => (
+                  <TableRow key={source.source_name}>
+                    <TableCell className="font-medium">{source.source_name}</TableCell>
+                    <TableCell className="capitalize">{source.status}</TableCell>
+                    <TableCell className="text-right tabular-nums">{source.items_found_last_run}</TableCell>
+                    <TableCell className="text-muted-foreground">{source.last_attempt_at ? new Date(source.last_attempt_at).toLocaleString() : "Never"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Section>
+        )}
       </div>
     </>
   );
@@ -226,6 +274,15 @@ function Section({ icon: Icon, title, children }: { icon: typeof SettingsIcon; t
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{title}</h2>
       </div>
       {children}
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-3">
+      <div className="text-2xl font-semibold tabular-nums text-foreground">{value}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
     </div>
   );
 }
