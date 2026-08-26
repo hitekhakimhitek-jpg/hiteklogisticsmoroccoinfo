@@ -9,6 +9,7 @@ import { SEO } from "@/components/SEO";
 import { HolidayCalendar } from "@/components/map/HolidayCalendar";
 import { useIntelligenceItems } from "@/hooks/useIntelligenceItems";
 import { ISO3 } from "@/data/iso3to2";
+import { buildCentroids, inferPoint, type Centroids, type Place } from "@/lib/geoInfer";
 import { CalendarDays, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import L from "leaflet";
@@ -35,6 +36,7 @@ type MapItem = {
   source_url: string | null;
   source_name: string | null;
   verification_status: string | null;
+  affected_tags: string[] | null;
 };
 
 const SEV_COLOR: Record<Severity, string> = {
@@ -62,13 +64,15 @@ export default function DisruptionMap() {
   // feed (same query, same filters, same severity clamp), limited to items
   // that carry coordinates.
   const { data: feed, isLoading: loading } = useIntelligenceItems({ limit: 500 });
-  const items = useMemo(
-    () =>
-      ((feed || []) as unknown as MapItem[]).filter(
-        (d) => d.latitude != null && d.longitude != null,
-      ),
-    [feed],
-  );
+  const [centroids, setCentroids] = useState<Centroids>({});
+  const [places, setPlaces] = useState<Place[]>([]);
+  const items = useMemo(() => {
+    return ((feed || []) as unknown as MapItem[]).flatMap((item) => {
+      if (item.latitude != null && item.longitude != null) return [item];
+      const inferred = inferPoint(item, places, centroids);
+      return inferred ? [{ ...item, latitude: inferred.lat, longitude: inferred.lng }] : [];
+    });
+  }, [feed, places, centroids]);
   const [country, setCountry] = useState<{ a3: string; a2: string; name: string } | null>(null);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [holidaysLoading, setHolidaysLoading] = useState(false);
@@ -122,6 +126,24 @@ export default function DisruptionMap() {
     };
   }, []);
 
+  useEffect(() => {
+    supabase
+      .from("logistics_infrastructure")
+      .select("name,aliases,latitude,longitude")
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("infrastructure lookup failed", error);
+          return;
+        }
+        setPlaces((data || []).map((row) => ({
+          name: row.name,
+          aliases: row.aliases || [],
+          lat: row.latitude,
+          lng: row.longitude,
+        })));
+      });
+  }, []);
+
   // Country boundary layer: clicking a country opens its holiday calendar.
   useEffect(() => {
     const map = mapRef.current;
@@ -132,6 +154,7 @@ export default function DisruptionMap() {
         const res = await fetch("/countries.geo.json");
         const geo = await res.json();
         if (cancelled || !mapRef.current) return;
+        setCentroids(buildCentroids(geo));
         const layer = L.geoJSON(geo, {
           style: {
             color: "#94a3b8",
@@ -314,7 +337,7 @@ export default function DisruptionMap() {
           <p className="text-sm text-muted-foreground mt-1">
             {lang === "fr"
               ? `Perturbations et jours fériés au même endroit — synchronisé avec le tableau de bord (${items.length} éléments).`
-              : `Disruptions and public holidays in one view — synced with the dashboard feed (${items.length} items).`}
+              : `Disruptions and public holidays in one view — ${items.length} of ${feed?.length ?? 0} dashboard items have a mappable location.`}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             {lang === "fr"
