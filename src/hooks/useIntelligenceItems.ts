@@ -189,14 +189,13 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
   return useQuery({
     queryKey: ["intel_items", filters, lang],
     queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const start = new Date(Date.now() - 13 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const { start, end } = feedWindow();
       const { data, error } = await supabase.rpc("canonical_intelligence", {
         _start_date: start,
-        _end_date: today,
+        _end_date: end,
         _department: filters.department && filters.department !== "all" ? filters.department : undefined,
         _severity: filters.severity && filters.severity !== "all" ? filters.severity : undefined,
-        _limit: filters.limit || 200,
+        _limit: filters.limit || FEED_LIMIT,
       });
       if (error) throw error;
       let rows = (data || []) as IntelligenceItem[];
