@@ -813,6 +813,12 @@ serve(async (req) => {
             technologyUsage,
           });
         }
+        const duplicateOf = await findRecentDuplicate(supabase, drafted.clean_title, entry.source_url);
+        if (duplicateOf) {
+          skipped++;
+          console.log(`duplicate skipped: ${drafted.clean_title} matches ${duplicateOf}`);
+          continue;
+        }
         const { error: insErr } = await supabase.from("intelligence_items").insert({
           headline: drafted.headline || entry.headline,
           summary: drafted.summary || entry.summary,
@@ -861,40 +867,6 @@ serve(async (req) => {
           processing_error: drafted.relevance_status === "accept" ? null : drafted.classification_reason,
           canonical_url: canonicalizeUrl(entry.source_url),
         });
-        const duplicateOf = await findRecentDuplicate(supabase, drafted.clean_title, entry.source_url);
-        if (duplicateOf) {
-          const { error: duplicateError } = await supabase.from("intelligence_items").insert({
-            headline: drafted.headline || entry.headline,
-            summary: drafted.summary || entry.summary,
-            impact: drafted.impact,
-            action_required: drafted.action_required,
-            department: drafted.department,
-            severity: drafted.severity,
-            time_to_impact: drafted.time_to_impact,
-            affected_tags: drafted.affected_tags,
-            source_name: entry.source_name,
-            source_url: entry.source_url,
-            status: "archived",
-            is_ai_draft: false,
-            source_entry_id: entry.id,
-            language: "en",
-            publication_date: entry.publication_date,
-            verification_status: "duplicate",
-            relevance_score: 0,
-            department_confidence: drafted.department_confidence,
-            severity_score: 0,
-            processing_status: "duplicate",
-            relevance_status: "reject",
-            clean_title: drafted.clean_title,
-            clean_summary: drafted.clean_summary,
-            decision_reasons: [...drafted.decision_reasons, `duplicate of ${duplicateOf}`],
-            enrichment_version: drafted.enrichment_version,
-            processing_error: `duplicate of ${duplicateOf}`,
-            canonical_url: canonicalizeUrl(entry.source_url),
-          });
-          if (duplicateError) throw new Error(duplicateError.message);
-          continue;
-        }
         if (insErr) {
           failed++;
           console.error("insert error:", insErr.message);
