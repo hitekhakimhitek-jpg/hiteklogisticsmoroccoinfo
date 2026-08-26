@@ -311,6 +311,36 @@ export type Database = {
           },
         ]
       }
+      hitek_technologies: {
+        Row: {
+          aliases: string[]
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          updated_at: string
+          usage_status: string
+        }
+        Insert: {
+          aliases?: string[]
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          updated_at?: string
+          usage_status?: string
+        }
+        Update: {
+          aliases?: string[]
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          updated_at?: string
+          usage_status?: string
+        }
+        Relationships: []
+      }
       ingestion_runs: {
         Row: {
           archived_count: number
@@ -415,11 +445,15 @@ export type Database = {
           carrier_affected: string | null
           category: string | null
           classification_reason: string | null
+          clean_summary: string | null
+          clean_title: string | null
           country: string | null
           created_at: string
+          decision_reasons: string[]
           department: Database["public"]["Enums"]["intel_department"]
           department_confidence: number
           effective_date: string | null
+          enrichment_version: string | null
           event_date: string | null
           headline: string
           id: string
@@ -441,10 +475,12 @@ export type Database = {
           processing_status: Database["public"]["Enums"]["intel_processing_status"]
           publication_date: string | null
           relevance_score: number
+          relevance_status: string
           severity: Database["public"]["Enums"]["intel_severity"]
           severity_score: number
           source_entry_id: string | null
           source_name: string
+          source_severity: string | null
           source_tier: number
           source_url: string | null
           status: Database["public"]["Enums"]["intel_status"]
@@ -471,11 +507,15 @@ export type Database = {
           carrier_affected?: string | null
           category?: string | null
           classification_reason?: string | null
+          clean_summary?: string | null
+          clean_title?: string | null
           country?: string | null
           created_at?: string
+          decision_reasons?: string[]
           department?: Database["public"]["Enums"]["intel_department"]
           department_confidence?: number
           effective_date?: string | null
+          enrichment_version?: string | null
           event_date?: string | null
           headline: string
           id?: string
@@ -497,10 +537,12 @@ export type Database = {
           processing_status?: Database["public"]["Enums"]["intel_processing_status"]
           publication_date?: string | null
           relevance_score?: number
+          relevance_status?: string
           severity?: Database["public"]["Enums"]["intel_severity"]
           severity_score?: number
           source_entry_id?: string | null
           source_name?: string
+          source_severity?: string | null
           source_tier?: number
           source_url?: string | null
           status?: Database["public"]["Enums"]["intel_status"]
@@ -527,11 +569,15 @@ export type Database = {
           carrier_affected?: string | null
           category?: string | null
           classification_reason?: string | null
+          clean_summary?: string | null
+          clean_title?: string | null
           country?: string | null
           created_at?: string
+          decision_reasons?: string[]
           department?: Database["public"]["Enums"]["intel_department"]
           department_confidence?: number
           effective_date?: string | null
+          enrichment_version?: string | null
           event_date?: string | null
           headline?: string
           id?: string
@@ -553,10 +599,12 @@ export type Database = {
           processing_status?: Database["public"]["Enums"]["intel_processing_status"]
           publication_date?: string | null
           relevance_score?: number
+          relevance_status?: string
           severity?: Database["public"]["Enums"]["intel_severity"]
           severity_score?: number
           source_entry_id?: string | null
           source_name?: string
+          source_severity?: string | null
           source_tier?: number
           source_url?: string | null
           status?: Database["public"]["Enums"]["intel_status"]
@@ -578,6 +626,62 @@ export type Database = {
             columns: ["source_entry_id"]
             isOneToOne: false
             referencedRelation: "news_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intelligence_reprocessing_audit: {
+        Row: {
+          created_at: string
+          decision_reasons: string[]
+          id: string
+          item_id: string
+          new_department: string
+          new_processing_status: string
+          new_relevance_score: number
+          new_severity: string
+          previous_department: string
+          previous_processing_status: string
+          previous_relevance_score: number
+          previous_severity: string
+          run_id: string
+        }
+        Insert: {
+          created_at?: string
+          decision_reasons?: string[]
+          id?: string
+          item_id: string
+          new_department: string
+          new_processing_status: string
+          new_relevance_score: number
+          new_severity: string
+          previous_department: string
+          previous_processing_status: string
+          previous_relevance_score: number
+          previous_severity: string
+          run_id: string
+        }
+        Update: {
+          created_at?: string
+          decision_reasons?: string[]
+          id?: string
+          item_id?: string
+          new_department?: string
+          new_processing_status?: string
+          new_relevance_score?: number
+          new_severity?: string
+          previous_department?: string
+          previous_processing_status?: string
+          previous_relevance_score?: number
+          previous_severity?: string
+          run_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intelligence_reprocessing_audit_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "intelligence_items"
             referencedColumns: ["id"]
           },
         ]
@@ -849,9 +953,12 @@ export type Database = {
           body: string | null
           canonical_url: string | null
           classification_reason: string | null
+          clean_summary: string | null
+          clean_title: string | null
           collected_at: string
           countries: string[]
           created_at: string
+          decision_reasons: string[]
           department: string | null
           department_confidence: number | null
           duplicate_of: string | null
@@ -870,9 +977,11 @@ export type Database = {
           published_at: string | null
           rejection_reason: string | null
           relevance_score: number | null
+          relevance_status: string
           severity_score: number | null
           source_language: string | null
           source_name: string
+          source_severity: string | null
           source_type: string | null
           translated_summary: string | null
           translated_title: string | null
@@ -886,9 +995,12 @@ export type Database = {
           body?: string | null
           canonical_url?: string | null
           classification_reason?: string | null
+          clean_summary?: string | null
+          clean_title?: string | null
           collected_at?: string
           countries?: string[]
           created_at?: string
+          decision_reasons?: string[]
           department?: string | null
           department_confidence?: number | null
           duplicate_of?: string | null
@@ -907,9 +1019,11 @@ export type Database = {
           published_at?: string | null
           rejection_reason?: string | null
           relevance_score?: number | null
+          relevance_status?: string
           severity_score?: number | null
           source_language?: string | null
           source_name: string
+          source_severity?: string | null
           source_type?: string | null
           translated_summary?: string | null
           translated_title?: string | null
@@ -923,9 +1037,12 @@ export type Database = {
           body?: string | null
           canonical_url?: string | null
           classification_reason?: string | null
+          clean_summary?: string | null
+          clean_title?: string | null
           collected_at?: string
           countries?: string[]
           created_at?: string
+          decision_reasons?: string[]
           department?: string | null
           department_confidence?: number | null
           duplicate_of?: string | null
@@ -944,9 +1061,11 @@ export type Database = {
           published_at?: string | null
           rejection_reason?: string | null
           relevance_score?: number | null
+          relevance_status?: string
           severity_score?: number | null
           source_language?: string | null
           source_name?: string
+          source_severity?: string | null
           source_type?: string | null
           translated_summary?: string | null
           translated_title?: string | null
@@ -1384,11 +1503,15 @@ export type Database = {
           carrier_affected: string | null
           category: string | null
           classification_reason: string | null
+          clean_summary: string | null
+          clean_title: string | null
           country: string | null
           created_at: string
+          decision_reasons: string[]
           department: Database["public"]["Enums"]["intel_department"]
           department_confidence: number
           effective_date: string | null
+          enrichment_version: string | null
           event_date: string | null
           headline: string
           id: string
@@ -1410,10 +1533,12 @@ export type Database = {
           processing_status: Database["public"]["Enums"]["intel_processing_status"]
           publication_date: string | null
           relevance_score: number
+          relevance_status: string
           severity: Database["public"]["Enums"]["intel_severity"]
           severity_score: number
           source_entry_id: string | null
           source_name: string
+          source_severity: string | null
           source_tier: number
           source_url: string | null
           status: Database["public"]["Enums"]["intel_status"]
@@ -1524,6 +1649,10 @@ export type Database = {
         | "published"
         | "failed"
         | "review_required"
+        | "validated"
+        | "relevance_checked"
+        | "classified"
+        | "enrichment_failed"
       intel_severity: "act_now" | "this_week" | "awareness"
       intel_status: "new" | "acknowledged" | "actioned" | "archived"
       news_category:
@@ -1708,6 +1837,10 @@ export const Constants = {
         "published",
         "failed",
         "review_required",
+        "validated",
+        "relevance_checked",
+        "classified",
+        "enrichment_failed",
       ],
       intel_severity: ["act_now", "this_week", "awareness"],
       intel_status: ["new", "acknowledged", "actioned", "archived"],
