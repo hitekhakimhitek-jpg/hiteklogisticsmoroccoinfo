@@ -53,19 +53,26 @@ serve(async (req) => {
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-      const { data: news } = await supabase
-        .from("news_entries")
-        .select("*")
-        .gte("published_date", sevenDaysAgo.toISOString())
-        .lte("published_date", now.toISOString())
-        .order("priority", { ascending: true });
+      const toDate = (date: Date) => date.toISOString().slice(0, 10);
+      const { data: news, error: newsError } = await supabase.rpc("canonical_intelligence", {
+        _start_date: toDate(sevenDaysAgo),
+        _end_date: toDate(now),
+        _department: null,
+        _severity: null,
+        _limit: 500,
+      });
+      if (newsError) throw new Error(`Canonical weekly query failed: ${newsError.message}`);
 
       // Previous week for comparison
-      const { data: prevNews } = await supabase
-        .from("news_entries")
-        .select("category,priority")
-        .gte("published_date", fourteenDaysAgo.toISOString())
-        .lt("published_date", sevenDaysAgo.toISOString());
+      const previousEnd = new Date(sevenDaysAgo.getTime() - 24 * 60 * 60 * 1000);
+      const { data: prevNews, error: prevError } = await supabase.rpc("canonical_intelligence", {
+        _start_date: toDate(fourteenDaysAgo),
+        _end_date: toDate(previousEnd),
+        _department: null,
+        _severity: null,
+        _limit: 500,
+      });
+      if (prevError) throw new Error(`Canonical comparison query failed: ${prevError.message}`);
 
       if (!news || news.length === 0) {
         return new Response(
@@ -75,9 +82,9 @@ serve(async (req) => {
       }
 
       const countMetrics = (arr: any[] | null) => ({
-        disruptions: (arr || []).filter((e) => e.category === "weather" || e.category === "port").length,
-        regulations: (arr || []).filter((e) => e.category === "regulation" || e.category === "compliance").length,
-        criticalAlerts: (arr || []).filter((e) => e.priority === "critical").length,
+        disruptions: (arr || []).filter((e) => e.department === "operations").length,
+        regulations: (arr || []).filter((e) => e.department === "compliance").length,
+        criticalAlerts: (arr || []).filter((e) => e.severity === "act_now").length,
         newsItems: (arr || []).length,
       });
       const cur = countMetrics(news);
@@ -90,14 +97,14 @@ serve(async (req) => {
         newsItems: { current: cur.newsItems, previous: prev.newsItems, change: pctChange(cur.newsItems, prev.newsItems) },
       };
 
-      const prompt = `You are a senior freight intelligence analyst producing a weekly briefing for a Morocco-based freight forwarder. Analyze the following ${news.length} news entries from the past 7 days and produce a comprehensive, polished intelligence report.
+      const prompt = `You are a senior freight intelligence analyst producing a weekly briefing for a Morocco-based freight forwarder. Analyze the following ${news.length} canonical intelligence items from the past 7 days and produce a comprehensive, polished intelligence report.
 
 CONTENT PRIORITIZATION (apply this hierarchy strictly throughout the report):
 1st: Compliance & Regulatory — customs regulations, ADII circulars, IMO/IATA/WCO changes, legal obligations
 2nd: Direct Operational Impact — port closures, route changes, rate surcharges, weather disruptions
 3rd: Everything Else — market stories, trends, forecasts, benchmarking data
 
-News entries:
+Canonical intelligence items (the same quality-filtered records shown on the dashboard):
 ${JSON.stringify(news, null, 2)}
 
 Generate a JSON object with these exact fields (mirroring the monthly summary format):

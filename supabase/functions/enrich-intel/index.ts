@@ -374,6 +374,8 @@ serve(async (req) => {
   const authErr = await requireHitekAdmin(req);
   if (authErr) return authErr;
 
+  let leaseToken: string | null = null;
+  let pipelineClient: any = null;
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -382,6 +384,7 @@ serve(async (req) => {
       throw new Error("Missing env vars");
     }
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    pipelineClient = supabase;
     const body = await req.json().catch(() => ({}));
 
     // ---- Mode: AI assist (preview, do not save) ----
@@ -508,16 +511,17 @@ serve(async (req) => {
 
     // ---- Mode: batch enrich news_entries that have no intelligence_item ----
     const limit = Math.min(Number(body.limit) || 30, 100);
-    const { data: leaseToken, error: leaseError } = await supabase.rpc("acquire_pipeline_lease", {
+    const { data: acquiredLease, error: leaseError } = await supabase.rpc("acquire_pipeline_lease", {
       _pipeline: "enrich-intel",
       _lease_seconds: 600,
     });
     if (leaseError) throw new Error(leaseError.message);
-    if (!leaseToken) {
+    if (!acquiredLease) {
       return new Response(JSON.stringify({ success: true, status: "already_running", created: 0, failed: 0, considered: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    leaseToken = acquiredLease;
 
     // Find news_entries without a matching intelligence_item.source_entry_id
     const { data: existingIds } = await supabase
@@ -648,12 +652,19 @@ serve(async (req) => {
       _stage: "complete",
       _error: null,
     });
+    leaseToken = null;
     return new Response(
       JSON.stringify({ success: true, created, failed, considered: todo.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
     console.error("enrich-intel error:", e);
+    if (pipelineClient && leaseToken) {
+      await pipelineClient.rpc("release_pipeline_lease", {
+        _pipeline: "enrich-intel", _token: leaseToken, _succeeded: false, _stage: "failed",
+        _error: e instanceof Error ? e.message.slice(0, 1000) : "Unknown error",
+      });
+    }
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
