@@ -138,6 +138,47 @@ async function analyze(input: Record<string, unknown>): Promise<Analysis | null>
   return null;
 }
 
+function heuristicAnalysis(
+  row: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  exposure: { ports: string[]; airports: string[]; lanes: string[]; maxImportance: number },
+): Analysis {
+  const title = String(row.original_title ?? "Logistics hazard advisory");
+  const summary = String(row.original_summary ?? row.body ?? title).replace(/\s+/g, " ").trim().slice(0, 1200);
+  const text = `${title} ${summary}`;
+  const hazard = String(payload.hazard_type ?? "severe_weather");
+  const countries = Array.isArray(row.countries) ? row.countries.filter((value): value is string => typeof value === "string") : [];
+  const actual = /(closed|closure|blocked|suspended|halted|landfall|flooding|earthquake|tsunami|attack|strike)/i.test(text);
+  const forecast = /(forecast|approach|warning|watch|expected|may|could|projected)/i.test(text);
+  const strategic = exposure.maxImportance >= 75 || exposure.ports.length > 0 || exposure.airports.length > 0;
+  const severe = /(extreme|severe|major|super typhoon|hurricane|cyclone|red alert|black rainstorm|tsunami|earthquake)/i.test(text);
+  const globalScore = Math.min(100, 25 + (strategic ? 35 : 0) + (severe ? 20 : 0) + (actual ? 15 : forecast ? 8 : 0));
+  const hitekScore = Math.min(100, 20 + Math.round(exposure.maxImportance * 0.55) + (exposure.lanes.length > 0 ? 15 : 0));
+  const eventStatus: Analysis["event_status"] = actual ? "actual_disruption" : forecast ? "forecast_risk" : "watch";
+  return {
+    relevant: strategic || globalScore >= 55,
+    event_type: hazard,
+    event_status: eventStatus,
+    global_logistics_impact_score: globalScore,
+    hitek_relevance_score: hitekScore,
+    severity: globalScore >= 80 ? "critical" : globalScore >= 55 ? "important" : "awareness",
+    confidence: "medium",
+    countries,
+    infrastructure: [...exposure.ports, ...exposure.airports, ...exposure.lanes],
+    transport_modes: exposure.airports.length > 0 ? ["air"] : ["sea", "road"],
+    departments: ["operations"],
+    event_key: `${hazard}-${countries[0] ?? "global"}`,
+    event_name: title,
+    summary,
+    logistics_impact: strategic
+      ? "The advisory may affect exposed ports, airports, routes, or inland transport capacity."
+      : "The advisory is being monitored for changes that could affect freight movements.",
+    next_watchpoint: "Monitor the issuing authority and operator advisories for escalation, closures, or schedule changes.",
+    what_happened: summary,
+    reasoning_short: "Deterministic assessment from official hazard data and mapped logistics exposure.",
+  };
+}
+
 // ---------- deterministic overrides ----------
 
 const CHOKEPOINTS = /(suez|panama canal|hormuz|bab el-mandeb|bab al-mandab|malacca|gibraltar|bosporus|bosphorus|taiwan strait|red sea)/i;
@@ -411,15 +452,12 @@ serve(async (req) => {
         exposed_infrastructure: { ports, airports, lanes, industrial, max_importance: maxImportance },
       });
     } catch (e) {
-      stats.failed++;
-      console.error("analysis failed:", (e as Error).message);
-      break; // rate limited / out of credits — stop cleanly, retry next run
+      console.error("AI analysis unavailable; using deterministic hazard assessment:", (e as Error).message);
+      a = heuristicAnalysis(row, payload, { ports, airports, lanes, maxImportance });
     }
 
     if (!a) {
-      stats.failed++;
-      await db.from("raw_items").update({ analysis_status: "failed", rejection_reason: "invalid model response" }).eq("id", row.id);
-      continue;
+      a = heuristicAnalysis(row, payload, { ports, airports, lanes, maxImportance });
     }
 
     const ov = applyOverrides(a, text, { maxImportance, ports, airports });
@@ -562,9 +600,19 @@ serve(async (req) => {
     });
     const finalRelevance = Math.max(quality.relevanceScore, hitekScore);
     const finalRelevanceStatus = finalRelevance >= 55 ? "accept" : finalRelevance >= 35 ? "review" : "reject";
-    const finalAssessment = { ...quality, relevanceScore: finalRelevance, relevanceStatus: finalRelevanceStatus };
+    const hazardSeverityScore = Math.min(100, Math.round(finalScore * 0.55 + hitekScore * 0.45));
+    const hazardSeverity: Severity = hazardSeverityScore >= 80 && hitekScore >= 65
+      ? "act_now"
+      : hazardSeverityScore >= 55 ? "this_week" : "awareness";
+    const finalAssessment = {
+      ...quality,
+      relevanceScore: finalRelevance,
+      relevanceStatus: finalRelevanceStatus,
+      severity: quality.department === "it" && hazardSeverity === "act_now" ? "this_week" as Severity : hazardSeverity,
+      severityScore: hazardSeverityScore,
+    };
     const hitekCopy = buildHitekImpactAction({ headline: a.event_name || row.original_title, summary: a.what_happened || a.summary, assessment: finalAssessment });
-    const cappedSeverity: Severity = quality.department === "it" && severity === "act_now" ? "this_week" : severity;
+    const cappedSeverity: Severity = finalAssessment.severity;
     const cleanHeadline = cleanTitle(a.event_name || row.original_title, row.source_name);
     const cleanItemSummary = cleanSummary(a.what_happened || a.summary);
     // One dashboard card per EVENT, never one per bulletin. Later, stronger
@@ -603,7 +651,7 @@ serve(async (req) => {
           action_required_bool: cappedSeverity !== "awareness",
           relevance_score: finalRelevance,
           department_confidence: quality.departmentConfidence,
-          severity_score: quality.severityScore,
+          severity_score: finalAssessment.severityScore,
           classification_reason: quality.classificationReason,
           relevance_status: finalRelevanceStatus,
           source_severity: quality.sourceSeverity,
@@ -636,7 +684,7 @@ serve(async (req) => {
         // feed window instead of being dropped for a missing date.
         publication_date: (row.published_at ?? row.collected_at ?? new Date().toISOString()).slice(0, 10),
         event_date: (row.published_at ?? row.collected_at ?? new Date().toISOString()).slice(0, 10),
-        verification_status: (payload.tier === 1 || row.source_type === "weather" || row.source_type === "hazard") ? "verified" : "partially_verified",
+        verification_status: a.confidence === "high" ? "verified" : "partially_verified",
         category: a.event_type,
         country: a.countries[0] ?? null,
         latitude: row.latitude,
@@ -650,7 +698,7 @@ serve(async (req) => {
         action_required_bool: cappedSeverity !== "awareness",
         relevance_score: finalRelevance,
         department_confidence: quality.departmentConfidence,
-        severity_score: quality.severityScore,
+        severity_score: finalAssessment.severityScore,
         classification_reason: quality.classificationReason,
         processing_status: finalRelevanceStatus === "accept" ? "published" : finalRelevanceStatus === "review" ? "review_required" : "rejected_irrelevant",
         processing_error: finalRelevanceStatus === "accept" ? null : quality.classificationReason,

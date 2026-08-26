@@ -38,8 +38,8 @@ const GEO_PRIORITY = /morocco|maroc|tanger|tangier|casablanca|kenitra|spain|fran
 const LOGISTICS = /freight forward|ocean freight|air freight|road freight|rail freight|cargo|shipping|container|port|terminal|customs|border crossing|warehouse|carrier|vessel|trade lane|supply chain|route|chokepoint/i;
 const INDUSTRY = /automotive|aerospace|project cargo|manufacturing|industrial (?:plant|facility|investment)|factory (?:expansion|investment)|foreign direct investment|\bfdi\b/i;
 const COMPLIANCE = /customs|douane|ics2|\bens\b|import requirement|export requirement|sanction|trade restriction|transport regulation|compliance deadline|directive|decree|tariff regulation/i;
-const CYBER = /cyber|ransomware|malware|phish|vulnerab|\bcve[-\s]?\d*|zero-?day|data breach|credential theft|remote.code.execution|\brce\b|security flaw|actively exploited|patching/i;
-const ENTERPRISE_IT = /microsoft|windows|entra|zimbra|sharepoint|salesforce|cloud security|azure|office 365|microsoft 365|wordpress|elementor|cargowise|\bsap\b|portnet|badr|firewall|server/i;
+const CYBER = /cyber|ransomware|malware|phish|vulnerab|\bcve[-\s]?\d*|zero-?day|data breach|credential theft|remote.code.execution|\brce\b|security flaw|actively exploited|patching|attack.{0,80}(?:systems?|infrastructure)|autonomous ai attacks?|adversar/i;
+const ENTERPRISE_IT = /microsoft|windows|entra|zimbra|sharepoint|salesforce|google cloud|cloud security|azure|office 365|microsoft 365|wordpress|elementor|cargowise|\bsap\b|portnet|badr|firewall|server/i;
 const MARITIME = /vessel|tanker|container ship|port|ocean carrier|red sea|suez|hormuz|bab el-mandeb|gulf of aden|piracy|pirates|hijack|shipping route|maritime|carrier suspension/i;
 const OPERATIONS = new RegExp(`${MARITIME.source}|trucking|road freight|air cargo|airport cargo|rail freight|transport strike|port congestion|capacity disruption|route disruption|typhoon|hurricane|cyclone|storm surge|flood|earthquake|tsunami|extreme weather`, "i");
 const COMMERCIAL = /new (?:investment|factory|industrial facility|automotive project|aerospace project)|manufacturing expansion|market opportunity|potential customer|capacity|freight rate|customer demand/i;
@@ -73,7 +73,7 @@ export function assessIntelligenceQuality(input: QualityInput): QualityAssessmen
   if (isMaritime || OPERATIONS.test(text)) department = "operations";
   else if (isCyber || ENTERPRISE_IT.test(text)) department = "it";
   else if (COMPLIANCE.test(text)) department = "compliance";
-  else if (INDUSTRY.test(text) || COMMERCIAL.test(text)) department = "commercial";
+  else if (INDUSTRY.test(text) || COMMERCIAL.test(text) || /tourism|tourisme|museum|musée/i.test(text)) department = "commercial";
   else if (FINANCE.test(text)) department = "finance";
   else if (INTEL_DEPARTMENTS.includes(input.department as IntelDepartment)) {
     department = input.department as IntelDepartment;
@@ -93,12 +93,17 @@ export function assessIntelligenceQuality(input: QualityInput): QualityAssessmen
   if (INDUSTRY.test(text)) relevanceScore += 25;
   if (isCyber && ENTERPRISE_IT.test(text)) relevanceScore += 25;
   else if (isCyber) relevanceScore += 18;
+  if (tech) relevanceScore += 10;
+  if (/actively exploited|exploitation in the wild/i.test(text) && ENTERPRISE_IT.test(text)) relevanceScore += 25;
   if (DIRECT_HITEK.test(text) || input.directHitekExposure) relevanceScore += 30;
   if (isMaritime && /red sea|suez|hormuz|bab el-mandeb|gulf of aden/i.test(text)) relevanceScore += 20;
+  if (isMaritime) relevanceScore += 15;
+  if (isMaritime && /attack|hit|hijack|piracy|pirates/i.test(text)) relevanceScore += 15;
   if (HARD_REJECT.test(text)) relevanceScore -= 55;
   if (/freight distress report|jobs? cut|layoffs?/i.test(text) && !GEO_PRIORITY.test(text) && !DIRECT_HITEK.test(text)) relevanceScore = 10;
   if (/release notes/i.test(text) && !DIRECT_HITEK.test(text)) relevanceScore = 5;
   if (tech?.state === "not_used") relevanceScore = Math.min(relevanceScore, 20);
+  if (isCyber && !ENTERPRISE_IT.test(text) && !tech) relevanceScore = Math.max(relevanceScore, 35);
   relevanceScore = Math.max(0, Math.min(100, relevanceScore));
 
   let relevanceStatus: QualityAssessment["relevanceStatus"] = relevanceScore >= 55 ? "accept" : relevanceScore >= 35 ? "review" : "reject";
