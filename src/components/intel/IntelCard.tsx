@@ -42,14 +42,14 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
     ? formatDate(new Date(item.publication_date), "d LLLL yyyy", { locale })
     : null;
 
-  const CardContent = (
-    <article
-      className={cn(
-        "bg-card rounded-lg border border-border border-l-4 card-elevated p-4 sm:p-5 space-y-3",
-        sev.border,
-        item.status === "archived" && "opacity-50"
-      )}
-    >
+  const cardClassName = cn(
+    "bg-card rounded-lg border border-border border-l-4 card-elevated p-4 sm:p-5 space-y-3 transition-colors hover:bg-muted/30",
+    sev.border,
+    item.status === "archived" && "opacity-50"
+  );
+
+  const content = (
+    <>
       {/* Top row: badges */}
       <div className="flex items-center gap-2 flex-wrap text-xs">
         <span className={cn("inline-block w-2 h-2 rounded-full", sev.dot)} aria-hidden />
@@ -137,7 +137,7 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
           </>
         )}
       </div>
-    </article>
+    </>
   );
 
   if (item.source_url) {
@@ -146,14 +146,12 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
         href={item.source_url}
         target="_blank"
         rel="noopener noreferrer"
-        className="block cursor-pointer group"
+        className={cn(cardClassName, "block cursor-pointer")}
       >
-        <div className="transition-colors group-hover:bg-muted/30 rounded-lg">
-          {CardContent}
-        </div>
+        {content}
       </a>
     );
   }
 
-  return CardContent;
+  return <article className={cardClassName}>{content}</article>;
 }
