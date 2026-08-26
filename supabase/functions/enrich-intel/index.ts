@@ -378,7 +378,7 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error("Missing env vars");
     }
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -386,16 +386,16 @@ serve(async (req) => {
 
     // ---- Mode: AI assist (preview, do not save) ----
     if (body.mode === "assist") {
-      const drafted = await callAI(
-        LOVABLE_API_KEY,
-        buildUserPrompt({
+      const prompt = buildUserPrompt({
           headline: body.headline,
           summary: body.summary,
           full_content: body.text,
           source_name: body.source_name,
           source_url: body.source_url,
-        })
-      );
+        });
+      const drafted = LOVABLE_API_KEY
+        ? await callAI(LOVABLE_API_KEY, prompt)
+        : heuristicDraft({ headline: body.headline, summary: body.summary, full_content: body.text });
       return new Response(JSON.stringify({ success: true, draft: drafted }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -445,16 +445,16 @@ serve(async (req) => {
       if (!contentLooksReadable(markdown, pageTitle)) throw new Error("Article is paywalled or unreadable");
       if (!isCurrentDate(pubDate)) throw new Error("Article is outside the current 14-day window");
 
-      const drafted = await callAI(
-        LOVABLE_API_KEY,
-        buildUserPrompt({
+      const draftPrompt = buildUserPrompt({
           headline: pageTitle,
           summary: "",
           full_content: markdown,
           source_name: sourceName,
           source_url: url,
-        })
-      );
+        });
+      const drafted = LOVABLE_API_KEY
+        ? await callAI(LOVABLE_API_KEY, draftPrompt)
+        : heuristicDraft({ headline: pageTitle, full_content: markdown, source_name: sourceName, publication_date: pubDate });
 
       const finalSeverity = severityOverride ?? drafted.severity;
 
@@ -490,6 +490,12 @@ serve(async (req) => {
           affected_lanes_or_customers: drafted.affected_lanes_or_customers,
           suggested_action: drafted.suggested_action,
           action_required_bool: drafted.action_required_bool,
+          relevance_score: drafted.relevance_score,
+          department_confidence: drafted.department_confidence,
+          severity_score: drafted.severity_score,
+          classification_reason: drafted.classification_reason,
+          processing_status: drafted.relevance_score >= 60 ? "published" : "rejected_irrelevant",
+          canonical_url: url,
         })
         .select()
         .single();
@@ -502,6 +508,16 @@ serve(async (req) => {
 
     // ---- Mode: batch enrich news_entries that have no intelligence_item ----
     const limit = Math.min(Number(body.limit) || 30, 100);
+    const { data: leaseToken, error: leaseError } = await supabase.rpc("acquire_pipeline_lease", {
+      _pipeline: "enrich-intel",
+      _lease_seconds: 600,
+    });
+    if (leaseError) throw new Error(leaseError.message);
+    if (!leaseToken) {
+      return new Response(JSON.stringify({ success: true, status: "already_running", created: 0, failed: 0, considered: 0 }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Find news_entries without a matching intelligence_item.source_entry_id
     const { data: existingIds } = await supabase
@@ -522,6 +538,7 @@ serve(async (req) => {
 
     let created = 0;
     let failed = 0;
+    let aiAvailable = Boolean(LOVABLE_API_KEY);
     for (const entry of todo) {
       try {
         if (!looksLikeArticleUrl(entry.source_url) || !isCurrentDate((entry as any).publication_date) || !["verified", "partially_verified"].includes((entry as any).verification_status)) {
@@ -531,6 +548,7 @@ serve(async (req) => {
         }
         let drafted: Drafted;
         try {
+          if (!aiAvailable || !LOVABLE_API_KEY) throw new Error("AI enrichment paused; using deterministic quality engine");
           drafted = await callAI(
             LOVABLE_API_KEY,
             buildUserPrompt({
@@ -545,6 +563,7 @@ serve(async (req) => {
           );
         } catch (aiErr) {
           console.error("AI drafting unavailable, using heuristic draft:", aiErr);
+          if (/AI error (402|403|429)/.test(String(aiErr))) aiAvailable = false;
           drafted = heuristicDraft({
             headline: entry.headline,
             summary: entry.summary,
@@ -587,6 +606,12 @@ serve(async (req) => {
           affected_lanes_or_customers: drafted.affected_lanes_or_customers,
           suggested_action: drafted.suggested_action,
           action_required_bool: drafted.action_required_bool,
+          relevance_score: drafted.relevance_score,
+          department_confidence: drafted.department_confidence,
+          severity_score: drafted.severity_score,
+          classification_reason: drafted.classification_reason,
+          processing_status: drafted.relevance_score >= 60 ? "published" : "rejected_irrelevant",
+          canonical_url: entry.source_url,
         });
         if (insErr) {
           failed++;
@@ -616,6 +641,13 @@ serve(async (req) => {
       }
     }
 
+    await supabase.rpc("release_pipeline_lease", {
+      _pipeline: "enrich-intel",
+      _token: leaseToken,
+      _succeeded: true,
+      _stage: "complete",
+      _error: null,
+    });
     return new Response(
       JSON.stringify({ success: true, created, failed, considered: todo.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
