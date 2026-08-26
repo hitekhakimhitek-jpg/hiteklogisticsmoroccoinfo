@@ -58,14 +58,14 @@ const SettingsPage = () => {
     queryKey: ["hitek-technologies"],
     enabled: isAdmin,
     queryFn: async () => {
-      const { data, error } = await supabase.from("hitek_technologies").select("id,name,aliases,usage_status,notes").order("name");
+      const { data, error } = await (supabase as any).from("hitek_technologies").select("id,name,aliases,usage_status,notes").order("name");
       if (error) throw error;
       return data || [];
     },
   });
   const updateTechnology = useMutation({
     mutationFn: async ({ id, usage_status }: { id: string; usage_status: "used" | "not_used" | "unknown" }) => {
-      const { error } = await supabase.from("hitek_technologies").update({ usage_status }).eq("id", id);
+      const { error } = await (supabase as any).from("hitek_technologies").update({ usage_status }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["hitek-technologies"] }),

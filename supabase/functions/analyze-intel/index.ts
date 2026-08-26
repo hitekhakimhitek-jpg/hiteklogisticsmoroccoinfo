@@ -11,6 +11,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders, requireHitekAdmin } from "../_shared/auth.ts";
 import { serviceClient } from "../_shared/health.ts";
 import { loadInfrastructure, exposureFromText, Infra } from "../_shared/geo.ts";
+import { assessIntelligenceQuality, buildHitekImpactAction } from "../_shared/intel-quality.ts";
+import { canonicalizeUrl, cleanSummary, cleanTitle } from "../_shared/intel-article.ts";
 
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 const MODEL = "google/gemini-2.5-flash";
@@ -547,7 +549,24 @@ serve(async (req) => {
 
     // ---------- dashboard item ----------
     const dept = a.departments[0] ?? "operations";
-    const cappedSeverity: Severity = dept === "it" && severity === "act_now" ? "this_week" : severity;
+    const sourceUrl = readableSourceUrl(row.url);
+    const quality = assessIntelligenceQuality({
+      headline: a.event_name || row.original_title,
+      summary: a.what_happened || a.summary,
+      content: `${a.logistics_impact} ${ports.join(" ")} ${airports.join(" ")} ${lanes.join(" ")}`,
+      sourceName: row.source_name,
+      sourceUrl,
+      country: a.countries.join(" "),
+      department: dept,
+      directHitekExposure: hitekScore >= 70,
+    });
+    const finalRelevance = Math.max(quality.relevanceScore, hitekScore);
+    const finalRelevanceStatus = finalRelevance >= 55 ? "accept" : finalRelevance >= 35 ? "review" : "reject";
+    const finalAssessment = { ...quality, relevanceScore: finalRelevance, relevanceStatus: finalRelevanceStatus };
+    const hitekCopy = buildHitekImpactAction({ headline: a.event_name || row.original_title, summary: a.what_happened || a.summary, assessment: finalAssessment });
+    const cappedSeverity: Severity = quality.department === "it" && severity === "act_now" ? "this_week" : severity;
+    const cleanHeadline = cleanTitle(a.event_name || row.original_title, row.source_name);
+    const cleanItemSummary = cleanSummary(a.what_happened || a.summary);
     // One dashboard card per EVENT, never one per bulletin. Later, stronger
     // reports refresh the existing card instead of stacking duplicates.
     let dupItemId: string | null = null;
@@ -574,29 +593,41 @@ serve(async (req) => {
       if (cur && rank[cappedSeverity] > (rank[cur.severity] ?? 0)) {
         await db.from("intelligence_items").update({
           severity: cappedSeverity,
-          headline: a.event_name || row.original_title,
-          summary: `${a.what_happened || a.summary}`.slice(0, 2000),
-          impact: a.logistics_impact || a.summary,
-          action_required: a.next_watchpoint || "Monitor for further updates.",
+          headline: cleanHeadline,
+          summary: cleanItemSummary,
+          impact: hitekCopy.impact,
+          action_required: hitekCopy.action,
+          department: quality.department,
           suggested_action: a.next_watchpoint,
-          why_it_matters_to_hitek: a.logistics_impact,
+          why_it_matters_to_hitek: hitekCopy.impact,
           action_required_bool: cappedSeverity !== "awareness",
+          relevance_score: finalRelevance,
+          department_confidence: quality.departmentConfidence,
+          severity_score: quality.severityScore,
+          classification_reason: quality.classificationReason,
+          relevance_status: finalRelevanceStatus,
+          source_severity: quality.sourceSeverity,
+          clean_title: cleanHeadline,
+          clean_summary: cleanItemSummary,
+          decision_reasons: quality.decisionReasons,
+          enrichment_version: "hitek-v2-hazard",
+          processing_status: finalRelevanceStatus === "accept" ? "published" : finalRelevanceStatus === "review" ? "review_required" : "rejected_irrelevant",
         }).eq("id", dupItemId);
       }
     }
 
     if (!dupItemId) {
       const { data: item } = await db.from("intelligence_items").insert({
-        headline: a.event_name || row.original_title,
-        summary: `${a.what_happened || a.summary}`.slice(0, 2000),
-        impact: a.logistics_impact || a.summary,
-        action_required: a.next_watchpoint || "Monitor for further updates.",
-        department: dept,
+        headline: cleanHeadline,
+        summary: cleanItemSummary,
+        impact: hitekCopy.impact,
+        action_required: hitekCopy.action,
+        department: quality.department,
         severity: cappedSeverity,
         time_to_impact: horizon(a.event_status),
         affected_tags: [...new Set([...ports, ...lanes, ...a.countries])].slice(0, 8),
         source_name: row.source_name,
-        source_url: readableSourceUrl(row.url),
+        source_url: sourceUrl,
         status: "new",
         is_ai_draft: false,
         language: row.source_language ?? "en",
@@ -614,9 +645,23 @@ serve(async (req) => {
         port_affected: ports[0] ?? null,
         airport_affected: airports[0] ?? null,
         lane_affected: lanes[0] ?? null,
-        why_it_matters_to_hitek: a.logistics_impact,
-        suggested_action: a.next_watchpoint,
+        why_it_matters_to_hitek: hitekCopy.impact,
+        suggested_action: hitekCopy.action,
         action_required_bool: cappedSeverity !== "awareness",
+        relevance_score: finalRelevance,
+        department_confidence: quality.departmentConfidence,
+        severity_score: quality.severityScore,
+        classification_reason: quality.classificationReason,
+        processing_status: finalRelevanceStatus === "accept" ? "published" : finalRelevanceStatus === "review" ? "review_required" : "rejected_irrelevant",
+        processing_error: finalRelevanceStatus === "accept" ? null : quality.classificationReason,
+        canonical_url: canonicalizeUrl(sourceUrl),
+        source_tier: Number(payload.tier || 3),
+        relevance_status: finalRelevanceStatus,
+        source_severity: quality.sourceSeverity,
+        clean_title: cleanHeadline,
+        clean_summary: cleanItemSummary,
+        decision_reasons: quality.decisionReasons,
+        enrichment_version: "hitek-v2-hazard",
       }).select("id").single();
       if (item) stats.items_written++;
       await db.from("raw_items").update({
