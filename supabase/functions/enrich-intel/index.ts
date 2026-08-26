@@ -469,6 +469,7 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     pipelineClient = supabase;
     const body = await req.json().catch(() => ({}));
+    const technologyUsage = await loadTechnologyUsage(supabase);
 
     // ---- Mode: AI assist (preview, do not save) ----
     if (body.mode === "assist") {
@@ -479,9 +480,13 @@ serve(async (req) => {
           source_name: body.source_name,
           source_url: body.source_url,
         });
-      const drafted = LOVABLE_API_KEY
+      const baseDraft = LOVABLE_API_KEY
         ? await callAI(LOVABLE_API_KEY, prompt)
-        : heuristicDraft({ headline: body.headline, summary: body.summary, full_content: body.text });
+        : heuristicDraft({ headline: body.headline, summary: body.summary, full_content: body.text, source_url: body.source_url, technologyUsage });
+      const drafted = hardenDraft(baseDraft, {
+        headline: body.headline, summary: body.summary, content: body.text,
+        sourceName: body.source_name, sourceUrl: body.source_url,
+      }, technologyUsage);
       return new Response(JSON.stringify({ success: true, draft: drafted }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -538,9 +543,10 @@ serve(async (req) => {
           source_name: sourceName,
           source_url: url,
         });
-      const drafted = LOVABLE_API_KEY
+      const baseDraft = LOVABLE_API_KEY
         ? await callAI(LOVABLE_API_KEY, draftPrompt)
-        : heuristicDraft({ headline: pageTitle, full_content: markdown, source_name: sourceName, publication_date: pubDate });
+        : heuristicDraft({ headline: pageTitle, full_content: markdown, source_name: sourceName, source_url: url, publication_date: pubDate, technologyUsage });
+      const drafted = hardenDraft(baseDraft, { headline: pageTitle, content: markdown, sourceName, sourceUrl: url }, technologyUsage);
 
       const finalSeverity = severityOverride ?? drafted.severity;
 
@@ -580,8 +586,15 @@ serve(async (req) => {
           department_confidence: drafted.department_confidence,
           severity_score: drafted.severity_score,
           classification_reason: drafted.classification_reason,
-          processing_status: drafted.relevance_score >= 60 ? "published" : "rejected_irrelevant",
-          canonical_url: url,
+          processing_status: drafted.relevance_status === "accept" ? "published" : drafted.relevance_status === "review" ? "review_required" : "rejected_irrelevant",
+          relevance_status: drafted.relevance_status,
+          source_severity: drafted.source_severity,
+          clean_title: drafted.clean_title,
+          clean_summary: drafted.clean_summary,
+          decision_reasons: drafted.decision_reasons,
+          enrichment_version: drafted.enrichment_version,
+          processing_error: drafted.relevance_status === "accept" ? null : drafted.classification_reason,
+          canonical_url: canonicalizeUrl(url),
         })
         .select()
         .single();
@@ -636,7 +649,7 @@ serve(async (req) => {
         let drafted: Drafted;
         try {
           if (!aiAvailable || !LOVABLE_API_KEY) throw new Error("AI enrichment paused; using deterministic quality engine");
-          drafted = await callAI(
+          const aiDraft = await callAI(
             LOVABLE_API_KEY,
             buildUserPrompt({
               headline: entry.headline,
@@ -648,6 +661,10 @@ serve(async (req) => {
               category: entry.category,
             })
           );
+          drafted = hardenDraft(aiDraft, {
+            headline: entry.headline, summary: entry.summary, content: entry.full_content,
+            sourceName: entry.source_name, sourceUrl: entry.source_url,
+          }, technologyUsage);
         } catch (aiErr) {
           console.error("AI drafting unavailable, using heuristic draft:", aiErr);
           if (/AI error (402|403|429)/.test(String(aiErr))) aiAvailable = false;
@@ -656,8 +673,10 @@ serve(async (req) => {
             summary: entry.summary,
             full_content: entry.full_content,
             source_name: entry.source_name,
+            source_url: entry.source_url,
             category: entry.category,
             publication_date: (entry as any).publication_date,
+            technologyUsage,
           });
         }
         const { error: insErr } = await supabase.from("intelligence_items").insert({
@@ -697,8 +716,15 @@ serve(async (req) => {
           department_confidence: drafted.department_confidence,
           severity_score: drafted.severity_score,
           classification_reason: drafted.classification_reason,
-          processing_status: drafted.relevance_score >= 60 ? "published" : "rejected_irrelevant",
-          canonical_url: entry.source_url,
+          processing_status: drafted.relevance_status === "accept" ? "published" : drafted.relevance_status === "review" ? "review_required" : "rejected_irrelevant",
+          relevance_status: drafted.relevance_status,
+          source_severity: drafted.source_severity,
+          clean_title: drafted.clean_title,
+          clean_summary: drafted.clean_summary,
+          decision_reasons: drafted.decision_reasons,
+          enrichment_version: drafted.enrichment_version,
+          processing_error: drafted.relevance_status === "accept" ? null : drafted.classification_reason,
+          canonical_url: canonicalizeUrl(entry.source_url),
         });
         if (insErr) {
           failed++;
