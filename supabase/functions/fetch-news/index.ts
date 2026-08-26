@@ -1077,6 +1077,12 @@ serve(async (req) => {
         rejection_counts: rejectionStats,
       });
       await recordNewsHealth(uniqueArticles, [], [], "No articles passed source/date/link validation");
+      if (leaseToken) {
+        await supabase.rpc("release_pipeline_lease", {
+          _pipeline: "fetch-news", _token: leaseToken, _succeeded: true, _stage: "validation_empty", _error: null,
+        });
+        leaseToken = null;
+      }
       return new Response(
         JSON.stringify({
           success: true,
