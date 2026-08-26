@@ -267,21 +267,26 @@ export function useIntelCounts() {
   return useQuery({
     queryKey: ["intel_counts"],
     queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const start = new Date(Date.now() - 13 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const { data, error } = await supabase.rpc("canonical_intelligence_counts", {
+      const { start, end } = feedWindow();
+      // Counts are computed from the exact same rows the feed and map render
+      // (including the IT severity clamp), so the summary strip, the pills and
+      // the visible cards always agree.
+      const { data, error } = await supabase.rpc("canonical_intelligence", {
         _start_date: start,
-        _end_date: today,
+        _end_date: end,
+        _limit: FEED_LIMIT,
       });
       if (error) throw error;
-      const counts = (data || {}) as Record<string, unknown>;
-      return {
-        act_now: Number(counts.act_now || 0),
-        this_week: Number(counts.this_week || 0),
-        awareness: Number(counts.awareness || 0),
-        by_dept: (counts.by_dept || {}) as Record<string, number>,
-        review_pending: 0,
-      };
+      const rows = ((data || []) as IntelligenceItem[]).map(clampSeverity);
+      const by_dept: Record<string, number> = {};
+      let act_now = 0, this_week = 0, awareness = 0;
+      for (const r of rows) {
+        by_dept[r.department] = (by_dept[r.department] || 0) + 1;
+        if (r.severity === "act_now") act_now++;
+        else if (r.severity === "this_week") this_week++;
+        else awareness++;
+      }
+      return { act_now, this_week, awareness, by_dept, review_pending: 0 };
     },
     refetchInterval: 60_000,
   });
