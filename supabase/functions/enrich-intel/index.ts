@@ -3,9 +3,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, requireHitekAdmin, isSafeExternalUrl } from "../_shared/auth.ts";
 import {
   assessIntelligenceQuality,
+  buildHitekImpactAction,
   departmentAction,
   deterministicSummary,
 } from "../_shared/intel-quality.ts";
+import { canonicalizeUrl, cleanSummary, cleanTitle, nonArticleReason } from "../_shared/intel-article.ts";
 
 const DEPARTMENTS = ["operations", "compliance", "finance", "commercial", "it"] as const;
 const SEVERITIES = ["act_now", "this_week", "awareness"] as const;
@@ -144,7 +146,74 @@ type Drafted = {
   department_confidence: number;
   severity_score: number;
   classification_reason: string;
+  relevance_status: "accept" | "review" | "reject";
+  source_severity: string | null;
+  clean_title: string;
+  clean_summary: string;
+  decision_reasons: string[];
+  enrichment_version: string;
 };
+
+type TechnologyUsage = Record<string, "used" | "not_used" | "unknown">;
+
+async function loadTechnologyUsage(supabase: any): Promise<TechnologyUsage> {
+  const { data, error } = await supabase.from("hitek_technologies").select("name,aliases,usage_status");
+  if (error) {
+    console.error("technology profile unavailable:", error.message);
+    return {};
+  }
+  const usage: TechnologyUsage = {};
+  for (const row of data || []) {
+    const names = [row.name, ...(Array.isArray(row.aliases) ? row.aliases : [])].filter(Boolean);
+    usage[names.join("|").toLowerCase()] = row.usage_status;
+  }
+  return usage;
+}
+
+function hardenDraft(
+  draft: Drafted,
+  source: { headline?: string | null; summary?: string | null; content?: string | null; sourceName?: string | null; sourceUrl?: string | null; country?: string | null },
+  technologyUsage: TechnologyUsage,
+): Drafted {
+  const clean_title = cleanTitle(draft.headline || source.headline, source.sourceName);
+  const clean_summary = cleanSummary(draft.summary || source.summary || source.content);
+  const quality = assessIntelligenceQuality({
+    headline: clean_title,
+    summary: clean_summary,
+    content: source.content,
+    sourceName: source.sourceName,
+    sourceUrl: source.sourceUrl,
+    country: draft.country || source.country,
+    department: draft.department,
+    technologyUsage,
+  });
+  const copy = buildHitekImpactAction({ headline: clean_title, summary: clean_summary, assessment: quality });
+  const articleFailure = source.sourceUrl
+    ? nonArticleReason({ title: clean_title, url: source.sourceUrl, content: source.content || clean_summary })
+    : null;
+  return {
+    ...draft,
+    headline: clean_title,
+    summary: deterministicSummary(clean_title, clean_summary),
+    impact: copy.impact,
+    action_required: copy.action,
+    suggested_action: copy.action,
+    why_it_matters_to_hitek: copy.impact,
+    action_required_bool: quality.severity !== "awareness",
+    department: quality.department,
+    severity: quality.severity,
+    relevance_score: quality.relevanceScore,
+    department_confidence: quality.departmentConfidence,
+    severity_score: quality.severityScore,
+    classification_reason: quality.classificationReason,
+    relevance_status: articleFailure ? "reject" : quality.relevanceStatus,
+    source_severity: quality.sourceSeverity,
+    clean_title,
+    clean_summary,
+    decision_reasons: articleFailure ? [...quality.decisionReasons, articleFailure] : quality.decisionReasons,
+    enrichment_version: "hitek-v2",
+  };
+}
 
 const SYSTEM_PROMPT = `You triage external signals for Hitek Logistic Morocco, a freight-forwarding company at Tanger Med. Convert a raw news item into one actionable Intelligence Item. Write plainly. No marketing. No hedging.
 
@@ -274,6 +343,12 @@ function coerce(d: any): Drafted {
     department_confidence: quality.departmentConfidence,
     severity_score: quality.severityScore,
     classification_reason: quality.classificationReason,
+    relevance_status: quality.relevanceStatus,
+    source_severity: quality.sourceSeverity,
+    clean_title: headline,
+    clean_summary: summary,
+    decision_reasons: quality.decisionReasons,
+    enrichment_version: "hitek-v2",
   };
 }
 
@@ -288,6 +363,8 @@ function heuristicDraft(input: {
   source_name?: string | null;
   category?: string | null;
   publication_date?: string | null;
+  source_url?: string | null;
+  technologyUsage?: TechnologyUsage;
 }): Drafted {
   const text = `${input.headline || ""} ${input.summary || ""}`.toLowerCase();
   let department: string = "operations";
@@ -300,7 +377,7 @@ function heuristicDraft(input: {
   if (/strike|closure|closed|blockade|shutdown|attack|suspend|halt|force majeure/.test(text)) severity = "act_now";
   else if (/delay|congestion|disrupt|surcharge|diversion|backlog|warning|restriction/.test(text)) severity = "this_week";
 
-  return coerce({
+  return hardenDraft(coerce({
     headline: input.headline,
     summary: input.summary || input.headline,
     impact: `${input.headline || "This development"} may affect freight timing, cost, compliance, or customer commitments; verify exposure against current files.`,
@@ -312,7 +389,13 @@ function heuristicDraft(input: {
     category: input.category,
     event_date: input.publication_date || null,
     why_it_matters_to_hitek: "The development may affect Hitek shipments, costs, compliance duties, or customer commitments on connected lanes.",
-  });
+  }), {
+    headline: input.headline,
+    summary: input.summary,
+    content: input.full_content,
+    sourceName: input.source_name,
+    sourceUrl: input.source_url,
+  }, input.technologyUsage || {});
 }
 
 async function callAI(LOVABLE_API_KEY: string, userContent: string): Promise<Drafted> {
@@ -386,6 +469,7 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     pipelineClient = supabase;
     const body = await req.json().catch(() => ({}));
+    const technologyUsage = await loadTechnologyUsage(supabase);
 
     // ---- Mode: AI assist (preview, do not save) ----
     if (body.mode === "assist") {
@@ -396,9 +480,13 @@ serve(async (req) => {
           source_name: body.source_name,
           source_url: body.source_url,
         });
-      const drafted = LOVABLE_API_KEY
+      const baseDraft = LOVABLE_API_KEY
         ? await callAI(LOVABLE_API_KEY, prompt)
-        : heuristicDraft({ headline: body.headline, summary: body.summary, full_content: body.text });
+        : heuristicDraft({ headline: body.headline, summary: body.summary, full_content: body.text, source_url: body.source_url, technologyUsage });
+      const drafted = hardenDraft(baseDraft, {
+        headline: body.headline, summary: body.summary, content: body.text,
+        sourceName: body.source_name, sourceUrl: body.source_url,
+      }, technologyUsage);
       return new Response(JSON.stringify({ success: true, draft: drafted }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -455,9 +543,10 @@ serve(async (req) => {
           source_name: sourceName,
           source_url: url,
         });
-      const drafted = LOVABLE_API_KEY
+      const baseDraft = LOVABLE_API_KEY
         ? await callAI(LOVABLE_API_KEY, draftPrompt)
-        : heuristicDraft({ headline: pageTitle, full_content: markdown, source_name: sourceName, publication_date: pubDate });
+        : heuristicDraft({ headline: pageTitle, full_content: markdown, source_name: sourceName, source_url: url, publication_date: pubDate, technologyUsage });
+      const drafted = hardenDraft(baseDraft, { headline: pageTitle, content: markdown, sourceName, sourceUrl: url }, technologyUsage);
 
       const finalSeverity = severityOverride ?? drafted.severity;
 
@@ -497,8 +586,15 @@ serve(async (req) => {
           department_confidence: drafted.department_confidence,
           severity_score: drafted.severity_score,
           classification_reason: drafted.classification_reason,
-          processing_status: drafted.relevance_score >= 60 ? "published" : "rejected_irrelevant",
-          canonical_url: url,
+          processing_status: drafted.relevance_status === "accept" ? "published" : drafted.relevance_status === "review" ? "review_required" : "rejected_irrelevant",
+          relevance_status: drafted.relevance_status,
+          source_severity: drafted.source_severity,
+          clean_title: drafted.clean_title,
+          clean_summary: drafted.clean_summary,
+          decision_reasons: drafted.decision_reasons,
+          enrichment_version: drafted.enrichment_version,
+          processing_error: drafted.relevance_status === "accept" ? null : drafted.classification_reason,
+          canonical_url: canonicalizeUrl(url),
         })
         .select()
         .single();
@@ -553,7 +649,7 @@ serve(async (req) => {
         let drafted: Drafted;
         try {
           if (!aiAvailable || !LOVABLE_API_KEY) throw new Error("AI enrichment paused; using deterministic quality engine");
-          drafted = await callAI(
+          const aiDraft = await callAI(
             LOVABLE_API_KEY,
             buildUserPrompt({
               headline: entry.headline,
@@ -565,6 +661,10 @@ serve(async (req) => {
               category: entry.category,
             })
           );
+          drafted = hardenDraft(aiDraft, {
+            headline: entry.headline, summary: entry.summary, content: entry.full_content,
+            sourceName: entry.source_name, sourceUrl: entry.source_url,
+          }, technologyUsage);
         } catch (aiErr) {
           console.error("AI drafting unavailable, using heuristic draft:", aiErr);
           if (/AI error (402|403|429)/.test(String(aiErr))) aiAvailable = false;
@@ -573,8 +673,10 @@ serve(async (req) => {
             summary: entry.summary,
             full_content: entry.full_content,
             source_name: entry.source_name,
+            source_url: entry.source_url,
             category: entry.category,
             publication_date: (entry as any).publication_date,
+            technologyUsage,
           });
         }
         const { error: insErr } = await supabase.from("intelligence_items").insert({
@@ -614,8 +716,15 @@ serve(async (req) => {
           department_confidence: drafted.department_confidence,
           severity_score: drafted.severity_score,
           classification_reason: drafted.classification_reason,
-          processing_status: drafted.relevance_score >= 60 ? "published" : "rejected_irrelevant",
-          canonical_url: entry.source_url,
+          processing_status: drafted.relevance_status === "accept" ? "published" : drafted.relevance_status === "review" ? "review_required" : "rejected_irrelevant",
+          relevance_status: drafted.relevance_status,
+          source_severity: drafted.source_severity,
+          clean_title: drafted.clean_title,
+          clean_summary: drafted.clean_summary,
+          decision_reasons: drafted.decision_reasons,
+          enrichment_version: drafted.enrichment_version,
+          processing_error: drafted.relevance_status === "accept" ? null : drafted.classification_reason,
+          canonical_url: canonicalizeUrl(entry.source_url),
         });
         if (insErr) {
           failed++;

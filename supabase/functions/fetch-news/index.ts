@@ -4,6 +4,7 @@ import { corsHeaders, requireHitekAdmin } from "../_shared/auth.ts";
 import { recordSourceRun } from "../_shared/health.ts";
 import { NEWS_SOURCE_META, syncSourceRegistry } from "../_shared/registry.ts";
 import { assessIntelligenceQuality } from "../_shared/intel-quality.ts";
+import { canonicalizeUrl, cleanSummary, cleanTitle, nonArticleReason } from "../_shared/intel-article.ts";
 
 const CATEGORIES = ["regulation", "weather", "port", "trade", "compliance", "market", "general"];
 const REGIONS = [
@@ -187,6 +188,8 @@ function isTrustedUndatedHost(url: string): boolean {
 }
 
 function classifyArticleRejection(article: { title: string; url: string; description: string; markdown?: string; publishedDate?: string | null }): string | null {
+  const hardFailure = nonArticleReason({ title: article.title, url: article.url, content: article.markdown || article.description });
+  if (hardFailure) return hardFailure;
   if (!looksLikeArticleUrl(article.url)) return "non_article_url";
   if (!isCurrentPublicationDate(article.publishedDate)) {
     if (!article.publishedDate && isTrustedUndatedHost(article.url)) {
@@ -1350,12 +1353,14 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       // Use the REAL source publication date when available; never fall back to today.
       const sourcePubDate: string | null =
         (originalArticle as any).publishedDate || null;
-      const headline = entry.headline || originalArticle.title;
-      const sourceUrl = originalArticle.url || null;
+      const sourceName = originalArticle.source || extractSourceName(originalArticle.url || "");
+      const headline = cleanTitle(entry.headline || originalArticle.title, sourceName);
+      const sourceUrl = canonicalizeUrl(originalArticle.url || null);
+      const cleanArticleSummary = cleanSummary(entry.summary || originalArticle.description || originalArticle.markdown);
       const auditCandidate = {
         title: headline,
         url: sourceUrl || "",
-        description: entry.summary || originalArticle.description || "",
+        description: cleanArticleSummary,
         markdown: originalArticle.markdown || "",
         publishedDate: sourcePubDate,
       };
@@ -1374,14 +1379,15 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         summary: entry.summary || originalArticle.description,
         content: originalArticle.markdown,
         sourceName: originalArticle.source,
+        sourceUrl,
         country: affectedCountries.join(" "),
         actionRequired: entry.action_required === true,
       });
 
       return {
         headline,
-        summary: entry.summary || originalArticle.description,
-        source_name: originalArticle.source || extractSourceName(originalArticle.url || ""),
+        summary: cleanArticleSummary,
+        source_name: sourceName,
         source_url: sourceUrl,
         category: CATEGORIES.includes(entry.category) ? entry.category : "general",
         region: dbRegion,

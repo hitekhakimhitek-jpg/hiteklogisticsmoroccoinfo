@@ -59,6 +59,12 @@ export type IntelligenceItem = {
   canonical_url: string | null;
   source_tier: number;
   ingested_at: string;
+  relevance_status: "accept" | "review" | "reject";
+  source_severity: string | null;
+  clean_title: string | null;
+  clean_summary: string | null;
+  decision_reasons: string[];
+  enrichment_version: string | null;
 };
 
 export type VerificationStatus =
@@ -203,7 +209,11 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
         const needle = filters.search.toLocaleLowerCase();
         rows = rows.filter((row) => `${row.headline} ${row.summary} ${row.impact}`.toLocaleLowerCase().includes(needle));
       }
-      rows = rows.map(clampSeverity);
+      rows = rows.map((row) => ({
+        ...row,
+        headline: row.clean_title || row.headline,
+        summary: row.clean_summary || row.summary,
+      }));
       // Sort blend: recency + severity + learned predicted_relevance.
       // HARD SAFETY FLOOR: critical (act_now) and action_required items are pinned
       // to the top regardless of preference signal. Learning tunes noise, not alerts.
@@ -268,25 +278,13 @@ export function useIntelCounts() {
     queryKey: ["intel_counts"],
     queryFn: async () => {
       const { start, end } = feedWindow();
-      // Counts are computed from the exact same rows the feed and map render
-      // (including the IT severity clamp), so the summary strip, the pills and
-      // the visible cards always agree.
-      const { data, error } = await supabase.rpc("canonical_intelligence", {
+      const { data, error } = await supabase.rpc("canonical_intelligence_counts", {
         _start_date: start,
         _end_date: end,
-        _limit: FEED_LIMIT,
       });
       if (error) throw error;
-      const rows = ((data || []) as IntelligenceItem[]).map(clampSeverity);
-      const by_dept: Record<string, number> = {};
-      let act_now = 0, this_week = 0, awareness = 0;
-      for (const r of rows) {
-        by_dept[r.department] = (by_dept[r.department] || 0) + 1;
-        if (r.severity === "act_now") act_now++;
-        else if (r.severity === "this_week") this_week++;
-        else awareness++;
-      }
-      return { act_now, this_week, awareness, by_dept, review_pending: 0 };
+      const result = data as unknown as { total: number; act_now: number; this_week: number; awareness: number; by_dept: Record<string, number> };
+      return { ...result, review_pending: 0 };
     },
     refetchInterval: 60_000,
   });
