@@ -54,7 +54,7 @@ export type IntelligenceItem = {
   department_confidence: number;
   severity_score: number;
   classification_reason: string | null;
-  processing_status: "discovered" | "rejected_irrelevant" | "rejected_non_article" | "duplicate" | "processing" | "enriched" | "published" | "failed" | "review_required";
+  processing_status: "discovered" | "validated" | "relevance_checked" | "classified" | "rejected_irrelevant" | "rejected_non_article" | "duplicate" | "processing" | "enriched" | "enrichment_failed" | "published" | "failed" | "review_required";
   processing_error: string | null;
   canonical_url: string | null;
   source_tier: number;

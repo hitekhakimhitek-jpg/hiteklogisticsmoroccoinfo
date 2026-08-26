@@ -492,6 +492,115 @@ serve(async (req) => {
       });
     }
 
+    // ---- Mode: reprocess existing intelligence with the hardened v2 engine ----
+    if (body.mode === "reprocess") {
+      const requestedDays = Number(body.days || 30);
+      const days = Math.min(Math.max(Number.isFinite(requestedDays) ? requestedDays : 30, 1), 90);
+      const requestedLimit = Number(body.limit || 500);
+      const reprocessLimit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 500, 1), 1000);
+      const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+      const { data: items, error: itemsError } = await supabase
+        .from("intelligence_items")
+        .select("*")
+        .gte("publication_date", cutoff)
+        .order("publication_date", { ascending: false })
+        .limit(reprocessLimit);
+      if (itemsError) throw new Error(itemsError.message);
+
+      const runId = crypto.randomUUID();
+      const stats = { accepted: 0, review: 0, rejected: 0, failed: 0 };
+      for (const item of items || []) {
+        try {
+          const base = coerce({
+            headline: item.headline,
+            summary: item.summary,
+            impact: item.impact,
+            action_required: item.action_required,
+            department: item.department,
+            severity: item.severity,
+            time_to_impact: item.time_to_impact,
+            affected_tags: item.affected_tags,
+            owner: item.owner,
+            category: item.category,
+            country: item.country,
+            latitude: item.latitude,
+            longitude: item.longitude,
+            event_date: item.event_date,
+            transport_modes: item.transport_modes,
+            port_affected: item.port_affected,
+            airport_affected: item.airport_affected,
+            carrier_affected: item.carrier_affected,
+            lane_affected: item.lane_affected,
+            why_it_matters_to_hitek: item.why_it_matters_to_hitek,
+            affected_lanes_or_customers: item.affected_lanes_or_customers,
+            suggested_action: item.suggested_action,
+            action_required_bool: item.action_required_bool,
+          });
+          const drafted = hardenDraft(base, {
+            headline: item.headline,
+            summary: item.summary,
+            content: `${item.summary || ""} ${item.impact || ""}`,
+            sourceName: item.source_name,
+            sourceUrl: item.source_url,
+            country: item.country,
+          }, technologyUsage);
+          const newStatus = drafted.relevance_status === "accept"
+            ? "published"
+            : drafted.relevance_status === "review" ? "review_required" : "rejected_irrelevant";
+
+          await supabase.from("intelligence_reprocessing_audit").insert({
+            run_id: runId,
+            item_id: item.id,
+            previous_processing_status: item.processing_status,
+            previous_department: item.department,
+            previous_severity: item.severity,
+            previous_relevance_score: item.relevance_score,
+            new_processing_status: newStatus,
+            new_department: drafted.department,
+            new_severity: drafted.severity,
+            new_relevance_score: drafted.relevance_score,
+            decision_reasons: drafted.decision_reasons,
+          });
+          const { error: updateError } = await supabase.from("intelligence_items").update({
+            headline: drafted.clean_title,
+            summary: drafted.clean_summary,
+            impact: drafted.impact,
+            action_required: drafted.action_required,
+            department: drafted.department,
+            severity: drafted.severity,
+            action_required_bool: drafted.action_required_bool,
+            suggested_action: drafted.suggested_action,
+            why_it_matters_to_hitek: drafted.why_it_matters_to_hitek,
+            relevance_score: drafted.relevance_score,
+            department_confidence: drafted.department_confidence,
+            severity_score: drafted.severity_score,
+            classification_reason: drafted.classification_reason,
+            processing_status: newStatus,
+            processing_error: newStatus === "published" ? null : drafted.classification_reason,
+            relevance_status: drafted.relevance_status,
+            source_severity: drafted.source_severity,
+            clean_title: drafted.clean_title,
+            clean_summary: drafted.clean_summary,
+            decision_reasons: drafted.decision_reasons,
+            enrichment_version: drafted.enrichment_version,
+            canonical_url: canonicalizeUrl(item.source_url),
+            status: newStatus === "published" ? item.status : "archived",
+          }).eq("id", item.id);
+          if (updateError) throw new Error(updateError.message);
+          if (drafted.relevance_status === "accept") stats.accepted++;
+          else if (drafted.relevance_status === "review") stats.review++;
+          else stats.rejected++;
+        } catch (error) {
+          stats.failed++;
+          console.error("reprocess item failed:", item.id, (error as Error).message);
+        }
+      }
+      return new Response(JSON.stringify({ success: stats.failed === 0, run_id: runId, considered: items?.length || 0, ...stats }), {
+        status: stats.failed === 0 ? 200 : 207,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ---- Mode: scrape a URL with Firecrawl, AI-draft, and insert ----
     if (body.mode === "scrape_create") {
       const url = String(body.url || "").trim();

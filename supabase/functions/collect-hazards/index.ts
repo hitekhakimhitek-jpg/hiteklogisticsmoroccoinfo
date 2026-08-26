@@ -309,7 +309,32 @@ serve(async (req) => {
     });
   }
 
-  return new Response(JSON.stringify({ run_id: runId, inserted, sources: report }, null, 2), {
+  // Collection and analysis are one pipeline. Always wake the analyzer after
+  // collecting so raw official warnings cannot remain pending indefinitely.
+  // The analyzer has its own bounded batch and deterministic no-AI fallback.
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  let analysisTriggered = false;
+  if (supabaseUrl && serviceRole) {
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/analyze-intel`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceRole}`,
+        },
+        body: JSON.stringify({ limit: 120, since_hours: 720 }),
+      });
+      analysisTriggered = response.ok;
+      if (!response.ok) {
+        console.error("analyze-intel chain failed:", response.status, await response.text());
+      }
+    } catch (error) {
+      console.error("analyze-intel chain failed:", (error as Error).message);
+    }
+  }
+
+  return new Response(JSON.stringify({ run_id: runId, inserted, analysis_triggered: analysisTriggered, sources: report }, null, 2), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });

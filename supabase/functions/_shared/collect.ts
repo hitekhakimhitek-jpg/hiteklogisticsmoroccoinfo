@@ -36,7 +36,7 @@ export async function safeFetch(
   url: string,
   timeoutMs = 20000,
   headers: Record<string, string> = {},
-): Promise<{ res: Response | null; status: number; text: string; error?: string }> {
+): Promise<{ res: Response | null; status: number; text: string; error?: string | null }> {
   if (!isSafeExternalUrl(url)) return { res: null, status: 0, text: "", error: "unsafe url" };
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
