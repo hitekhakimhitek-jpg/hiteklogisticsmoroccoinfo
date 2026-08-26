@@ -5,17 +5,11 @@ import {
   HORIZON_LABELS_BY_LANG,
 } from "@/hooks/useIntelligenceItems";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ExternalLink, Clock, User, CalendarDays, ThumbsUp, ThumbsDown } from "lucide-react";
+import { ExternalLink, Clock, User, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow as formatDistanceToNowFn, format as formatDate } from "date-fns";
 import { fr as frLocale } from "date-fns/locale";
 import { useLanguage } from "@/contexts/LanguageContext";
-import {
-  useMyIntelVotes,
-  useIntelVoteCounts,
-  useCastIntelVote,
-} from "@/hooks/useIntelFeedback";
 
 const SEVERITY_STYLES = {
   act_now: {
@@ -41,14 +35,6 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
   const SEV = SEVERITY_LABELS_BY_LANG[lang];
   const DEPT = DEPARTMENT_LABELS_BY_LANG[lang];
   const HORIZON = HORIZON_LABELS_BY_LANG[lang];
-  const { data: mine } = useMyIntelVotes();
-  const { data: counts } = useIntelVoteCounts();
-  const cast = useCastIntelVote();
-  const myVote = mine?.map[item.id] ?? null;
-  const c = counts?.[item.id] ?? { useful: 0, not_useful: 0 };
-  const onVote = (next: "useful" | "not_useful") => {
-    cast.mutate({ itemId: item.id, next: myVote === next ? null : next });
-  };
 
   const locale = lang === "fr" ? frLocale : undefined;
   const pubLabel = lang === "fr" ? "Publié" : "Published";
@@ -56,7 +42,7 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
     ? formatDate(new Date(item.publication_date), "d LLLL yyyy", { locale })
     : null;
 
-  return (
+  const CardContent = (
     <article
       className={cn(
         "bg-card rounded-lg border border-border border-l-4 card-elevated p-4 sm:p-5 space-y-3",
@@ -99,21 +85,9 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
       )}
 
       {/* Headline */}
-      {item.source_url ? (
-        <a
-          href={item.source_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block text-base sm:text-lg font-semibold text-card-foreground hover:text-primary leading-snug"
-        >
-          {item.headline}
-          <ExternalLink className="w-3.5 h-3.5 ml-1 inline opacity-60" />
-        </a>
-      ) : (
-        <h3 className="text-base sm:text-lg font-semibold text-card-foreground leading-snug">
-          {item.headline}
-        </h3>
-      )}
+      <h3 className="text-base sm:text-lg font-semibold text-card-foreground leading-snug">
+        {item.headline}
+      </h3>
 
       {item.summary && (
         <p className="text-sm text-muted-foreground leading-relaxed">{item.summary}</p>
@@ -147,9 +121,12 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
         </div>
       )}
 
-      {/* Footer: source + owner + actions */}
+      {/* Footer: source + owner */}
       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border text-xs text-muted-foreground">
-        <span className="font-medium">{item.source_name}</span>
+        <span className="font-medium inline-flex items-center gap-1">
+          {item.source_name}
+          <ExternalLink className="w-3 h-3 opacity-60" aria-hidden />
+        </span>
         {item.owner && (
           <>
             <span>·</span>
@@ -159,33 +136,24 @@ export function IntelCard({ item }: { item: IntelligenceItem }) {
             </span>
           </>
         )}
-        <div className="ml-auto flex items-center gap-1">
-          <Button
-            variant={myVote === "useful" ? "default" : "ghost"}
-            size="sm"
-            className="h-7 px-2 gap-1"
-            onClick={() => onVote("useful")}
-            aria-label={lang === "fr" ? "Utile" : "Useful"}
-            aria-pressed={myVote === "useful"}
-            disabled={cast.isPending}
-          >
-            <ThumbsUp className="w-3.5 h-3.5" />
-            <span className="tabular-nums">{c.useful}</span>
-          </Button>
-          <Button
-            variant={myVote === "not_useful" ? "default" : "ghost"}
-            size="sm"
-            className="h-7 px-2 gap-1"
-            onClick={() => onVote("not_useful")}
-            aria-label={lang === "fr" ? "Pas utile" : "Not useful"}
-            aria-pressed={myVote === "not_useful"}
-            disabled={cast.isPending}
-          >
-            <ThumbsDown className="w-3.5 h-3.5" />
-            <span className="tabular-nums">{c.not_useful}</span>
-          </Button>
-        </div>
       </div>
     </article>
   );
+
+  if (item.source_url) {
+    return (
+      <a
+        href={item.source_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block cursor-pointer group"
+      >
+        <div className="transition-colors group-hover:bg-muted/30 rounded-lg">
+          {CardContent}
+        </div>
+      </a>
+    );
+  }
+
+  return CardContent;
 }
