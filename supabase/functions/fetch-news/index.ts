@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, requireHitekAdmin } from "../_shared/auth.ts";
 import { recordSourceRun } from "../_shared/health.ts";
 import { NEWS_SOURCE_META, syncSourceRegistry } from "../_shared/registry.ts";
+import { assessIntelligenceQuality } from "../_shared/intel-quality.ts";
 
 const CATEGORIES = ["regulation", "weather", "port", "trade", "compliance", "market", "general"];
 const REGIONS = [
@@ -604,6 +605,7 @@ serve(async (req) => {
 
   let telemetryClient: any = null;
   let runId: string | null = null;
+  let leaseToken: string | null = null;
   runDeadline = Date.now() + RUN_BUDGET_MS;
   const finishRun = async (patch: Record<string, unknown>) => {
     if (!telemetryClient || !runId) return;
@@ -674,6 +676,17 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     telemetryClient = supabase;
+    const { data: acquiredLease, error: leaseError } = await supabase.rpc("acquire_pipeline_lease", {
+      _pipeline: "fetch-news",
+      _lease_seconds: 240,
+    });
+    if (leaseError) throw new Error(leaseError.message);
+    if (!acquiredLease) {
+      return new Response(JSON.stringify({ success: true, status: "already_running", message: "A refresh is already in progress" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    leaseToken = acquiredLease;
     await syncSourceRegistry(supabase, NEWS_SOURCE_META);
     const { data: run } = await supabase
       .from("ingestion_runs")
@@ -1344,6 +1357,14 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
           : rejectionReason === "paywalled_or_unreadable"
             ? "broken_link"
             : resolvedPubDate ? "verified" : "date_not_verified";
+      const quality = assessIntelligenceQuality({
+        headline,
+        summary: entry.summary || originalArticle.description,
+        content: originalArticle.markdown,
+        sourceName: originalArticle.source,
+        country: affectedCountries.join(" "),
+        actionRequired: entry.action_required === true,
+      });
 
       return {
         headline,
@@ -1365,13 +1386,18 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         display_regions: displayRegions,
         affected_countries: affectedCountries,
         content_type: contentType,
-        impact_score: impactScore,
+        impact_score: Math.max(impactScore, quality.relevanceScore),
         region_confidence: regionConfidence || null,
         classification_notes: typeof entry.classification_notes === "string"
           ? entry.classification_notes.slice(0, 500)
           : null,
       };
-    }).filter((row: any) => row.verification_status === "verified" || row.verification_status === "partially_verified");
+        _quality: quality,
+      };
+    }).filter((row: any) =>
+      (row.verification_status === "verified" || row.verification_status === "partially_verified") &&
+      row._quality.publishable
+    ).map(({ _quality, ...row }: any) => row);
 
     // Deduplicate against existing DB entries
     const existingUrls = new Set<string>();
@@ -1517,6 +1543,12 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
     }
 
     await finishRun({ enriched_count: enrichedCount });
+    if (leaseToken) {
+      await supabase.rpc("release_pipeline_lease", {
+        _pipeline: "fetch-news", _token: leaseToken, _succeeded: true, _stage: "complete", _error: null,
+      });
+      leaseToken = null;
+    }
 
     return new Response(
       JSON.stringify({
@@ -1541,6 +1573,13 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
       status: "failed",
       error_message: e instanceof Error ? e.message.slice(0, 1000) : "Unknown error",
     });
+    if (telemetryClient && leaseToken) {
+      await telemetryClient.rpc("release_pipeline_lease", {
+        _pipeline: "fetch-news", _token: leaseToken, _succeeded: false, _stage: "failed",
+        _error: e instanceof Error ? e.message.slice(0, 1000) : "Unknown error",
+      });
+      leaseToken = null;
+    }
     return new Response(
       JSON.stringify({
         success: false,
