@@ -14,3 +14,33 @@ verify_jwt = false
 
 [functions.mcp]
 verify_jwt = false
+
+[functions.enrich-intel]
+verify_jwt = false
+
+[functions.generate-weekly-digest]
+verify_jwt = false
+
+[functions.classify-sections]
+verify_jwt = false
+
+[functions.verify-dates]
+verify_jwt = false
+
+[functions.collect-hazards]
+verify_jwt = false
+
+[functions.analyze-intel]
+verify_jwt = false
+
+[functions.sync-disruptions]
+verify_jwt = false
+
+[functions.sync-hazard-alerts]
+verify_jwt = false
+
+[functions.sync-holidays]
+verify_jwt = false
+
+[functions.send-critical-alert]
+verify_jwt = false

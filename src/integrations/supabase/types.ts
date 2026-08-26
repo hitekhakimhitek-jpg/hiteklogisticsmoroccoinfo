@@ -411,16 +411,20 @@ export type Database = {
           affected_tags: string[]
           airport_affected: string | null
           alerted_at: string | null
+          canonical_url: string | null
           carrier_affected: string | null
           category: string | null
+          classification_reason: string | null
           country: string | null
           created_at: string
           department: Database["public"]["Enums"]["intel_department"]
+          department_confidence: number
           effective_date: string | null
           event_date: string | null
           headline: string
           id: string
           impact: string
+          ingested_at: string
           is_ai_draft: boolean
           lane_affected: string | null
           language: string
@@ -433,10 +437,15 @@ export type Database = {
           owner: string | null
           port_affected: string | null
           predicted_relevance: number
+          processing_error: string | null
+          processing_status: Database["public"]["Enums"]["intel_processing_status"]
           publication_date: string | null
+          relevance_score: number
           severity: Database["public"]["Enums"]["intel_severity"]
+          severity_score: number
           source_entry_id: string | null
           source_name: string
+          source_tier: number
           source_url: string | null
           status: Database["public"]["Enums"]["intel_status"]
           suggested_action: string | null
@@ -458,16 +467,20 @@ export type Database = {
           affected_tags?: string[]
           airport_affected?: string | null
           alerted_at?: string | null
+          canonical_url?: string | null
           carrier_affected?: string | null
           category?: string | null
+          classification_reason?: string | null
           country?: string | null
           created_at?: string
           department?: Database["public"]["Enums"]["intel_department"]
+          department_confidence?: number
           effective_date?: string | null
           event_date?: string | null
           headline: string
           id?: string
           impact?: string
+          ingested_at?: string
           is_ai_draft?: boolean
           lane_affected?: string | null
           language?: string
@@ -480,10 +493,15 @@ export type Database = {
           owner?: string | null
           port_affected?: string | null
           predicted_relevance?: number
+          processing_error?: string | null
+          processing_status?: Database["public"]["Enums"]["intel_processing_status"]
           publication_date?: string | null
+          relevance_score?: number
           severity?: Database["public"]["Enums"]["intel_severity"]
+          severity_score?: number
           source_entry_id?: string | null
           source_name?: string
+          source_tier?: number
           source_url?: string | null
           status?: Database["public"]["Enums"]["intel_status"]
           suggested_action?: string | null
@@ -505,16 +523,20 @@ export type Database = {
           affected_tags?: string[]
           airport_affected?: string | null
           alerted_at?: string | null
+          canonical_url?: string | null
           carrier_affected?: string | null
           category?: string | null
+          classification_reason?: string | null
           country?: string | null
           created_at?: string
           department?: Database["public"]["Enums"]["intel_department"]
+          department_confidence?: number
           effective_date?: string | null
           event_date?: string | null
           headline?: string
           id?: string
           impact?: string
+          ingested_at?: string
           is_ai_draft?: boolean
           lane_affected?: string | null
           language?: string
@@ -527,10 +549,15 @@ export type Database = {
           owner?: string | null
           port_affected?: string | null
           predicted_relevance?: number
+          processing_error?: string | null
+          processing_status?: Database["public"]["Enums"]["intel_processing_status"]
           publication_date?: string | null
+          relevance_score?: number
           severity?: Database["public"]["Enums"]["intel_severity"]
+          severity_score?: number
           source_entry_id?: string | null
           source_name?: string
+          source_tier?: number
           source_url?: string | null
           status?: Database["public"]["Enums"]["intel_status"]
           suggested_action?: string | null
@@ -777,13 +804,57 @@ export type Database = {
         }
         Relationships: []
       }
+      pipeline_control: {
+        Row: {
+          consecutive_rate_limits: number
+          last_stage: string | null
+          last_started_at: string | null
+          last_success_at: string | null
+          lease_expires_at: string | null
+          lease_token: string | null
+          paused_reason: string | null
+          pipeline: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          consecutive_rate_limits?: number
+          last_stage?: string | null
+          last_started_at?: string | null
+          last_success_at?: string | null
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          paused_reason?: string | null
+          pipeline: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          consecutive_rate_limits?: number
+          last_stage?: string | null
+          last_started_at?: string | null
+          last_success_at?: string | null
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          paused_reason?: string | null
+          pipeline?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       raw_items: {
         Row: {
           analysis_status: string
           body: string | null
+          canonical_url: string | null
+          classification_reason: string | null
           collected_at: string
           countries: string[]
           created_at: string
+          department: string | null
+          department_confidence: number | null
+          duplicate_of: string | null
           event_id: string | null
           fetch_method: string | null
           id: string
@@ -794,8 +865,12 @@ export type Database = {
           original_summary: string | null
           original_title: string
           payload: Json
+          processing_error: string | null
+          processing_status: Database["public"]["Enums"]["intel_processing_status"]
           published_at: string | null
           rejection_reason: string | null
+          relevance_score: number | null
+          severity_score: number | null
           source_language: string | null
           source_name: string
           source_type: string | null
@@ -809,9 +884,14 @@ export type Database = {
         Insert: {
           analysis_status?: string
           body?: string | null
+          canonical_url?: string | null
+          classification_reason?: string | null
           collected_at?: string
           countries?: string[]
           created_at?: string
+          department?: string | null
+          department_confidence?: number | null
+          duplicate_of?: string | null
           event_id?: string | null
           fetch_method?: string | null
           id?: string
@@ -822,8 +902,12 @@ export type Database = {
           original_summary?: string | null
           original_title: string
           payload?: Json
+          processing_error?: string | null
+          processing_status?: Database["public"]["Enums"]["intel_processing_status"]
           published_at?: string | null
           rejection_reason?: string | null
+          relevance_score?: number | null
+          severity_score?: number | null
           source_language?: string | null
           source_name: string
           source_type?: string | null
@@ -837,9 +921,14 @@ export type Database = {
         Update: {
           analysis_status?: string
           body?: string | null
+          canonical_url?: string | null
+          classification_reason?: string | null
           collected_at?: string
           countries?: string[]
           created_at?: string
+          department?: string | null
+          department_confidence?: number | null
+          duplicate_of?: string | null
           event_id?: string | null
           fetch_method?: string | null
           id?: string
@@ -850,8 +939,12 @@ export type Database = {
           original_summary?: string | null
           original_title?: string
           payload?: Json
+          processing_error?: string | null
+          processing_status?: Database["public"]["Enums"]["intel_processing_status"]
           published_at?: string | null
           rejection_reason?: string | null
+          relevance_score?: number | null
+          severity_score?: number | null
           source_language?: string | null
           source_name?: string
           source_type?: string | null
@@ -863,6 +956,13 @@ export type Database = {
           url_hash?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "raw_items_duplicate_of_fkey"
+            columns: ["duplicate_of"]
+            isOneToOne: false
+            referencedRelation: "raw_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "raw_items_event_fk"
             columns: ["event_id"]
@@ -1172,11 +1272,14 @@ export type Database = {
       weekly_digests: {
         Row: {
           act_now_count: number
+          awareness_count: number
           category: string | null
           department: Database["public"]["Enums"]["intel_department"] | null
           generated_at: string
           id: string
           item_count: number
+          period_end: string | null
+          period_start: string | null
           summary_md: string
           this_week_count: number
           week_number: number
@@ -1184,11 +1287,14 @@ export type Database = {
         }
         Insert: {
           act_now_count?: number
+          awareness_count?: number
           category?: string | null
           department?: Database["public"]["Enums"]["intel_department"] | null
           generated_at?: string
           id?: string
           item_count?: number
+          period_end?: string | null
+          period_start?: string | null
           summary_md: string
           this_week_count?: number
           week_number: number
@@ -1196,11 +1302,14 @@ export type Database = {
         }
         Update: {
           act_now_count?: number
+          awareness_count?: number
           category?: string | null
           department?: Database["public"]["Enums"]["intel_department"] | null
           generated_at?: string
           id?: string
           item_count?: number
+          period_end?: string | null
+          period_start?: string | null
           summary_md?: string
           this_week_count?: number
           week_number?: number
@@ -1252,6 +1361,99 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      acquire_pipeline_lease: {
+        Args: { _lease_seconds?: number; _pipeline: string }
+        Returns: string
+      }
+      canonical_intelligence: {
+        Args: {
+          _department?: Database["public"]["Enums"]["intel_department"]
+          _end_date?: string
+          _limit?: number
+          _severity?: Database["public"]["Enums"]["intel_severity"]
+          _start_date?: string
+        }
+        Returns: {
+          action_required: string
+          action_required_bool: boolean | null
+          affected_lanes_or_customers: string | null
+          affected_tags: string[]
+          airport_affected: string | null
+          alerted_at: string | null
+          canonical_url: string | null
+          carrier_affected: string | null
+          category: string | null
+          classification_reason: string | null
+          country: string | null
+          created_at: string
+          department: Database["public"]["Enums"]["intel_department"]
+          department_confidence: number
+          effective_date: string | null
+          event_date: string | null
+          headline: string
+          id: string
+          impact: string
+          ingested_at: string
+          is_ai_draft: boolean
+          lane_affected: string | null
+          language: string
+          last_reviewed_at: string | null
+          last_verification_attempt_at: string | null
+          latitude: number | null
+          longitude: number | null
+          month: number | null
+          og_image_url: string | null
+          owner: string | null
+          port_affected: string | null
+          predicted_relevance: number
+          processing_error: string | null
+          processing_status: Database["public"]["Enums"]["intel_processing_status"]
+          publication_date: string | null
+          relevance_score: number
+          severity: Database["public"]["Enums"]["intel_severity"]
+          severity_score: number
+          source_entry_id: string | null
+          source_name: string
+          source_tier: number
+          source_url: string | null
+          status: Database["public"]["Enums"]["intel_status"]
+          suggested_action: string | null
+          summary: string
+          time_to_impact: Database["public"]["Enums"]["intel_horizon"]
+          time_to_impact_date: string | null
+          transport_modes: string[] | null
+          updated_at: string
+          updated_date: string | null
+          verification_attempts: number
+          verification_status: string
+          week_number: number | null
+          why_it_matters_to_hitek: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "intelligence_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      canonical_intelligence_counts: {
+        Args: {
+          _department?: Database["public"]["Enums"]["intel_department"]
+          _end_date?: string
+          _severity?: Database["public"]["Enums"]["intel_severity"]
+          _start_date?: string
+        }
+        Returns: Json
+      }
+      casablanca_week_bounds: {
+        Args: { _anchor?: string }
+        Returns: {
+          iso_week: number
+          iso_year: number
+          period_end: string
+          period_start: string
+        }[]
+      }
       cast_intel_vote: {
         Args: { _item_id: string; _vote: string; _voter: string }
         Returns: undefined
@@ -1278,6 +1480,16 @@ export type Database = {
         Args: { _item_id: string }
         Returns: undefined
       }
+      release_pipeline_lease: {
+        Args: {
+          _error?: string
+          _pipeline: string
+          _stage?: string
+          _succeeded: boolean
+          _token: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       compliance_status:
@@ -1302,6 +1514,16 @@ export type Database = {
         | "commercial"
         | "it"
       intel_horizon: "today" | "this_week" | "this_month" | "horizon"
+      intel_processing_status:
+        | "discovered"
+        | "rejected_irrelevant"
+        | "rejected_non_article"
+        | "duplicate"
+        | "processing"
+        | "enriched"
+        | "published"
+        | "failed"
+        | "review_required"
       intel_severity: "act_now" | "this_week" | "awareness"
       intel_status: "new" | "acknowledged" | "actioned" | "archived"
       news_category:
@@ -1476,6 +1698,17 @@ export const Constants = {
         "it",
       ],
       intel_horizon: ["today", "this_week", "this_month", "horizon"],
+      intel_processing_status: [
+        "discovered",
+        "rejected_irrelevant",
+        "rejected_non_article",
+        "duplicate",
+        "processing",
+        "enriched",
+        "published",
+        "failed",
+        "review_required",
+      ],
       intel_severity: ["act_now", "this_week", "awareness"],
       intel_status: ["new", "acknowledged", "actioned", "archived"],
       news_category: [

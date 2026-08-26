@@ -63,7 +63,7 @@ ${briefs}`;
     }),
   });
   if (!resp.ok) {
-    return `_Summary unavailable (${resp.status})_\n\n${briefs}`;
+    return briefs;
   }
   const data = await resp.json();
   return (data.choices?.[0]?.message?.content || "").trim() || briefs;
@@ -81,30 +81,34 @@ serve(async (req) => {
     );
 
     const now = new Date();
-    const { year, week } = isoWeek(now);
-    // CURRENT ISO WEEK only: Monday 00:00 UTC of the running week → now.
-    const monday = new Date(now);
-    const day = monday.getUTCDay() || 7; // Sun=0 → 7
-    monday.setUTCDate(monday.getUTCDate() - (day - 1));
-    monday.setUTCHours(0, 0, 0, 0);
-    const weekStart = monday.toISOString();
-    // Fallback window: previous 7 days before this Monday, so an empty current week
-    // still yields a "last week" recap instead of a "no items" placeholder.
-    const prevMonday = new Date(monday);
-    prevMonday.setUTCDate(prevMonday.getUTCDate() - 7);
-    const prevWeekStart = prevMonday.toISOString();
+    const { data: boundsRows, error: boundsError } = await supabase.rpc("casablanca_week_bounds", {
+      _anchor: now.toISOString(),
+    });
+    if (boundsError) throw new Error(boundsError.message);
+    const bounds = boundsRows?.[0];
+    if (!bounds) throw new Error("Could not calculate Morocco week bounds");
+    const year = bounds.iso_year;
+    const week = bounds.iso_week;
+    const currentStart = bounds.period_start;
+    const currentEnd = bounds.period_end;
+    const previousEndDate = new Date(`${currentStart}T00:00:00Z`);
+    previousEndDate.setUTCDate(previousEndDate.getUTCDate() - 1);
+    const previousStartDate = new Date(previousEndDate);
+    previousStartDate.setUTCDate(previousStartDate.getUTCDate() - 6);
+    const previousStart = previousStartDate.toISOString().slice(0, 10);
+    const previousEnd = previousEndDate.toISOString().slice(0, 10);
 
-    const { data: items, error } = await supabase
-      .from("intelligence_items")
-      .select("headline, summary, impact, action_required, department, severity, source_name, category, event_date, publication_date, created_at")
-      .gte("created_at", prevWeekStart)
-      .neq("status", "archived");
+    const { data: currentItems, error } = await supabase.rpc("canonical_intelligence", {
+      _start_date: currentStart, _end_date: currentEnd, _limit: 500,
+    });
     if (error) throw new Error(error.message);
+    const { data: previousItems, error: previousError } = await supabase.rpc("canonical_intelligence", {
+      _start_date: previousStart, _end_date: previousEnd, _limit: 500,
+    });
+    if (previousError) throw new Error(previousError.message);
 
-    const all = items || [];
-    const isThisWeek = (i: any) => new Date(i.created_at).getTime() >= monday.getTime();
-    const currentAll = all.filter(isThisWeek);
-    const prevAll = all.filter((i: any) => !isThisWeek(i));
+    const currentAll = currentItems || [];
+    const prevAll = previousItems || [];
     const generated: any[] = [];
 
     // Wipe this week's existing rows up front so re-runs are idempotent across the new category schema.
@@ -119,6 +123,8 @@ serve(async (req) => {
       const fallback = prevCatItems.length > 0 ? prevCatItems : prevAll;
       const md = await summarize(LOVABLE_API_KEY, CAT_LABEL[cat], catItems, fallback);
       const usedCount = catItems.length > 0 ? catItems.length : fallback.length;
+      const usingCurrent = catItems.length > 0;
+      const used = usingCurrent ? catItems : fallback;
       const row = {
         year,
         week_number: week,
@@ -126,8 +132,11 @@ serve(async (req) => {
         department: null,
         summary_md: md,
         item_count: usedCount,
-        act_now_count: (catItems.length > 0 ? catItems : fallback).filter((i: any) => i.severity === "act_now").length,
-        this_week_count: (catItems.length > 0 ? catItems : fallback).filter((i: any) => i.severity === "this_week").length,
+        act_now_count: used.filter((i: any) => i.severity === "act_now").length,
+        this_week_count: used.filter((i: any) => i.severity === "this_week").length,
+        awareness_count: used.filter((i: any) => i.severity === "awareness").length,
+        period_start: usingCurrent ? currentStart : previousStart,
+        period_end: usingCurrent ? currentEnd : previousEnd,
       };
       // v2 schema: category column drives grouping (was misnamed `department` before).
       console.log(`[digest v2] inserting cat=${cat} current=${catItems.length} fallback=${fallback.length}`);
@@ -139,7 +148,7 @@ serve(async (req) => {
     // "All" bucket removed — Global category is the top-level view.
 
     return new Response(
-      JSON.stringify({ success: true, year, week, generated, total: all.length }),
+      JSON.stringify({ success: true, year, week, generated, total: currentAll.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
