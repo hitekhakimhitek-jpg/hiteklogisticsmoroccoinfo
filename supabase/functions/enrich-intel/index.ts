@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, requireHitekAdmin, isSafeExternalUrl } from "../_shared/auth.ts";
+import {
+  assessIntelligenceQuality,
+  departmentAction,
+  deterministicSummary,
+} from "../_shared/intel-quality.ts";
 
 const DEPARTMENTS = ["operations", "compliance", "finance", "commercial", "it"] as const;
 const SEVERITIES = ["act_now", "this_week", "awareness"] as const;
@@ -135,6 +140,10 @@ type Drafted = {
   affected_lanes_or_customers: string | null;
   suggested_action: string;
   action_required_bool: boolean;
+  relevance_score: number;
+  department_confidence: number;
+  severity_score: number;
+  classification_reason: string;
 };
 
 const SYSTEM_PROMPT = `You triage external signals for Hitek Logistic Morocco, a freight-forwarding company at Tanger Med. Convert a raw news item into one actionable Intelligence Item. Write plainly. No marketing. No hedging.
@@ -152,9 +161,11 @@ Category (high-level bucket, separate from department):
 - global: geopolitics, broad trends, IT/tech, regulatory horizon-scanning that isn't immediately operational or financial.
 
 Severity (be strict):
-- act_now: requires action today; affects ongoing/imminent shipments or has hard legal deadline within days.
-- this_week: must be handled this week; affects upcoming shipments, near-term costs, or compliance reviews.
+- act_now: RARE. A confirmed closure, stoppage, binding immediate rule, or direct disruption requires action today and affects exposed shipments.
+- this_week: Significant and actionable, but operations are not currently stopped. It affects upcoming shipments, near-term costs, or compliance reviews.
 - awareness: horizon scanning, trends, background context. No immediate action.
+
+Department ownership is strict: Operations owns physical movement; Compliance owns binding rules/documents; Finance owns direct cost/cash exposure; Commercial owns rates/capacity/customer demand; IT owns systems and cyber. Choose one primary owner only.
 
 IMPORTANT RULE (IT severity): Items in department "it" are capped at "this_week" (Important). Cybersecurity incidents, hacks, ransomware, data breaches, CVEs and software flaws are ALWAYS at most "this_week" — never "act_now". The ONLY exception allowing "act_now" for IT is a major outage, breaking change or forced migration of core business software Hitek actually operates on (Microsoft Teams, OneDrive, SharePoint, Outlook/Exchange, Microsoft 365/Windows, CargoWise, SAP, or the customs/port declaration platforms) that stops people working today.
 
@@ -221,12 +232,24 @@ function coerce(d: any): Drafted {
   const lng = typeof d?.longitude === "number" && d.longitude >= -180 && d.longitude <= 180 ? d.longitude : null;
   const ev = typeof d?.event_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.event_date) ? d.event_date : null;
   const trim = (v: any, n: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, n) : null);
-  return {
-    headline: String(d?.headline || "").slice(0, 240) || "Untitled",
-    summary: String(d?.summary || "").slice(0, 600),
-    impact: String(d?.impact || "").slice(0, 400),
-    action_required: String(d?.action_required || "Monitor only.").slice(0, 400),
+  const quality = assessIntelligenceQuality({
+    headline: d?.headline,
+    summary: d?.summary,
     department: dept,
+    severity: sev,
+    actionRequired: d?.action_required_bool,
+    country: d?.country,
+  });
+  sev = quality.severity;
+  const headline = String(d?.headline || "").slice(0, 240) || "Untitled";
+  const summary = deterministicSummary(headline, d?.summary);
+  const action = String(d?.action_required || departmentAction(quality.department, sev, headline)).slice(0, 400);
+  return {
+    headline,
+    summary,
+    impact: String(d?.impact || "").slice(0, 400),
+    action_required: action,
+    department: quality.department,
     severity: sev,
     time_to_impact: hor,
     affected_tags: tags,
@@ -243,10 +266,14 @@ function coerce(d: any): Drafted {
     lane_affected: trim(d?.lane_affected, 160),
     why_it_matters_to_hitek: String(d?.why_it_matters_to_hitek || "").slice(0, 400),
     affected_lanes_or_customers: trim(d?.affected_lanes_or_customers, 200),
-    suggested_action: String(d?.suggested_action || d?.action_required || "Monitor only.").slice(0, 400),
+    suggested_action: String(d?.suggested_action || action).slice(0, 400),
     action_required_bool: typeof d?.action_required_bool === "boolean"
       ? d.action_required_bool
-      : sev !== "awareness",
+       : sev !== "awareness",
+    relevance_score: quality.relevanceScore,
+    department_confidence: quality.departmentConfidence,
+    severity_score: quality.severityScore,
+    classification_reason: quality.classificationReason,
   };
 }
 
@@ -276,15 +303,15 @@ function heuristicDraft(input: {
   return coerce({
     headline: input.headline,
     summary: input.summary || input.headline,
-    impact: "Automatic summary unavailable — review the source for full impact.",
-    action_required: severity === "awareness" ? "Monitor only." : "Review affected shipments and notify concerned customers.",
+    impact: `${input.headline || "This development"} may affect freight timing, cost, compliance, or customer commitments; verify exposure against current files.`,
+    action_required: departmentAction(department as any, severity as any, input.headline || "this development"),
     department,
     severity,
     time_to_impact: severity === "act_now" ? "today" : severity === "this_week" ? "this_week" : "horizon",
     affected_tags: [],
     category: input.category,
     event_date: input.publication_date || null,
-    why_it_matters_to_hitek: "Flagged by keyword rules while AI analysis was unavailable.",
+    why_it_matters_to_hitek: "The development may affect Hitek shipments, costs, compliance duties, or customer commitments on connected lanes.",
   });
 }
 
