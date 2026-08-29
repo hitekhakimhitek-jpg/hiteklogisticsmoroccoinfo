@@ -100,8 +100,8 @@ export default function DisruptionMap() {
     mapDivRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [lang]);
 
-  // Initialize the Leaflet map once the container is mounted. Uses Carto
-  // Voyager tiles — no API key, English labels, Google-Maps-like look.
+  // Initialize the Leaflet map once the container is mounted. Uses Esri's free
+  // World Street Map tiles — no API key, clean Google-Maps-like look.
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return;
     const map = L.map(mapDivRef.current, {
@@ -111,12 +111,11 @@ export default function DisruptionMap() {
       scrollWheelZoom: true,
     });
     L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
       {
         maxZoom: 19,
         attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: "abcd",
+          "&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, &copy; OpenStreetMap contributors",
       }
     ).addTo(map);
     mapRef.current = map;
