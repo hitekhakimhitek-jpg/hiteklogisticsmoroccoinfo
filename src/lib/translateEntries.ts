@@ -53,11 +53,30 @@ function setCached(target: "fr" | "en", text: string, value: string) {
   }
 }
 
+// Circuit breaker: once the translation backend is unavailable (e.g. no AI
+// credits -> 402), stop hammering it for the rest of the session. Every extra
+// call just produces another 502 in the console and slows the UI down.
+let translationDisabled = false;
+
+async function isUnavailable(error: unknown): Promise<boolean> {
+  const ctx = (error as { context?: Response })?.context;
+  if (!ctx || typeof ctx.status !== "number") return false;
+  if (ctx.status === 402 || ctx.status === 429) return true;
+  if (ctx.status !== 502) return false;
+  try {
+    const body = await ctx.clone().json();
+    return body?.status === 402 || body?.error === "translation_upstream_failed";
+  } catch {
+    return false;
+  }
+}
+
 async function translateChunk(
   slice: string[],
   target: "fr" | "en",
   attempt = 0,
 ): Promise<(string | null)[]> {
+  if (translationDisabled) return slice.map(() => null);
   try {
     const { data, error } = await supabase.functions.invoke("translate-text", {
       body: { texts: slice, target },
@@ -76,6 +95,11 @@ async function translateChunk(
       return t;
     });
   } catch (e) {
+    if (await isUnavailable(e)) {
+      translationDisabled = true;
+      console.warn("Translation service unavailable — showing original text.");
+      return slice.map(() => null);
+    }
     if (attempt < 3) {
       await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
       return translateChunk(slice, target, attempt + 1);
