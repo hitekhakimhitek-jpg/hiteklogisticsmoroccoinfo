@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.intel_vote_counts();

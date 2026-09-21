@@ -1595,14 +1595,6 @@ export type Database = {
           attribute_value: string
         }[]
       }
-      intel_vote_counts: {
-        Args: never
-        Returns: {
-          item_id: string
-          not_useful: number
-          useful: number
-        }[]
-      }
       is_hitek_admin: { Args: never; Returns: boolean }
       recompute_all_predicted_relevance: { Args: never; Returns: undefined }
       recompute_learned_weight: {
