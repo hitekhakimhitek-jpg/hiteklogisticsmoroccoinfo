@@ -722,15 +722,17 @@ serve(async (req) => {
           sourceUrl: meta?.homepage,
           sourceType: meta?.source_type,
           fetchMethod: "firecrawl_search_direct",
-          httpStatus: fallbackError ? 0 : 200,
+          httpStatus: fallbackError ? 0 : (searchHttp.get(sourceName) ?? 200),
           pagesRequested: 1,
           itemsDiscovered: found.length,
+          itemsValid: acceptedCount,
           itemsNew: newCount,
           itemsDuplicates: Math.max(0, acceptedCount - newCount),
           itemsRejected: Math.max(0, found.length - acceptedCount),
           latestPublicationAt,
           startedAt: Date.now(),
-          error: fallbackError ?? (found.length === 0 ? "No parseable current articles found in this source cohort" : null),
+          // Only a real failure counts; an empty week of publications is "no new items".
+          error: fallbackError ?? (found.length === 0 ? searchErr.get(sourceName) ?? null : null),
         });
       }
     };
@@ -748,6 +750,8 @@ serve(async (req) => {
     }> = [];
 
     const queryStats = { ok: 0, failed: 0, empty: 0 };
+    const searchHttp = new Map<string, number>();
+    const searchErr = new Map<string, string>();
     const searchPromises = searchPlans.map(async ({ source, query }) => {
       try {
         const response = await firecrawlFetch("https://api.firecrawl.dev/v2/search", {
@@ -768,8 +772,11 @@ serve(async (req) => {
           const errText = await response.text();
           console.error(`Firecrawl search error for "${query.substring(0, 50)}...":`, response.status, errText);
           queryStats.failed++;
+          searchHttp.set(source, response.status);
+          searchErr.set(source, `Search API HTTP ${response.status}`);
           return [];
         }
+        searchHttp.set(source, response.status);
 
         const result = await response.json();
         const items = normalizeSearchItems(result);
@@ -785,6 +792,8 @@ serve(async (req) => {
       } catch (e) {
         console.error(`Search failed for query: ${query.substring(0, 50)}...`, e);
         queryStats.failed++;
+        searchHttp.set(source, 0);
+        searchErr.set(source, (e as Error).message?.slice(0, 120) || "search failed");
         return [];
       }
     });
