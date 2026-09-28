@@ -31,6 +31,8 @@ export interface SourceRunResult {
   /** Set when the raw response parsed but produced no structural records at all. */
   parserEmpty?: boolean;
   fallbackUsed?: boolean;
+  /** Warning/alert feeds: empty or mostly-expired output is normal, not degraded. */
+  alertFeed?: boolean;
 }
 
 export function serviceClient(): SupabaseClient {
@@ -63,6 +65,9 @@ export function classify(r: SourceRunResult): Classification {
   const invalid = Math.max(0, r.itemsDiscovered - valid);
   const httpFail = r.httpStatus === 0 || (r.httpStatus !== undefined && r.httpStatus >= 400);
 
+  if (r.alertFeed && r.itemsDiscovered === 0 && !httpFail && r.httpStatus !== undefined) {
+    return { parse: "empty", status: "no_new_items", failure: false, reason: "Feed reachable — no active warnings" };
+  }
   if (r.error && r.itemsDiscovered === 0) {
     return {
       parse: httpFail || r.httpStatus === undefined ? "fetch_failure" : "parser_failure",
@@ -83,7 +88,7 @@ export function classify(r: SourceRunResult): Classification {
   if (r.fallbackUsed) {
     return { parse: "ok", status: "degraded", failure: false, reason: "Primary feed unavailable — official fallback page used" };
   }
-  if (invalid > valid) {
+  if (invalid > valid && !r.alertFeed) {
     return { parse: "ok", status: "degraded", failure: false, reason: `${r.itemsDiscovered} records found, ${invalid} failed validation` };
   }
   return {

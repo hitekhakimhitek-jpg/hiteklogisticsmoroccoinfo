@@ -302,6 +302,7 @@ serve(async (req) => {
       itemsRejected: outcome.items.length - items.length,
       latestPublicationAt: latestPub,
       startedAt,
+      alertFeed: true,
       // A warning feed with no active warnings is healthy/quiet, not broken.
       error: outcome.error ?? null,
     });

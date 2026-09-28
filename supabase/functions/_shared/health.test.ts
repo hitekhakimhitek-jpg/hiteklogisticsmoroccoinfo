@@ -29,3 +29,10 @@ Deno.test("parser returning nothing from a real response is degraded", () => {
 Deno.test("fallback use is degraded", () => {
   assertEquals(classify({ ...base, httpStatus: 200, itemsDiscovered: 3, itemsValid: 3, fallbackUsed: true }).status, "degraded");
 });
+
+Deno.test("alert feed: quiet and mostly-expired warnings are not degraded", () => {
+  const quiet = classify({ sourceName: "x", itemsDiscovered: 0, startedAt: 0, httpStatus: 200, alertFeed: true, error: "no items" });
+  if (quiet.status !== "no_new_items") throw new Error(quiet.status);
+  const expired = classify({ sourceName: "x", itemsDiscovered: 39, itemsValid: 16, startedAt: 0, alertFeed: true });
+  if (expired.status !== "healthy") throw new Error(expired.status);
+});
