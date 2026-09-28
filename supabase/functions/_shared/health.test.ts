@@ -19,9 +19,10 @@ Deno.test("403 / 429 / timeout are failures with readable reasons", () => {
   assertEquals(classify({ ...base, httpStatus: 429, itemsDiscovered: 0, error: "x" }).reason.startsWith("HTTP 429"), true);
   assertEquals(classify({ ...base, httpStatus: 0, itemsDiscovered: 0, error: "timeout" }).failure, true);
 });
-Deno.test("partial validation failure is degraded", () => {
-  assertEquals(classify({ ...base, httpStatus: 200, itemsDiscovered: 7, itemsValid: 2 }).status, "degraded");
+Deno.test("heavy validation failure is degraded, light filtering is not", () => {
+  assertEquals(classify({ ...base, httpStatus: 200, itemsDiscovered: 11, itemsValid: 2 }).status, "degraded");
   assertEquals(classify({ ...base, httpStatus: 200, itemsDiscovered: 7, itemsValid: 5 }).status, "healthy");
+  assertEquals(classify({ ...base, httpStatus: 200, itemsDiscovered: 4, itemsValid: 1 }).status, "healthy");
 });
 Deno.test("parser returning nothing from a real response is degraded", () => {
   assertEquals(classify({ ...base, httpStatus: 200, itemsDiscovered: 0, parserEmpty: true }).status, "degraded");
