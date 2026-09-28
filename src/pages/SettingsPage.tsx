@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const ALL_PRIORITIES = ["critical", "important", "informational"] as const;
+const STATUS_LABEL: Record<string, string> = { healthy: "Healthy", no_new_items: "No new items", degraded: "Degraded", broken: "Broken" };
 const ALL_SOURCES = [
   "Lloyd's List", "FreightWaves", "The Loadstar", "JOC",
   "Hellenic Shipping News", "Splash247", "gCaptain", "Seatrade Maritime",
@@ -43,14 +44,18 @@ const SettingsPage = () => {
     queryKey: ["admin-quality-health"],
     enabled: isAdmin,
     queryFn: async () => {
+      const since = new Date(Date.now() - 86_400_000).toISOString();
       const [runs, health, pipeline] = await Promise.all([
-        supabase.from("ingestion_runs").select("id,status,started_at,finished_at,candidates_found,candidates_accepted,inserted_count,enriched_count,error_message").order("started_at", { ascending: false }).limit(5),
-        supabase.from("source_health").select("source_name,status,last_attempt_at,last_success_at,items_found_last_run,consecutive_failures,last_error").order("status").order("source_name").limit(100),
+        supabase.from("ingestion_runs").select("id,status,started_at,finished_at,candidates_found,candidates_accepted,inserted_count,enriched_count,error_message").gte("started_at", since).order("started_at", { ascending: false }).limit(200),
+        (supabase as any).from("source_health").select("source_name,status,last_attempt_at,last_success_at,items_found_last_run,items_valid_last_run,items_inserted_last_run,consecutive_failures,failure_reason,last_error").order("status").order("source_name").limit(200),
         supabase.from("pipeline_control").select("pipeline,status,last_started_at,last_success_at,last_stage,paused_reason").order("pipeline"),
       ]);
       const error = runs.error || health.error || pipeline.error;
       if (error) throw error;
-      return { runs: runs.data || [], health: health.data || [], pipeline: pipeline.data || [] };
+      // Each run covers one rotating cohort of sources, so a single run's count
+      // is misleading; show the daily total across all cohorts instead.
+      const inserted24h = (runs.data || []).reduce((sum, r) => sum + (r.inserted_count ?? 0), 0);
+      return { runs: runs.data || [], health: (health.data || []) as any[], pipeline: pipeline.data || [], inserted24h };
     },
     refetchInterval: 60_000,
   });
@@ -279,10 +284,12 @@ const SettingsPage = () => {
 
         {isAdmin && (
           <Section icon={RefreshCw} title="Data Quality & Pipeline Health">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <Metric label="Sources healthy" value={quality?.health.filter((s) => s.status === "healthy").length ?? 0} />
-              <Metric label="Sources degraded" value={quality?.health.filter((s) => s.status !== "healthy").length ?? 0} />
-              <Metric label="Last run inserted" value={quality?.runs[0]?.inserted_count ?? 0} />
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <Metric label="Healthy" value={quality?.health.filter((s) => s.status === "healthy").length ?? 0} />
+              <Metric label="No new items" value={quality?.health.filter((s) => s.status === "no_new_items").length ?? 0} />
+              <Metric label="Degraded" value={quality?.health.filter((s) => s.status === "degraded").length ?? 0} />
+              <Metric label="Broken" value={quality?.health.filter((s) => s.status === "broken").length ?? 0} />
+              <Metric label="Inserted (24h)" value={quality?.inserted24h ?? 0} />
             </div>
             <Table>
               <TableHeader>
@@ -290,16 +297,32 @@ const SettingsPage = () => {
                   <TableHead>Source</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Found</TableHead>
+                  <TableHead className="text-right">Valid</TableHead>
+                  <TableHead className="text-right">Inserted</TableHead>
+                  <TableHead>Last success</TableHead>
                   <TableHead>Last attempt</TableHead>
+                  <TableHead>Reason</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(quality?.health ?? []).filter((s) => s.status !== "healthy").slice(0, 12).map((source) => (
+                {(quality?.health ?? [])
+                  .filter((s: any) => s.status === "broken" || s.status === "degraded")
+                  .sort((a: any, b: any) => (a.status === b.status ? 0 : a.status === "broken" ? -1 : 1))
+                  .slice(0, 20)
+                  .map((source: any) => (
                   <TableRow key={source.source_name}>
                     <TableCell className="font-medium">{source.source_name}</TableCell>
-                    <TableCell className="capitalize">{source.status}</TableCell>
+                    <TableCell title={source.failure_reason ?? source.last_error ?? ""}>
+                      <span className={source.status === "broken" ? "text-destructive font-medium" : "text-muted-foreground font-medium"}>
+                        {STATUS_LABEL[source.status] ?? source.status}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">{source.items_found_last_run}</TableCell>
+                    <TableCell className="text-right tabular-nums">{source.items_valid_last_run ?? 0}</TableCell>
+                    <TableCell className="text-right tabular-nums">{source.items_inserted_last_run ?? 0}</TableCell>
+                    <TableCell className="text-muted-foreground">{source.last_success_at ? new Date(source.last_success_at).toLocaleString() : "Never"}</TableCell>
                     <TableCell className="text-muted-foreground">{source.last_attempt_at ? new Date(source.last_attempt_at).toLocaleString() : "Never"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-[220px]">{source.failure_reason ?? source.last_error ?? "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
