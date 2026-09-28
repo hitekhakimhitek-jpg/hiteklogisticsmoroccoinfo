@@ -17,23 +17,22 @@ export interface SourceMeta {
   fetch_method?: string;
 }
 
-/** Weather / hazard authorities — checked far more often than news. */
+/** Weather / hazard authorities — checked far more often than news.
+ * Names MUST equal the collector names in collect-hazards, otherwise health
+ * rows become orphaned. BoM, IMD and Meteo-France are collected through the
+ * WMO Alert Hub (registered by collect-hazards itself). Copernicus EMS was
+ * removed: its public API requires an activation code and has no listing feed. */
 export const HAZARD_SOURCE_META: SourceMeta[] = [
   { name: "JTWC", source_type: "weather", tier: 1, poll_interval_minutes: 15, homepage: "https://www.metoc.navy.mil/jtwc/jtwc.html", fetch_method: "feed" },
   { name: "NOAA National Hurricane Center", source_type: "weather", tier: 1, poll_interval_minutes: 15, homepage: "https://www.nhc.noaa.gov/", fetch_method: "feed" },
   { name: "NOAA NWS Alerts", source_type: "weather", tier: 1, poll_interval_minutes: 15, homepage: "https://alerts.weather.gov/", fetch_method: "json" },
-  { name: "WMO Severe Weather Information Centre", source_type: "weather", tier: 1, poll_interval_minutes: 15, homepage: "https://severeweather.wmo.int/", fetch_method: "feed" },
   { name: "JMA / RSMC Tokyo", source_type: "weather", tier: 1, poll_interval_minutes: 15, homepage: "https://www.jma.go.jp/", language: "ja", fetch_method: "feed" },
   { name: "China NMC", source_type: "weather", tier: 1, poll_interval_minutes: 15, homepage: "https://www.nmc.cn/", country: "China", language: "zh", fetch_method: "json" },
   { name: "PAGASA", source_type: "weather", tier: 1, poll_interval_minutes: 20, homepage: "https://www.pagasa.dost.gov.ph/", country: "Philippines", fetch_method: "html" },
   { name: "Hong Kong Observatory", source_type: "weather", tier: 1, poll_interval_minutes: 20, homepage: "https://www.hko.gov.hk/", fetch_method: "feed" },
   { name: "Taiwan CWA", source_type: "weather", tier: 1, poll_interval_minutes: 20, homepage: "https://www.cwa.gov.tw/", language: "zh", fetch_method: "feed" },
-  { name: "India Meteorological Department", source_type: "weather", tier: 1, poll_interval_minutes: 30, homepage: "https://mausam.imd.gov.in/", fetch_method: "feed" },
-  { name: "Australian Bureau of Meteorology", source_type: "weather", tier: 1, poll_interval_minutes: 30, homepage: "https://www.bom.gov.au/", fetch_method: "feed" },
-  { name: "Meteo-France Vigilance", source_type: "weather", tier: 1, poll_interval_minutes: 30, homepage: "https://vigilance.meteofrance.fr/", language: "fr", fetch_method: "html" },
   { name: "GDACS", source_type: "hazard", tier: 1, poll_interval_minutes: 15, homepage: "https://www.gdacs.org/", fetch_method: "feed" },
   { name: "USGS Earthquakes", source_type: "hazard", tier: 1, poll_interval_minutes: 15, homepage: "https://earthquake.usgs.gov/", fetch_method: "json" },
-  { name: "Copernicus EMS Rapid Mapping", source_type: "hazard", tier: 1, poll_interval_minutes: 60, homepage: "https://emergency.copernicus.eu/", fetch_method: "json" },
 ];
 
 const t1 = (name: string, homepage: string, type: SourceMeta["source_type"] = "news", mins = 30, extra: Partial<SourceMeta> = {}): SourceMeta =>

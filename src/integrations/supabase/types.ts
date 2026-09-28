@@ -1095,13 +1095,19 @@ export type Database = {
         Row: {
           consecutive_failures: number
           created_at: string
+          failure_reason: string | null
+          fallback_used: boolean
           http_status: number | null
           id: string
           items_found_last_run: number
+          items_inserted_last_run: number
+          items_invalid_last_run: number
+          items_valid_last_run: number
           last_attempt_at: string | null
           last_error: string | null
           last_item_detected_at: string | null
           last_success_at: string | null
+          latency_ms: number | null
           latest_source_publication_at: string | null
           parse_status: string
           parser_method: string | null
@@ -1115,13 +1121,19 @@ export type Database = {
         Insert: {
           consecutive_failures?: number
           created_at?: string
+          failure_reason?: string | null
+          fallback_used?: boolean
           http_status?: number | null
           id?: string
           items_found_last_run?: number
+          items_inserted_last_run?: number
+          items_invalid_last_run?: number
+          items_valid_last_run?: number
           last_attempt_at?: string | null
           last_error?: string | null
           last_item_detected_at?: string | null
           last_success_at?: string | null
+          latency_ms?: number | null
           latest_source_publication_at?: string | null
           parse_status?: string
           parser_method?: string | null
@@ -1135,13 +1147,19 @@ export type Database = {
         Update: {
           consecutive_failures?: number
           created_at?: string
+          failure_reason?: string | null
+          fallback_used?: boolean
           http_status?: number | null
           id?: string
           items_found_last_run?: number
+          items_inserted_last_run?: number
+          items_invalid_last_run?: number
+          items_valid_last_run?: number
           last_attempt_at?: string | null
           last_error?: string | null
           last_item_detected_at?: string | null
           last_success_at?: string | null
+          latency_ms?: number | null
           latest_source_publication_at?: string | null
           parse_status?: string
           parser_method?: string | null

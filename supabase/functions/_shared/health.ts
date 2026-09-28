@@ -1,13 +1,15 @@
 // Per-source health + run tracking.
 //
-// Hard rule (non-negotiable): HTTP 200 with zero parsed items is NEVER a
-// success. It is recorded as PARSER_FAILURE / SOURCE_DEGRADED so a broken
-// source can never stay silently broken.
+// Status is derived from what actually happened, not from `found === 0`:
+//   healthy       fetch OK, records parsed, valid records produced
+//   no_new_items  fetch OK, parser OK, nothing new published (NOT a failure)
+//   degraded      fetch OK but most records invalid, fallback used, or stale
+//   broken        repeated fetch/parse failure (HTTP >= 400, timeout, exception)
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export type ParseStatus = "ok" | "empty" | "parser_failure" | "fetch_failure" | "skipped";
-export type HealthStatus = "healthy" | "degraded" | "broken" | "stale" | "unknown";
+export type HealthStatus = "healthy" | "no_new_items" | "degraded" | "broken" | "unknown";
 
 export interface SourceRunResult {
   sourceName: string;
@@ -17,13 +19,18 @@ export interface SourceRunResult {
   httpStatus?: number;
   pagesRequested?: number;
   itemsDiscovered: number;
+  itemsValid?: number;
   itemsNew?: number;
   itemsUpdated?: number;
   itemsDuplicates?: number;
   itemsRejected?: number;
   latestPublicationAt?: string | null;
   startedAt: number;
+  /** A real failure (network, HTTP, parser crash). Never set just because nothing was found. */
   error?: string | null;
+  /** Set when the raw response parsed but produced no structural records at all. */
+  parserEmpty?: boolean;
+  fallbackUsed?: boolean;
 }
 
 export function serviceClient(): SupabaseClient {
@@ -34,31 +41,66 @@ export function serviceClient(): SupabaseClient {
   );
 }
 
-export function classify(r: SourceRunResult): { parse: ParseStatus; status: HealthStatus } {
-  if (r.error && r.itemsDiscovered === 0) {
-    const fetchFail = r.httpStatus === undefined || r.httpStatus >= 400 || r.httpStatus === 0;
-    return { parse: fetchFail ? "fetch_failure" : "parser_failure", status: "broken" };
-  }
-  if (r.itemsDiscovered === 0) {
-    // HTTP OK but nothing extracted → degraded, never "healthy".
-    if (r.httpStatus && r.httpStatus < 400) return { parse: "parser_failure", status: "degraded" };
-    return { parse: "fetch_failure", status: "broken" };
-  }
-  return { parse: "ok", status: "healthy" };
+export function describeHttp(status?: number): string {
+  if (!status) return "Network error or timeout";
+  if (status === 403) return "HTTP 403 — source blocks automated access";
+  if (status === 404) return "HTTP 404 — endpoint moved or removed";
+  if (status === 410) return "HTTP 410 — endpoint discontinued";
+  if (status === 429) return "HTTP 429 — rate limited";
+  if (status >= 500) return `HTTP ${status} — source server error`;
+  return `HTTP ${status}`;
 }
 
-/** Age (hours) past which a source with no new item is considered stale. */
-function staleHours(sourceType?: string): number {
-  switch (sourceType) {
-    case "weather":
-    case "hazard":
-      return 12;
-    case "carrier":
-    case "authority":
-      return 96;
-    default:
-      return 72;
+export interface Classification {
+  parse: ParseStatus;
+  status: HealthStatus;
+  failure: boolean;
+  reason: string;
+}
+
+export function classify(r: SourceRunResult): Classification {
+  const valid = r.itemsValid ?? Math.max(0, r.itemsDiscovered - (r.itemsRejected ?? 0));
+  const invalid = Math.max(0, r.itemsDiscovered - valid);
+  const httpFail = r.httpStatus === 0 || (r.httpStatus !== undefined && r.httpStatus >= 400);
+
+  if (r.error && r.itemsDiscovered === 0) {
+    return {
+      parse: httpFail || r.httpStatus === undefined ? "fetch_failure" : "parser_failure",
+      status: "broken",
+      failure: true,
+      reason: httpFail ? `${describeHttp(r.httpStatus)}${r.error ? ` (${r.error.slice(0, 80)})` : ""}` : r.error.slice(0, 140),
+    };
   }
+  if (r.itemsDiscovered === 0) {
+    if (r.parserEmpty) {
+      return { parse: "parser_failure", status: "degraded", failure: true, reason: "Response received but parser returned no records" };
+    }
+    return { parse: "empty", status: "no_new_items", failure: false, reason: "Feed valid — no new publications" };
+  }
+  if (valid === 0) {
+    return { parse: "ok", status: "degraded", failure: false, reason: `${r.itemsDiscovered} records found, all failed validation` };
+  }
+  if (r.fallbackUsed) {
+    return { parse: "ok", status: "degraded", failure: false, reason: "Primary feed unavailable — official fallback page used" };
+  }
+  if (invalid > valid) {
+    return { parse: "ok", status: "degraded", failure: false, reason: `${r.itemsDiscovered} records found, ${invalid} failed validation` };
+  }
+  return {
+    parse: "ok",
+    status: "healthy",
+    failure: false,
+    reason: invalid > 0 ? `${valid} valid, ${invalid} rejected (outdated/duplicate/invalid)` : `${valid} valid records`,
+  };
+}
+
+/** Consecutive real failures before a source is declared broken. */
+export const BROKEN_AFTER = 3;
+
+export function finalStatus(c: Classification, consecutiveFailures: number): HealthStatus {
+  if (c.failure && consecutiveFailures < BROKEN_AFTER && c.status === "broken") return "degraded";
+  if (consecutiveFailures >= BROKEN_AFTER) return "broken";
+  return c.status;
 }
 
 export async function recordSourceRun(
@@ -66,16 +108,17 @@ export async function recordSourceRun(
   runId: string | null,
   r: SourceRunResult,
 ): Promise<void> {
-  const { parse, status } = classify(r);
+  const c = classify(r);
   const now = new Date().toISOString();
   const duration = Date.now() - r.startedAt;
+  const valid = r.itemsValid ?? Math.max(0, r.itemsDiscovered - (r.itemsRejected ?? 0));
 
   await db.from("source_runs").insert({
     run_id: runId,
     source_name: r.sourceName,
     started_at: new Date(r.startedAt).toISOString(),
     completed_at: now,
-    status: parse === "ok" ? "success" : parse === "parser_failure" ? "PARSER_FAILURE" : "SOURCE_DEGRADED",
+    status: c.failure ? (c.parse === "parser_failure" ? "PARSER_FAILURE" : "SOURCE_DEGRADED") : c.status === "no_new_items" ? "NO_NEW_ITEMS" : "success",
     http_status: r.httpStatus ?? null,
     fetch_method: r.fetchMethod ?? null,
     pages_requested: r.pagesRequested ?? 1,
@@ -94,17 +137,9 @@ export async function recordSourceRun(
     .eq("source_name", r.sourceName)
     .maybeSingle();
 
-  const ok = parse === "ok";
-  const consecutive = ok ? 0 : (prev?.consecutive_failures ?? 0) + 1;
+  const consecutive = c.failure ? (prev?.consecutive_failures ?? 0) + 1 : 0;
   const lastItemAt = r.itemsDiscovered > 0 ? now : (prev?.last_item_detected_at ?? null);
   const latestPub = r.latestPublicationAt ?? prev?.latest_source_publication_at ?? null;
-
-  const ageMs = lastItemAt ? Date.now() - new Date(lastItemAt).getTime() : Infinity;
-  const stale = ageMs > staleHours(r.sourceType) * 3600_000;
-
-  let finalStatus: HealthStatus = status;
-  if (ok && stale) finalStatus = "stale";
-  if (consecutive >= 3) finalStatus = "broken";
 
   await db.from("source_health").upsert(
     {
@@ -113,15 +148,21 @@ export async function recordSourceRun(
       source_type: r.sourceType ?? null,
       parser_method: r.fetchMethod ?? null,
       http_status: r.httpStatus ?? null,
-      parse_status: parse,
-      status: finalStatus,
+      parse_status: c.parse,
+      status: finalStatus(c, consecutive),
       last_attempt_at: now,
-      last_success_at: ok ? now : (prev?.last_success_at ?? null),
+      last_success_at: c.failure ? (prev?.last_success_at ?? null) : now,
       last_item_detected_at: lastItemAt,
       latest_source_publication_at: latestPub,
       items_found_last_run: r.itemsDiscovered,
+      items_valid_last_run: valid,
+      items_inserted_last_run: r.itemsNew ?? 0,
+      items_invalid_last_run: Math.max(0, r.itemsDiscovered - valid),
+      latency_ms: duration,
+      failure_reason: c.reason,
+      fallback_used: r.fallbackUsed ?? false,
       consecutive_failures: consecutive,
-      stale,
+      stale: false,
       last_error: r.error ?? null,
     },
     { onConflict: "source_name" },

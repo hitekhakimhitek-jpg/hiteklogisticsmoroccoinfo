@@ -197,13 +197,19 @@ serve(async (req) => {
     force = body?.force === true;
   } catch { /* no body */ }
 
-  await syncSourceRegistry(db, HAZARD_SOURCE_META);
+  // Register exactly what this collector monitors (including WMO Hub feeds).
+  const metaByName = new Map(HAZARD_SOURCE_META.map((m) => [m.name, m]));
+  const collectorMeta = HAZARD_SOURCES.map((s) => metaByName.get(s.name) ?? {
+    name: s.name, source_type: s.type, tier: s.tier, poll_interval_minutes: 30,
+    homepage: s.homepage, language: s.language, fetch_method: "feed",
+  });
+  await syncSourceRegistry(db, collectorMeta);
 
   // Respect each source's own polling interval instead of hammering
   // everything at the same frequency.
   const { data: healthRows } = await db.from("source_health").select("source_name, last_attempt_at");
   const lastAttempt = new Map((healthRows ?? []).map((h) => [h.source_name as string, h.last_attempt_at as string | null]));
-  const intervals = new Map(HAZARD_SOURCE_META.map((m) => [m.name, m.poll_interval_minutes]));
+  const intervals = new Map(collectorMeta.map((m) => [m.name, m.poll_interval_minutes]));
 
   const sources = (onlySource
     ? HAZARD_SOURCES.filter((s) => s.name.toLowerCase() === onlySource!.toLowerCase())
@@ -289,13 +295,15 @@ serve(async (req) => {
       fetchMethod: outcome.method,
       httpStatus: outcome.httpStatus,
       pagesRequested: outcome.pagesRequested,
-      itemsDiscovered: items.length,
+      itemsDiscovered: outcome.items.length,
+      itemsValid: items.length,
       itemsNew: newCount,
       itemsDuplicates: dupes,
       itemsRejected: outcome.items.length - items.length,
       latestPublicationAt: latestPub,
       startedAt,
-      error: outcome.error ?? (outcome.items.length > 0 && items.length === 0 ? "records parsed but none hazard-shaped" : null),
+      // A warning feed with no active warnings is healthy/quiet, not broken.
+      error: outcome.error ?? null,
     });
 
     report.push({
