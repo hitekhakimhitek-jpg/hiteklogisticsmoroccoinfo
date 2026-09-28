@@ -322,7 +322,7 @@ const SettingsPage = () => {
                     <TableCell className="text-right tabular-nums">{source.items_inserted_last_run ?? 0}</TableCell>
                     <TableCell className="text-muted-foreground">{source.last_success_at ? new Date(source.last_success_at).toLocaleString() : "Never"}</TableCell>
                     <TableCell className="text-muted-foreground">{source.last_attempt_at ? new Date(source.last_attempt_at).toLocaleString() : "Never"}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-[220px]">{source.failure_reason ?? source.last_error ?? "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground min-w-[280px]">{source.failure_reason ?? source.last_error ?? "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
