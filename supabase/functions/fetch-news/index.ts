@@ -45,7 +45,7 @@ const BAD_ARTICLE_PATH = /\/(tag|tags|sujet|category|categories|categorie|topic|
 const JUNK_DOMAINS = /(^|\.)(tiktok|instagram|facebook|x|twitter|pinterest|youtube|reddit|linkedin|merriam-webster|wikipedia|ticketmaster|tripadvisor|amazon)\.[a-z.]+$/i;
 
 // Sites that reliably answer bot requests with 403/429 but are vetted sources.
-const BOT_BLOCKED_TRUSTED = /(^|\.)(medias24\.com|leconomiste\.com|lematin\.ma|hespress\.com|lopinion\.ma|venturebeat\.com|joc\.com|lloydslist\.com)$/i;
+const BOT_BLOCKED_TRUSTED = /(^|\.)(medias24\.com|leconomiste\.com|lematin\.ma|hespress\.com|unctad\.org|lopinion\.ma|venturebeat\.com|joc\.com|lloydslist\.com)$/i;
 
 // ---------------------------------------------------------------------------
 // Firecrawl rate limiter.
@@ -321,7 +321,7 @@ const SOURCE_QUERIES: Record<string, string[]> = {
   "CISA": ["CISA advisory vulnerability alert critical infrastructure site:cisa.gov"],
   "The Register": ["cybersecurity IT infrastructure enterprise site:theregister.com"],
   "TechTarget": ["TechTarget cybersecurity IT infrastructure enterprise site:techtarget.com"],
-  "Microsoft Security": ["Microsoft security update patch Tuesday MSRC site:msrc.microsoft.com OR site:microsoft.com/security"],
+  "Microsoft Security": ["Microsoft Teams OR OneDrive OR Windows security vulnerability patch news site:msrc.microsoft.com/blog OR site:microsoft.com/en-us/security/blog"],
   "Google Cloud": ["Google Cloud security bulletin release notes site:cloud.google.com"],
   "AWS Security": ["AWS security advisory update site:aws.amazon.com/security OR site:aws.amazon.com/about-aws/whats-new"],
   "Ars Technica": ["technology cybersecurity AI news site:arstechnica.com"],
@@ -335,7 +335,7 @@ const SOURCE_QUERIES: Record<string, string[]> = {
   "SD Times": ["SD Times software development DevOps enterprise IT site:sdtimes.com"],
   "ACM TechNews": ["ACM TechNews computing technology research site:technews.acm.org OR site:cacm.acm.org"],
   // TIER 6 — Market intelligence
-  "UNCTAD": ["UNCTAD review maritime transport shipping site:unctad.org"],
+  "UNCTAD": ["UNCTAD shipping trade news site:unctad.org/news"],
   "World Bank": ["World Bank logistics trade development site:worldbank.org"],
   "World Bank LPI": ["World Bank logistics performance index LPI site:lpi.worldbank.org"],
   "ITC Trade Map": ["ITC trade map Morocco trade flows site:trademap.org"],
