@@ -1096,7 +1096,7 @@ serve(async (req) => {
         candidates_accepted: 0,
         rejection_counts: rejectionStats,
       });
-      await recordNewsHealth(uniqueArticles, [], [], "No articles passed source/date/link validation");
+      await recordNewsHealth(uniqueArticles, [], []);
       if (leaseToken) {
         await supabase.rpc("release_pipeline_lease", {
           _pipeline: "fetch-news", _token: leaseToken, _succeeded: true, _stage: "validation_empty", _error: null,
@@ -1296,7 +1296,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
         candidates_accepted: validatedArticles.length,
         rejection_counts: rejectionStats,
       });
-      await recordNewsHealth(uniqueArticles, validatedArticles, [], "AI relevance classification returned no logistics items");
+      await recordNewsHealth(uniqueArticles, validatedArticles, []);
       if (leaseToken) {
         await supabase.rpc("release_pipeline_lease", {
           _pipeline: "fetch-news", _token: leaseToken, _succeeded: true, _stage: "classified_empty", _error: null,
