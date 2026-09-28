@@ -88,7 +88,7 @@ export function classify(r: SourceRunResult): Classification {
   if (r.fallbackUsed) {
     return { parse: "ok", status: "degraded", failure: false, reason: "Primary feed unavailable — official fallback page used" };
   }
-  if (invalid > valid && !r.alertFeed) {
+  if (invalid > valid * 4 && !r.alertFeed) {
     return { parse: "ok", status: "degraded", failure: false, reason: `${r.itemsDiscovered} records found, ${invalid} failed validation` };
   }
   return {
