@@ -109,9 +109,32 @@ const SettingsPage = () => {
       await addSource.mutateAsync({ name, homepage });
       setNewSource("");
       setNewSourceUrl("");
-      toast.success(`${name} added — it will be scraped on the next daily run.`);
+      toast.success(`${name} added — checking it now…`);
+      void checkSource(name);
     } catch (e) {
-      toast.error((e as Error).message);
+      const msg = (e as Error).message;
+      toast.error(/duplicate|unique/i.test(msg) ? "A source with that name already exists." : msg);
+    }
+  };
+
+  const [checking, setChecking] = useState<string | null>(null);
+  const checkSource = async (name: string) => {
+    setChecking(name);
+    try {
+      const { data, error } = await supabase.functions.invoke("fetch-news", { body: { sources: [name], force: true } });
+      if (error) throw error;
+      if (data?.status === "already_running") {
+        toast.info(`A refresh is already running — ${name} will be checked on the next run.`);
+      } else {
+        const { data: h } = await supabase.from("source_health").select("status,failure_reason").eq("source_name", name).maybeSingle();
+        const ok = h && h.status !== "broken" && h.status !== "degraded";
+        (ok ? toast.success : toast.error)(`${name}: ${h?.failure_reason ?? "checked"}${data?.count ? ` — ${data.count} new item(s)` : ""}`);
+      }
+      qc.invalidateQueries();
+    } catch (e) {
+      toast.error(`Could not check ${name}: ${(e as Error).message}`);
+    } finally {
+      setChecking(null);
     }
   };
 
@@ -224,7 +247,10 @@ const SettingsPage = () => {
                     {customSources.map((s) => (
                       <span key={s.id} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full bg-secondary/10 border border-secondary/30 text-card-foreground">
                         {s.name}
-                        <button onClick={() => removeSource.mutate(s.id)} className="hover:text-destructive">
+                        <button onClick={() => checkSource(s.name)} disabled={checking !== null} title="Check this source now" className="hover:text-secondary disabled:opacity-40">
+                          <RefreshCw className={`w-3 h-3 ${checking === s.name ? "animate-spin" : ""}`} />
+                        </button>
+                        <button onClick={() => removeSource.mutate(s.id)} title="Remove source" className="hover:text-destructive">
                           <X className="w-3 h-3" />
                         </button>
                       </span>
