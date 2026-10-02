@@ -869,12 +869,17 @@ serve(async (req) => {
         .select("name, homepage")
         .eq("source_type", "custom")
         .eq("enabled", true);
+      // Manual runs: a targeted check of named sources only scrapes those; a
+      // general manual refresh always includes every admin-added source so a
+      // stale Settings selection can never silently exclude them.
+      const named = (enabledSources ?? []).filter((n) => (customSources ?? []).some((s) => s.name === n));
       const customInThisBatch = enabledSources
-        ? (customSources ?? []).filter((source) => enabledSources?.includes(source.name))
+        ? (named.length > 0 ? (customSources ?? []).filter((s) => named.includes(s.name)) : (customSources ?? []))
         : batch % batchCount === 0 ? (customSources ?? []) : [];
       for (const src of customInThisBatch) {
         if (!src.homepage) continue;
         plannedSourceNames.add(src.name);
+        sourceMeta.set(src.name, { name: src.name, homepage: src.homepage, source_type: "news", tier: 3, poll_interval_minutes: 1440, fetch_method: "firecrawl" });
         if (budgetLeftMs() < 25_000) {
           console.log(`[budget] skipping remaining custom source scrapes (${Math.round(budgetLeftMs() / 1000)}s left)`);
           break;
@@ -883,6 +888,10 @@ serve(async (req) => {
           const mapped = await firecrawlMapDomain(FIRECRAWL_API_KEY, src.homepage);
           const discovered = mapped.length > 0 ? mapped : await firecrawlHarvestLinks(FIRECRAWL_API_KEY, src.homepage);
           const candidateUrls = Array.from(new Set(discovered)).slice(0, 25);
+          if (candidateUrls.length === 0) {
+            searchHttp.set(src.name, 0);
+            searchErr.set(src.name, "No article links could be read from this website");
+          }
           const toScrape = (await filterUnseenUrls(supabase, candidateUrls)).slice(0, 4);
           const scraped = await Promise.all(toScrape.map((u) => firecrawlScrapeUrl(FIRECRAWL_API_KEY, u)));
           let count = 0;
@@ -898,9 +907,14 @@ serve(async (req) => {
             });
             count += 1;
           }
+          if (toScrape.length > 0 && count === 0) {
+            searchErr.set(src.name, `${toScrape.length} article pages could not be read`);
+          }
           console.log(`[custom-direct] ${src.name}: mapped=${candidateUrls.length}, scraped=${count}`);
         } catch (e) {
           console.error(`Custom source scrape failed for ${src.name}:`, e);
+          searchHttp.set(src.name, 0);
+          searchErr.set(src.name, (e as Error).message?.slice(0, 120) || "Scrape failed");
         }
       }
     }
