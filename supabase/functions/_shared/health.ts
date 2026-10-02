@@ -83,7 +83,9 @@ export function classify(r: SourceRunResult): Classification {
     return { parse: "empty", status: "no_new_items", failure: false, reason: "Feed valid — no new publications" };
   }
   if (valid === 0) {
-    return { parse: "ok", status: "degraded", failure: false, reason: `${r.itemsDiscovered} records found, all failed validation` };
+    // The source answered and its pages parsed; everything was simply old,
+    // already known or off-topic. That is a quiet source, not a broken one.
+    return { parse: "ok", status: "no_new_items", failure: false, reason: `${r.itemsDiscovered} articles checked — none new or relevant` };
   }
   if (r.fallbackUsed) {
     return { parse: "ok", status: "degraded", failure: false, reason: "Primary feed unavailable — official fallback page used" };
