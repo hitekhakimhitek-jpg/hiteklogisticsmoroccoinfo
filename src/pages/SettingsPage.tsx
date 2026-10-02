@@ -130,7 +130,7 @@ const SettingsPage = () => {
         const ok = h && h.status !== "broken" && h.status !== "degraded";
         (ok ? toast.success : toast.error)(`${name}: ${h?.failure_reason ?? "checked"}${data?.count ? ` — ${data.count} new item(s)` : ""}`);
       }
-      qc.invalidateQueries();
+      queryClient.invalidateQueries();
     } catch (e) {
       toast.error(`Could not check ${name}: ${(e as Error).message}`);
     } finally {
