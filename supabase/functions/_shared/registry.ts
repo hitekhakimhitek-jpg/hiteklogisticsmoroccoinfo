@@ -117,6 +117,8 @@ export const NEWS_SOURCE_META: SourceMeta[] = [
   t3("IT Security Guru", "https://www.itsecurityguru.org", "it", 360),
   t3("SD Times", "https://sdtimes.com", "it", 720),
   t3("ACM TechNews", "https://technews.acm.org", "it", 720),
+  // Always-on breaking-news sweep (free Google News feed, no paid scraping)
+  t2("Global Breaking News", "https://news.google.com", "news", 60),
 ];
 
 export const ALL_SOURCE_META = [...HAZARD_SOURCE_META, ...NEWS_SOURCE_META];

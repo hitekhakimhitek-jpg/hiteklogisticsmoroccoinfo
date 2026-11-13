@@ -45,7 +45,7 @@ const BAD_ARTICLE_PATH = /\/(tag|tags|sujet|category|categories|categorie|topic|
 const JUNK_DOMAINS = /(^|\.)(tiktok|instagram|facebook|x|twitter|pinterest|youtube|reddit|linkedin|merriam-webster|wikipedia|ticketmaster|tripadvisor|amazon)\.[a-z.]+$/i;
 
 // Sites that reliably answer bot requests with 403/429 but are vetted sources.
-const BOT_BLOCKED_TRUSTED = /(^|\.)(medias24\.com|leconomiste\.com|lematin\.ma|hespress\.com|unctad\.org|lopinion\.ma|venturebeat\.com|joc\.com|lloydslist\.com)$/i;
+const BOT_BLOCKED_TRUSTED = /(^|\.)(medias24\.com|leconomiste\.com|lematin\.ma|hespress\.com|unctad\.org|lopinion\.ma|venturebeat\.com|joc\.com|lloydslist\.com|news\.google\.com)$/i;
 
 // ---------------------------------------------------------------------------
 // Firecrawl rate limiter.
@@ -115,6 +115,49 @@ async function firecrawlFetch(url: string, init: RequestInit, timeoutMs: number)
 
 /** Drop URLs we have already ingested so Firecrawl credits and rate budget are
  *  only spent on genuinely new articles. */
+
+// ---- Free fallback: Google News RSS (no API key, no credits) ----
+// Used whenever the paid search API fails (e.g. 402 out of credits) and for an
+// always-on breaking sweep, so the feed never goes silent.
+export const BREAKING_QUERIES = [
+  "Microsoft Outlook OR Office 365 OR Microsoft 365 OR Teams outage",
+  "global IT outage OR cyberattack logistics OR shipping",
+  "port strike OR port closure OR port congestion",
+  "Suez OR Red Sea OR Panama Canal shipping disruption",
+  "air cargo disruption OR airport closure",
+  "Tanger Med OR Morocco port OR Morocco customs",
+  "container shipping freight rates surge",
+  "customs regulation tariff change trade",
+];
+async function googleNewsSearch(query: string, source: string, limit = 10) {
+  const q = query.replace(/\bsite:\S+/gi, " ").replace(/\s+OR\s+(OR\s+)+/g, " OR ").replace(/(^\s*OR\s+|\s+OR\s*$)/g, "").trim();
+  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q + " when:7d")}&hl=en-US&gl=US&ceid=US:en`;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "Mozilla/5.0 HitekIntelligenceBot/1.0" } });
+    if (!res.ok) return { ok: false, status: res.status, items: [] as any[] };
+    const xml = await res.text();
+    const tag = (b: string, n: string) => (b.match(new RegExp(`<${n}[^>]*>([\\s\\S]*?)</${n}>`, "i"))?.[1] ?? "")
+      .replace(/<!\[CDATA\[|\]\]>/g, "").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;|&gt;/g, " ").replace(/\s+/g, " ").trim();
+    const items = [...xml.matchAll(/<item>[\s\S]*?<\/item>/gi)].slice(0, limit).map((m) => {
+      const b = m[0];
+      const publisher = tag(b, "source");
+      let title = tag(b, "title");
+      if (publisher && title.endsWith(` - ${publisher}`)) title = title.slice(0, -(publisher.length + 3));
+      const d = new Date(tag(b, "pubDate"));
+      return {
+        title, url: tag(b, "link"), description: tag(b, "description").slice(0, 500) || title,
+        source, markdown: `${title}. Publisher: ${publisher}`,
+        publishedDate: isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10),
+      };
+    }).filter((i) => i.title && /^https?:\/\//.test(i.url));
+    return { ok: true, status: 200, items };
+  } catch (e) {
+    return { ok: false, status: 0, items: [] as any[], error: (e as Error).message };
+  } finally { clearTimeout(t); }
+}
+
 async function filterUnseenUrls(supabase: any, urls: string[]): Promise<string[]> {
   if (urls.length === 0) return urls;
   try {
@@ -773,6 +816,13 @@ serve(async (req) => {
           console.error(`Firecrawl search error for "${query.substring(0, 50)}...":`, response.status, errText);
           queryStats.failed++;
           searchHttp.set(source, response.status);
+          // Paid search failed — fall back to the free news feed for this source.
+          const fb = await googleNewsSearch(query, source, 7);
+          if (fb.ok) {
+            searchHttp.set(source, 200);
+            if (fb.items.length === 0) queryStats.empty++; else queryStats.ok++;
+            return fb.items;
+          }
           searchErr.set(source, `Search API HTTP ${response.status}`);
           return [];
         }
@@ -798,7 +848,16 @@ serve(async (req) => {
       }
     });
 
-    const settled = await Promise.allSettled(searchPromises);
+    // Always-on breaking sweep: catches wide-impact events (e.g. Outlook down)
+    // regardless of which source cohort runs or whether paid search works.
+    plannedSourceNames.add("Global Breaking News");
+    const breakingPromises = BREAKING_QUERIES.map(async (q) => {
+      const r = await googleNewsSearch(q, "Global Breaking News", 6);
+      if (!r.ok) searchErr.set("Global Breaking News", `News feed HTTP ${r.status}`);
+      else searchHttp.set("Global Breaking News", 200);
+      return r.items;
+    });
+    const settled = await Promise.allSettled([...searchPromises, ...breakingPromises]);
     const results = settled.map((s) => (s.status === "fulfilled" ? s.value : []));
     console.log(`[search-stats] ok=${queryStats.ok} empty=${queryStats.empty} failed=${queryStats.failed} of ${searchPlans.length}`);
     for (const batch of results) {
