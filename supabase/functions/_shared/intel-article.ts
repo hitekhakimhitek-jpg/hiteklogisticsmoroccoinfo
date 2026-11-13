@@ -104,3 +104,33 @@ export function areLikelyDuplicateTitles(a?: string | null, b?: string | null): 
   for (const word of A) if (B.has(word)) overlap++;
   return overlap >= 4 && overlap / Math.min(A.size, B.size) >= 0.82;
 }
+// Same-story detection for differently-worded headlines about one event
+// ("Microsoft Outlook goes down" vs "Massive Microsoft 365 outage disrupts Outlook").
+const STORY_EVENTS: Array<[string, RegExp]> = [
+  ["outage", /outage|goes down|\bdown\b|disrupt\w* (?:outlook|teams|services)|offline/i],
+  ["strike", /strike|walkout|industrial action/i],
+  ["closure", /closure|closed|shut ?down|suspend/i],
+  ["transit", /transit|resum\w+|return\w* to/i],
+  ["congestion", /congestion|backlog/i],
+  ["attack", /attack|hijack|seiz\w+|missile|drone/i],
+  ["tariff", /tariff|duty|duties/i],
+];
+const STORY_ENTITY_STOP = new Set(["the", "what", "when", "how", "why", "new", "global", "massive", "major", "first", "after", "into", "news", "report", "reports", "friday", "monday", "tuesday", "wednesday", "thursday", "saturday", "sunday"]);
+function storyEntities(title: string): Set<string> {
+  const out = new Set<string>();
+  for (const m of cleanTitle(title).matchAll(/\b[A-Z][A-Za-z0-9]{2,}\b/g)) {
+    const w = m[0].toLowerCase();
+    if (!STORY_ENTITY_STOP.has(w)) out.add(w);
+  }
+  return out;
+}
+export function areSameStory(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  if (areLikelyDuplicateTitles(a, b)) return true;
+  const shared = STORY_EVENTS.some(([, re]) => re.test(a) && re.test(b));
+  if (!shared) return false;
+  const A = storyEntities(a), B = storyEntities(b);
+  let overlap = 0;
+  for (const w of A) if (B.has(w)) overlap++;
+  return overlap >= 2 || (overlap >= 1 && Math.min(A.size, B.size) <= 2);
+}

@@ -4,7 +4,7 @@ import { corsHeaders, requireHitekAdmin } from "../_shared/auth.ts";
 import { recordSourceRun } from "../_shared/health.ts";
 import { NEWS_SOURCE_META, syncSourceRegistry } from "../_shared/registry.ts";
 import { assessIntelligenceQuality } from "../_shared/intel-quality.ts";
-import { areLikelyDuplicateTitles, canonicalizeUrl, cleanSummary, cleanTitle, nonArticleReason } from "../_shared/intel-article.ts";
+import { areLikelyDuplicateTitles, areSameStory, canonicalizeUrl, cleanSummary, cleanTitle, nonArticleReason } from "../_shared/intel-article.ts";
 
 const CATEGORIES = ["regulation", "weather", "port", "trade", "compliance", "market", "general"];
 const REGIONS = [
@@ -1092,7 +1092,7 @@ serve(async (req) => {
     );
     const uniqueArticles: typeof byCanonicalUrl = [];
     for (const article of byCanonicalUrl) {
-      if (!uniqueArticles.some((existing) => areLikelyDuplicateTitles(existing.title, article.title))) {
+      if (!uniqueArticles.some((existing) => areSameStory(existing.title, article.title))) {
         uniqueArticles.push(article);
       }
     }
@@ -1514,7 +1514,7 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
     const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const { data: existing } = await supabase
       .from("news_entries")
-      .select("source_url")
+      .select("source_url, headline, published_date")
       .gte("published_date", fourteenDaysAgo)
       .order("published_date", { ascending: false })
       .limit(2000);
@@ -1529,6 +1529,9 @@ Return ONLY the JSON array. No markdown fences, no commentary.`;
     const newRows = rows.filter((r: any) => {
       const canonical = canonicalizeUrl(r.source_url);
       if (canonical && existingUrls.has(canonical)) return false;
+      // Same event already reported in the last 3 days under another headline.
+      const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10);
+      if ((existing ?? []).some((e: any) => e.published_date >= threeDaysAgo && areSameStory(e.headline, r.headline))) return false;
       return true;
     });
 

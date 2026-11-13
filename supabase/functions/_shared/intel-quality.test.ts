@@ -11,6 +11,8 @@ const cases = [
   ["CISA orders urgent patching of actively exploited Zimbra flaw", "it", "this_week", "accept"],
   ["Pirates hijack tanker in Gulf of Aden", "operations", "this_week", "accept"],
   ["Google Cloud Load Balancing release notes", "it", "awareness", "reject"],
+  ["Microsoft Outlook goes down worldwide, paralyzing business email", "it", "act_now", "accept"],
+  ["Cloudflare outage takes major websites offline", "it", "this_week", "accept"],
   ["Musées: les nouveaux ambassadeurs du tourisme culturel", "commercial", "awareness", "reject"],
 ] as const;
 
@@ -66,4 +68,11 @@ Deno.test("canonical duplicate headlines match", () => {
 Deno.test("summary cleanup removes URLs hashtags and promotional copy", () => {
   const value = cleanSummary("Houthis escalated their shipping campaign with a VLCC strike. Get the daily insights that power maritime professionals worldwide ### https://example.com/story");
   assertEquals(value, "Houthis escalated their shipping campaign with a VLCC strike.");
+});
+import { areSameStory } from "./intel-article.ts";
+Deno.test("differently worded headlines about one outage are one story", () => {
+  assertEquals(areSameStory("Microsoft Outlook Goes Down, Paralyzing Business Communication", "Massive Microsoft 365 outage disrupts Outlook, Teams, Copilot worldwide"), true);
+  assertEquals(areSameStory("Evergreen resumes Suez Canal transits after three years", "Evergreen joins growing list of shipping lines returning to Suez Canal"), true);
+  assertEquals(areSameStory("Port strike in Antwerp halts terminals", "Microsoft Outlook goes down worldwide"), false);
+  assertEquals(areSameStory("Bahri-owned tanker hit in Red Sea", "Container freight rates could fall 30% as Suez return tests market"), false);
 });

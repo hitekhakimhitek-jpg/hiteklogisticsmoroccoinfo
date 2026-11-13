@@ -49,6 +49,10 @@ const DIRECT_HITEK = /hitek|tanger med|tangier med|morocco.spain|spain.morocco|a
 const IMMEDIATE = /closed|closure|blocked|shutdown|halted|suspended routes?|carrier suspension|force majeure|effective immediately|within 24 hours|active disruption|currently disrupted|actual compromise/i;
 const DEVELOPING = /upcoming strike|planned strike|worsening congestion|delay|diversion|backlog|actively exploited|mandatory|effective (?:on|from)|deadline|significant freight rate/i;
 const SOURCE_ALARM = /\bcritical\b|urgent|severe|catastrophic|major|emergency|maximum severity|dangerous|warning|alert/i;
+// Wide service outages of business-critical tools (mail, Teams, cloud) stop
+// bookings, customs filings and customer communication for every team.
+const SERVICE_OUTAGE = /(?:outlook|exchange online|microsoft 365|office 365|\bm365\b|\bteams\b|onedrive|sharepoint|azure|aws|google cloud|google workspace|gmail|cloudflare|crowdstrike|cargowise).{0,80}(?:outage|down\b|disrupt|not working|service incident|offline)|(?:outage|down\b|disrupt|service incident|offline).{0,80}(?:outlook|exchange online|microsoft 365|office 365|\bteams\b|onedrive|azure|aws|google cloud|gmail|cloudflare|crowdstrike|cargowise)/i;
+const CORE_COLLAB_OUTAGE = /outlook|exchange online|microsoft 365|office 365|\bteams\b|onedrive/i;
 const PORT_CONGESTION = /(?:global\s+)?port congestion|congestion.{0,50}(?:port|terminal)|(?:port|terminal).{0,50}congestion/i;
 
 function technologyMatch(text: string, usage: QualityInput["technologyUsage"] = {}) {
@@ -68,10 +72,12 @@ export function assessIntelligenceQuality(input: QualityInput): QualityAssessmen
   const tech = technologyMatch(text, input.technologyUsage);
   const isCyber = CYBER.test(text);
   const isMaritime = MARITIME.test(text);
+  const isOutage = SERVICE_OUTAGE.test(text);
 
   let department: IntelDepartment;
   let departmentConfidence = 0.9;
-  if (isMaritime || OPERATIONS.test(text)) department = "operations";
+  if (isOutage && !isMaritime) department = "it";
+  else if (isMaritime || OPERATIONS.test(text)) department = "operations";
   else if (isCyber || ENTERPRISE_IT.test(text)) department = "it";
   else if (COMPLIANCE.test(text)) department = "compliance";
   else if (INDUSTRY.test(text) || COMMERCIAL.test(text) || /tourism|tourisme|museum|musée/i.test(text)) department = "commercial";
@@ -105,6 +111,7 @@ export function assessIntelligenceQuality(input: QualityInput): QualityAssessmen
   if (/release notes/i.test(text) && !DIRECT_HITEK.test(text)) relevanceScore = 5;
   if (tech?.state === "not_used") relevanceScore = Math.min(relevanceScore, 20);
   if (isCyber && !ENTERPRISE_IT.test(text) && !tech) relevanceScore = Math.max(relevanceScore, 35);
+  if (isOutage) { relevanceScore = Math.max(relevanceScore, 75); reasons.push("wide business-tool outage"); }
   relevanceScore = Math.max(0, Math.min(100, relevanceScore));
 
   let relevanceStatus: QualityAssessment["relevanceStatus"] = relevanceScore >= 55 ? "accept" : relevanceScore >= 35 ? "review" : "reject";
@@ -135,6 +142,8 @@ export function assessIntelligenceQuality(input: QualityInput): QualityAssessmen
     else if (tech?.state === "used" && activelyExploited && direct) severityScore = 85;
     else if (ENTERPRISE_IT.test(text) && activelyExploited) severityScore = 65;
     severityScore = tech?.state === "used" && activelyExploited && direct ? severityScore : Math.min(severityScore, 79);
+    // Outlook/Teams/OneDrive outages are the configured IT exception that may be Critical.
+    if (isOutage) severityScore = CORE_COLLAB_OUTAGE.test(text) ? 82 : 62;
   }
   if (relevanceStatus === "reject") severityScore = Math.min(severityScore, 34);
   severityScore = Math.max(0, Math.min(100, severityScore));
