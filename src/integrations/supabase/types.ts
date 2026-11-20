@@ -398,6 +398,30 @@ export type Database = {
         }
         Relationships: []
       }
+      ingestion_service_state: {
+        Row: {
+          blocked_until: string | null
+          failure_reason: string | null
+          last_checked_at: string
+          service_key: string
+          updated_at: string
+        }
+        Insert: {
+          blocked_until?: string | null
+          failure_reason?: string | null
+          last_checked_at?: string
+          service_key: string
+          updated_at?: string
+        }
+        Update: {
+          blocked_until?: string | null
+          failure_reason?: string | null
+          last_checked_at?: string
+          service_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       intel_feedback: {
         Row: {
           created_at: string

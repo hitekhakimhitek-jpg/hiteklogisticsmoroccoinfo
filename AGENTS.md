@@ -1,0 +1,2 @@
+# Architecture decisions
+- Keep news ingestion resilient without paid scraping: use the free RSS fallback, preserve publisher attribution, and persist temporary provider cooldowns so scheduled runs recover automatically.

@@ -8,6 +8,13 @@
       "when": 1794562930718,
       "tag": "0000_tighten_permissive_read_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795167647802,
+      "tag": "0001_ingestion_service_state",
+      "breakpoints": true
     }
   ]
 }

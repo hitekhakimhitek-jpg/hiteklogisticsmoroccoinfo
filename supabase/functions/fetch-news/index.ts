@@ -5,6 +5,7 @@ import { recordSourceRun } from "../_shared/health.ts";
 import { NEWS_SOURCE_META, syncSourceRegistry } from "../_shared/registry.ts";
 import { assessIntelligenceQuality } from "../_shared/intel-quality.ts";
 import { areLikelyDuplicateTitles, areSameStory, canonicalizeUrl, cleanSummary, cleanTitle, nonArticleReason } from "../_shared/intel-article.ts";
+import { buildGoogleNewsRssUrl, parseGoogleNewsRss } from "../_shared/google-news.ts";
 
 const CATEGORIES = ["regulation", "weather", "port", "trade", "compliance", "market", "general"];
 const REGIONS = [
@@ -59,6 +60,9 @@ const REQS_PER_WINDOW = 10;
 const WINDOW_MS = 60_000;
 const MAX_CONCURRENCY = 3;
 const MAX_RETRIES = 3;
+const FIRECRAWL_CREDIT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+let firecrawlCreditBlockedUntil = 0;
+let persistFirecrawlCreditBlock: ((reason: string) => Promise<void>) | null = null;
 // The edge worker is terminated after ~3.5 minutes. Scraping passes must stop
 // well before that so the articles already gathered still get processed,
 // inserted and reported instead of dying mid-run.
@@ -92,12 +96,28 @@ async function acquireSlot(): Promise<void> {
 
 async function firecrawlFetch(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (Date.now() < firecrawlCreditBlockedUntil) {
+      throw new Error("Firecrawl credit limit recently reached; using the free news fallback");
+    }
     await acquireSlot();
     let resp: Response;
     try {
       resp = await fetchWithTimeout(url, init, timeoutMs);
     } finally {
       inFlight--;
+    }
+    if (resp.status === 402) {
+      firecrawlCreditBlockedUntil = Date.now() + FIRECRAWL_CREDIT_COOLDOWN_MS;
+      await persistFirecrawlCreditBlock?.("Firecrawl credits exhausted (HTTP 402)");
+      return resp;
+    }
+    if (resp.status === 403) {
+      const body = await resp.clone().text();
+      if (/credit limit reached/i.test(body)) {
+        firecrawlCreditBlockedUntil = Date.now() + FIRECRAWL_CREDIT_COOLDOWN_MS;
+        await persistFirecrawlCreditBlock?.("Firecrawl credit limit reached (HTTP 403)");
+      }
+      return resp;
     }
     if (resp.status !== 429 || attempt === MAX_RETRIES - 1) return resp;
     const body = await resp.text();
@@ -129,29 +149,15 @@ export const BREAKING_QUERIES = [
   "container shipping freight rates surge",
   "customs regulation tariff change trade",
 ];
-async function googleNewsSearch(query: string, source: string, limit = 10) {
-  const q = query.replace(/\bsite:\S+/gi, " ").replace(/\s+OR\s+(OR\s+)+/g, " OR ").replace(/(^\s*OR\s+|\s+OR\s*$)/g, "").trim();
-  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q + " when:7d")}&hl=en-US&gl=US&ceid=US:en`;
+async function googleNewsSearch(query: string, source: string, limit = 10, preserveSiteFilter = false) {
+  const url = buildGoogleNewsRssUrl(query, preserveSiteFilter);
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 15000);
   try {
     const res = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "Mozilla/5.0 HitekIntelligenceBot/1.0" } });
     if (!res.ok) return { ok: false, status: res.status, items: [] as any[] };
     const xml = await res.text();
-    const tag = (b: string, n: string) => (b.match(new RegExp(`<${n}[^>]*>([\\s\\S]*?)</${n}>`, "i"))?.[1] ?? "")
-      .replace(/<!\[CDATA\[|\]\]>/g, "").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;|&gt;/g, " ").replace(/\s+/g, " ").trim();
-    const items = [...xml.matchAll(/<item>[\s\S]*?<\/item>/gi)].slice(0, limit).map((m) => {
-      const b = m[0];
-      const publisher = tag(b, "source");
-      let title = tag(b, "title");
-      if (publisher && title.endsWith(` - ${publisher}`)) title = title.slice(0, -(publisher.length + 3));
-      const d = new Date(tag(b, "pubDate"));
-      return {
-        title, url: tag(b, "link"), description: tag(b, "description").slice(0, 500) || title,
-        source, markdown: `${title}. Publisher: ${publisher}`,
-        publishedDate: isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10),
-      };
-    }).filter((i) => i.title && /^https?:\/\//.test(i.url));
+    const items = parseGoogleNewsRss(xml, source, limit);
     return { ok: true, status: 200, items };
   } catch (e) {
     return { ok: false, status: 0, items: [] as any[], error: (e as Error).message };
@@ -668,8 +674,7 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!FIRECRAWL_API_KEY) throw new Error("FIRECRAWL_API_KEY is not configured. Please connect Firecrawl.");
-    if (!LOVABLE_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error("Missing required environment variables");
     }
 
@@ -733,6 +738,53 @@ serve(async (req) => {
       });
     }
     leaseToken = acquiredLease;
+    const { data: serviceState } = await supabase
+      .from("ingestion_service_state")
+      .select("blocked_until")
+      .eq("service_key", "firecrawl")
+      .maybeSingle();
+    const storedBlockUntil = serviceState?.blocked_until ? new Date(serviceState.blocked_until).getTime() : 0;
+    firecrawlCreditBlockedUntil = Math.max(firecrawlCreditBlockedUntil, storedBlockUntil || 0);
+    let firecrawlDisabled = !FIRECRAWL_API_KEY || Date.now() < firecrawlCreditBlockedUntil;
+    persistFirecrawlCreditBlock = async (reason) => {
+      firecrawlDisabled = true;
+      const blockedUntil = new Date(Date.now() + FIRECRAWL_CREDIT_COOLDOWN_MS).toISOString();
+      firecrawlCreditBlockedUntil = new Date(blockedUntil).getTime();
+      const now = new Date().toISOString();
+      const { error } = await supabase.from("ingestion_service_state").upsert({
+        service_key: "firecrawl",
+        blocked_until: blockedUntil,
+        failure_reason: reason.slice(0, 500),
+        last_checked_at: now,
+        updated_at: now,
+      }, { onConflict: "service_key" });
+      if (error) console.error("Could not save Firecrawl cooldown:", error.message);
+    };
+    if (firecrawlDisabled) console.warn("Firecrawl is unavailable or cooling down; using free news feeds for this run.");
+    const { data: enabledCustomSources, error: customSourcesError } = await supabase
+      .from("sources")
+      .select("name, homepage")
+      .eq("source_type", "custom")
+      .eq("enabled", true);
+    if (customSourcesError) console.error("Could not load user-added sources:", customSourcesError.message);
+    const customSourceList = enabledCustomSources ?? [];
+    const namedCustomSources = (enabledSources ?? []).filter((name) => customSourceList.some((source) => source.name === name));
+    const customSourcesForRun = enabledSources
+      ? (namedCustomSources.length > 0 ? customSourceList.filter((source) => namedCustomSources.includes(source.name)) : customSourceList)
+      : batch % batchCount === 0 ? customSourceList : [];
+    for (const source of customSourcesForRun) {
+      if (!source.homepage) continue;
+      let hostname: string;
+      try {
+        hostname = new URL(source.homepage).hostname.replace(/^www\./i, "");
+      } catch {
+        console.warn(`Skipping custom news source with invalid homepage: ${source.name}`);
+        continue;
+      }
+      plannedSourceNames.add(source.name);
+      sourceMeta.set(source.name, { name: source.name, homepage: source.homepage, source_type: "news", tier: 3, poll_interval_minutes: 1440, fetch_method: firecrawlDisabled ? "google_news_rss_fallback" : "firecrawl_search_direct" });
+      searchPlans.push({ source: source.name, query: `site:${hostname} freight OR logistics OR port OR shipping OR customs OR trade` });
+    }
     await syncSourceRegistry(supabase, NEWS_SOURCE_META);
     const { data: run } = await supabase
       .from("ingestion_runs")
@@ -743,18 +795,27 @@ serve(async (req) => {
     const checkedAt = new Date().toISOString();
     const today = checkedAt.split("T")[0];
     const sourceMeta = new Map(NEWS_SOURCE_META.map((source) => [source.name, source]));
+    for (const source of customSourcesForRun) {
+      sourceMeta.set(source.name, { name: source.name, homepage: source.homepage, source_type: "news", tier: 3, poll_interval_minutes: 1440, fetch_method: firecrawlDisabled ? "google_news_rss_fallback" : "firecrawl" });
+    }
 
     const recordNewsHealth = async (
-      candidates: Array<{ source: string; publishedDate?: string | null }>,
+      candidates: Array<{ source: string; requestedSource?: string; publishedDate?: string | null; url?: string }>,
       accepted: Array<{ source: string }>,
-      inserted: Array<{ source_name?: string | null }>,
+      inserted: Array<{ source_name?: string | null; source_url?: string | null }>,
       fallbackError: string | null = null,
+      fallbackSources: Set<string> = new Set(),
+      fallbackHttp: Map<string, number> = new Map(),
     ) => {
       for (const sourceName of plannedSourceNames) {
         const meta = sourceMeta.get(sourceName);
-        const found = candidates.filter((article) => article.source === sourceName);
-        const acceptedCount = accepted.filter((article) => article.source === sourceName).length;
-        const newCount = inserted.filter((row) => row.source_name === sourceName).length;
+        const found = candidates.filter((article) => (article.requestedSource || article.source) === sourceName);
+        const acceptedCount = accepted.filter((article: any) => (article.requestedSource || article.source) === sourceName).length;
+        const foundUrls = new Set(found.map((article) => canonicalizeUrl(article.url)).filter(Boolean));
+        const newCount = inserted.filter((row) => {
+          const url = canonicalizeUrl(row.source_url);
+          return Boolean(url && foundUrls.has(url));
+        }).length;
         const latestPublicationAt = found
           .map((article) => article.publishedDate)
           .filter((date): date is string => Boolean(date))
@@ -765,7 +826,7 @@ serve(async (req) => {
           sourceUrl: meta?.homepage,
           sourceType: meta?.source_type,
           fetchMethod: "firecrawl_search_direct",
-          httpStatus: fallbackError ? 0 : (searchHttp.get(sourceName) ?? 200),
+          httpStatus: fallbackError ? 0 : (fallbackSources.has(sourceName) ? 200 : (fallbackHttp.get(sourceName) ?? searchHttp.get(sourceName) ?? 200)),
           pagesRequested: 1,
           itemsDiscovered: found.length,
           itemsValid: acceptedCount,
@@ -776,8 +837,21 @@ serve(async (req) => {
           startedAt: Date.now(),
           // Only a real failure counts; an empty week of publications is "no new items".
           error: fallbackError ?? (found.length === 0 ? searchErr.get(sourceName) ?? null : null),
+          fallbackUsed: fallbackSources.has(sourceName),
         });
       }
+    };
+    const clearFirecrawlCooldownAfterSuccess = async () => {
+      if (Date.now() < storedBlockUntil) return;
+      const now = new Date().toISOString();
+      const { error } = await supabase.from("ingestion_service_state").upsert({
+        service_key: "firecrawl",
+        blocked_until: null,
+        failure_reason: null,
+        last_checked_at: now,
+        updated_at: now,
+      }, { onConflict: "service_key" });
+      if (error) console.error("Could not clear recovered Firecrawl status:", error.message);
     };
 
     // Step 1: Scrape real news using Firecrawl Search API
@@ -795,7 +869,27 @@ serve(async (req) => {
     const queryStats = { ok: 0, failed: 0, empty: 0 };
     const searchHttp = new Map<string, number>();
     const searchErr = new Map<string, string>();
+    const fallbackSources = new Set<string>();
+    const fallbackHttp = new Map<string, number>();
+    const runFreeFallback = async (source: string, query: string, limit = 7, preserveSiteFilter = false) => {
+      const fallback = await googleNewsSearch(query, source, limit, preserveSiteFilter);
+      if (fallback.ok) {
+        fallbackSources.add(source);
+        if (!searchHttp.has(source)) searchHttp.set(source, 200);
+        searchErr.delete(source);
+        if (fallback.items.length === 0) queryStats.empty++; else queryStats.ok++;
+        return fallback.items;
+      }
+      searchErr.set(source, `Free news feed HTTP ${fallback.status}`);
+      searchHttp.set(source, fallback.status);
+      queryStats.failed++;
+      return [];
+    };
     const searchPromises = searchPlans.map(async ({ source, query }) => {
+      if (firecrawlDisabled || Date.now() < firecrawlCreditBlockedUntil) {
+        fallbackHttp.set(source, 402);
+        return await runFreeFallback(source, query, 7, true);
+      }
       try {
         const response = await firecrawlFetch("https://api.firecrawl.dev/v2/search", {
           method: "POST",
@@ -814,18 +908,16 @@ serve(async (req) => {
         if (!response.ok) {
           const errText = await response.text();
           console.error(`Firecrawl search error for "${query.substring(0, 50)}...":`, response.status, errText);
-          queryStats.failed++;
-          searchHttp.set(source, response.status);
-          // Paid search failed — fall back to the free news feed for this source.
-          const fb = await googleNewsSearch(query, source, 7);
-          if (fb.ok) {
-            searchHttp.set(source, 200);
-            if (fb.items.length === 0) queryStats.empty++; else queryStats.ok++;
-            return fb.items;
+          if (response.status === 402 || (response.status === 403 && /credit limit reached/i.test(errText))) {
+            fallbackHttp.set(source, response.status);
+            if (response.status === 402) await persistFirecrawlCreditBlock?.(`Firecrawl search returned HTTP 402 for ${source}`);
+            else await persistFirecrawlCreditBlock?.(`Firecrawl search returned a credit-limit response for ${source}`);
+          } else {
+            searchHttp.set(source, response.status);
           }
-          searchErr.set(source, `Search API HTTP ${response.status}`);
-          return [];
+          return await runFreeFallback(source, query, 7, true);
         }
+        await clearFirecrawlCooldownAfterSuccess();
         searchHttp.set(source, response.status);
 
         const result = await response.json();
@@ -841,10 +933,9 @@ serve(async (req) => {
         }));
       } catch (e) {
         console.error(`Search failed for query: ${query.substring(0, 50)}...`, e);
-        queryStats.failed++;
-        searchHttp.set(source, 0);
-        searchErr.set(source, (e as Error).message?.slice(0, 120) || "search failed");
-        return [];
+        if (/credit limit|Firecrawl credits/i.test(String(e))) fallbackHttp.set(source, 402);
+        else searchHttp.set(source, 0);
+        return await runFreeFallback(source, query, 7, true);
       }
     });
 
@@ -853,8 +944,12 @@ serve(async (req) => {
     plannedSourceNames.add("Global Breaking News");
     const breakingPromises = BREAKING_QUERIES.map(async (q) => {
       const r = await googleNewsSearch(q, "Global Breaking News", 6);
-      if (!r.ok) searchErr.set("Global Breaking News", `News feed HTTP ${r.status}`);
+      if (!r.ok) {
+        searchErr.set("Global Breaking News", `News feed HTTP ${r.status}`);
+        searchHttp.set("Global Breaking News", r.status);
+      }
       else searchHttp.set("Global Breaking News", 200);
+      if (r.ok) fallbackSources.add("Global Breaking News");
       return r.items;
     });
     const settled = await Promise.allSettled([...searchPromises, ...breakingPromises]);
@@ -868,7 +963,7 @@ serve(async (req) => {
     // These run on every execution — they carry the most important global
     // freight-forwarding signal, so we want every run to capture them.
     {
-      const primarySources = PRIMARY_DIRECT_SOURCES.filter((source) => plannedSourceNames.has(source.name));
+      const primarySources = PRIMARY_DIRECT_SOURCES.filter((source) => !firecrawlDisabled && Date.now() >= firecrawlCreditBlockedUntil && plannedSourceNames.has(source.name));
       console.log(`Running direct scrape for ${primarySources.length} primary global sources...`);
       const primaryStats: Record<string, { mapped: number; scraped: number }> = {};
       for (const src of primarySources) {
@@ -923,19 +1018,10 @@ serve(async (req) => {
     // source_type = 'custom'. They are treated exactly like the built-in
     // direct sources: map the homepage, then scrape the unseen articles.
     {
-      const { data: customSources } = await supabase
-        .from("sources")
-        .select("name, homepage")
-        .eq("source_type", "custom")
-        .eq("enabled", true);
       // Manual runs: a targeted check of named sources only scrapes those; a
       // general manual refresh always includes every admin-added source so a
       // stale Settings selection can never silently exclude them.
-      const named = (enabledSources ?? []).filter((n) => (customSources ?? []).some((s) => s.name === n));
-      const customInThisBatch = enabledSources
-        ? (named.length > 0 ? (customSources ?? []).filter((s) => named.includes(s.name)) : (customSources ?? []))
-        : batch % batchCount === 0 ? (customSources ?? []) : [];
-      for (const src of customInThisBatch) {
+      for (const src of (firecrawlDisabled || Date.now() < firecrawlCreditBlockedUntil ? [] : customSourcesForRun)) {
         if (!src.homepage) continue;
         plannedSourceNames.add(src.name);
         sourceMeta.set(src.name, { name: src.name, homepage: src.homepage, source_type: "news", tier: 3, poll_interval_minutes: 1440, fetch_method: "firecrawl" });
@@ -969,6 +1055,20 @@ serve(async (req) => {
           if (toScrape.length > 0 && count === 0) {
             searchErr.set(src.name, `${toScrape.length} article pages could not be read`);
           }
+          if (count === 0) {
+            const hostname = new URL(src.homepage).hostname.replace(/^www\./i, "");
+            fallbackHttp.set(src.name, 402);
+            const fallback = await runFreeFallback(
+              src.name,
+              `site:${hostname} freight OR logistics OR port OR shipping OR customs OR trade`,
+              7,
+              true,
+            );
+            if (fallback.length > 0) {
+              allArticles.push(...fallback);
+              console.log(`[custom-rss-fallback] ${src.name}: found ${fallback.length} publisher results`);
+            }
+          }
           console.log(`[custom-direct] ${src.name}: mapped=${candidateUrls.length}, scraped=${count}`);
         } catch (e) {
           console.error(`Custom source scrape failed for ${src.name}:`, e);
@@ -985,7 +1085,7 @@ serve(async (req) => {
       const advisoryToday = Array.from(
         { length: Math.min(ADVISORY_PER_RUN, ADVISORY_DIRECT_SOURCES.length) },
         (_, i) => ADVISORY_DIRECT_SOURCES[(dayIndex * ADVISORY_PER_RUN + i) % ADVISORY_DIRECT_SOURCES.length],
-      ).filter((src) => plannedSourceNames.has(src.name));
+      ).filter((src) => !firecrawlDisabled && Date.now() >= firecrawlCreditBlockedUntil && plannedSourceNames.has(src.name));
       for (const src of advisoryToday) {
         if (budgetLeftMs() < 25_000) {
           console.log(`[budget] skipping remaining advisory scrapes (${Math.round(budgetLeftMs() / 1000)}s left)`);
@@ -1031,7 +1131,7 @@ serve(async (req) => {
       const MOROCCO_PER_RUN = 2;
       const moroccoToday = Array.from({ length: Math.min(MOROCCO_PER_RUN, MOROCCO_DIRECT_SOURCES.length) }, (_, i) =>
         MOROCCO_DIRECT_SOURCES[(dayIndex * MOROCCO_PER_RUN + i) % MOROCCO_DIRECT_SOURCES.length],
-      ).filter((source) => plannedSourceNames.has(source.name));
+      ).filter((source) => !firecrawlDisabled && Date.now() >= firecrawlCreditBlockedUntil && plannedSourceNames.has(source.name));
       console.log(`Running direct scrape for ${moroccoToday.map((s) => s.name).join(", ")}`);
       const directScrapeStats: Record<string, { mapped: number; scraped: number }> = {};
 
