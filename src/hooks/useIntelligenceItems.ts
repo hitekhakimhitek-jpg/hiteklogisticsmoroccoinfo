@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { translateRecords } from "@/lib/translateEntries";
+import { sanitizeNewsText } from "@/lib/newsText";
 
 export type IntelDepartment = "operations" | "compliance" | "finance" | "commercial" | "it";
 export type IntelSeverity = "act_now" | "this_week" | "awareness";
@@ -190,6 +191,19 @@ export function feedWindow() {
   return { start, end };
 }
 
+function sanitizeIntelligenceItem(row: IntelligenceItem): IntelligenceItem {
+  return {
+    ...row,
+    headline: sanitizeNewsText(row.headline),
+    summary: sanitizeNewsText(row.summary),
+    impact: sanitizeNewsText(row.impact),
+    action_required: sanitizeNewsText(row.action_required),
+    suggested_action: row.suggested_action ? sanitizeNewsText(row.suggested_action) : null,
+    why_it_matters_to_hitek: row.why_it_matters_to_hitek ? sanitizeNewsText(row.why_it_matters_to_hitek) : null,
+    affected_lanes_or_customers: row.affected_lanes_or_customers ? sanitizeNewsText(row.affected_lanes_or_customers) : null,
+  };
+}
+
 export function useIntelligenceItems(filters: IntelFilters = {}) {
   const { lang } = useLanguage();
   return useQuery({
@@ -209,7 +223,7 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
         const needle = filters.search.toLocaleLowerCase();
         rows = rows.filter((row) => `${row.headline} ${row.summary} ${row.impact}`.toLocaleLowerCase().includes(needle));
       }
-      rows = rows.map((row) => ({
+      rows = rows.map((row) => sanitizeIntelligenceItem({
         ...row,
         headline: row.clean_title || row.headline,
         summary: row.clean_summary || row.summary,
@@ -264,13 +278,13 @@ export function useIntelligenceItems(filters: IntelFilters = {}) {
             lang,
           );
           const byId = new Map(translated.map((row) => [row.id, row]));
-          return sorted.map((row) => byId.get(row.id) ?? row);
+          return sorted.map((row) => sanitizeIntelligenceItem(byId.get(row.id) ?? row));
         } catch (e) {
           console.error("intel translate failed", e);
-          return sorted;
+          return sorted.map(sanitizeIntelligenceItem);
         }
       }
-      return sorted;
+      return sorted.map(sanitizeIntelligenceItem);
     },
     // Keep the previous list on screen while a language switch re-translates,
     // instead of blanking the feed for several seconds.

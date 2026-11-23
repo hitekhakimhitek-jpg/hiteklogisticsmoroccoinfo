@@ -1,3 +1,5 @@
+import { sanitizeNewsText } from "./intel-article.ts";
+
 export type GoogleNewsArticle = {
   title: string;
   url: string;
@@ -10,6 +12,7 @@ export type GoogleNewsArticle = {
 
 function decodeXml(value: string): string {
   return value
+    .replace(/&nbsp;/gi, " ")
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
     .replace(/&#x([\da-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
     .replace(/&amp;/g, "&")
@@ -22,7 +25,7 @@ function decodeXml(value: string): string {
 function tagText(xml: string, name: string): string {
   const match = xml.match(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)</${name}>`, "i"));
   return match?.[1]
-    ? decodeXml(match[1].replace(/<!\[CDATA\[|\]\]>/g, "").replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim()
+    ? sanitizeNewsText(decodeXml(match[1].replace(/<!\[CDATA\[|\]\]>/g, "")))
     : "";
 }
 

@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { translateEntries, translateDeep } from "@/lib/translateEntries";
+import { sanitizeNewsText } from "@/lib/newsText";
 
 export type DbNewsEntry = {
   id: string;
@@ -39,6 +40,17 @@ export type DbNewsEntry = {
   classification_notes?: string | null;
 };
 
+function sanitizeNewsEntry(entry: DbNewsEntry): DbNewsEntry {
+  return {
+    ...entry,
+    headline: sanitizeNewsText(entry.headline),
+    summary: sanitizeNewsText(entry.summary),
+    full_content: entry.full_content ? sanitizeNewsText(entry.full_content) : null,
+    impact_assessment: entry.impact_assessment ? sanitizeNewsText(entry.impact_assessment) : null,
+    suggested_action: entry.suggested_action ? sanitizeNewsText(entry.suggested_action) : null,
+  };
+}
+
 export function useNewsEntries(filters?: {
   category?: string;
   region?: string;
@@ -66,10 +78,10 @@ export function useNewsEntries(filters?: {
 
       const { data, error } = await query;
       if (error) throw error;
-      const entries = (data || []) as DbNewsEntry[];
+      const entries = ((data || []) as DbNewsEntry[]).map(sanitizeNewsEntry);
       if (lang === "fr" && entries.length > 0) {
         try {
-          return await translateEntries(entries, "fr");
+          return (await translateEntries(entries, "fr")).map(sanitizeNewsEntry);
         } catch (e) {
           console.error("translation failed", e);
           return entries;

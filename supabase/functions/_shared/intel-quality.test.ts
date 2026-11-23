@@ -1,6 +1,6 @@
 import { assertEquals, assertMatch } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { assessIntelligenceQuality, buildHitekImpactAction } from "./intel-quality.ts";
-import { areLikelyDuplicateTitles, cleanSummary, nonArticleReason } from "./intel-article.ts";
+import { areLikelyDuplicateTitles, cleanSummary, nonArticleReason, sanitizeNewsText } from "./intel-article.ts";
 
 const cases = [
   ["If you're not using AI to attack your own systems, your adversaries will", "it", "awareness", "review"],
@@ -68,6 +68,11 @@ Deno.test("canonical duplicate headlines match", () => {
 Deno.test("summary cleanup removes URLs hashtags and promotional copy", () => {
   const value = cleanSummary("Houthis escalated their shipping campaign with a VLCC strike. Get the daily insights that power maritime professionals worldwide ### https://example.com/story");
   assertEquals(value, "Houthis escalated their shipping campaign with a VLCC strike.");
+});
+Deno.test("malformed Google News HTML attributes render as readable news text", () => {
+  const value = sanitizeNewsText('a href=" target=" blank" Morocco warns it could become tomato importer within three years /a &nbsp;&nbsp; font color=" 6f6f6f" Food Business Middle East & Africa /font');
+  assertEquals(value, "Morocco warns it could become tomato importer within three years Food Business Middle East & Africa");
+  assertEquals(/href=|target=|blank|font color|\/a/i.test(value), false);
 });
 import { areSameStory } from "./intel-article.ts";
 Deno.test("differently worded headlines about one outage are one story", () => {

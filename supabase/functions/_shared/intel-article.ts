@@ -19,9 +19,41 @@ export function canonicalizeUrl(value?: string | null): string | null {
   }
 }
 
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#(\d+);/g, (_, digits: string) => {
+      const code = Number(digits);
+      return code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff) ? String.fromCodePoint(code) : " ";
+    })
+    .replace(/&#x([\da-f]+);/gi, (_, digits: string) => {
+      const code = Number.parseInt(digits, 16);
+      return code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff) ? String.fromCodePoint(code) : " ";
+    });
+}
+
+/** Converts scraped HTML and malformed remnants of HTML attributes into readable text. */
+export function sanitizeNewsText(value?: string | null): string {
+  return decodeHtmlEntities(String(value || ""))
+    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style\s*>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\b(?:a|font)\s+(?:(?:href|target|rel|color|class|style)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s]+)?\s*)+/gi, " ")
+    .replace(/\b(?:href|target|rel|color|class|style)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s]+)?/gi, " ")
+    .replace(/\bblank["'](?=\s+[A-ZÀ-ÖØ-Þ“])/gu, " ")
+    .replace(/\/(?:a|font)\b/gi, " ")
+    .replace(/(?:&nbsp;|\u00a0)+/gi, " ")
+    .replace(/[\s\u00a0]+/g, " ")
+    .trim();
+}
+
 export function cleanTitle(value?: string | null, sourceName?: string | null): string {
-  let title = String(value || "")
-    .replace(/<[^>]+>/g, " ")
+  let title = sanitizeNewsText(value)
     .replace(/!\[[^\]]*\]\([^)]*\.(?:svg|png|jpe?g|gif)[^)]*\)/gi, " ")
     .replace(/\[[^\]]*\.(?:svg|png|jpe?g|gif)\]\([^)]*\)/gi, " ")
     .replace(/(?:https?:\/\/\S+)?\S+\.svg\b/gi, " ")
@@ -38,10 +70,7 @@ export function cleanTitle(value?: string | null, sourceName?: string | null): s
 }
 
 export function cleanSummary(value?: string | null): string {
-  const cleaned = String(value || "")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
+  const cleaned = sanitizeNewsText(value)
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
     .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/gi, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")

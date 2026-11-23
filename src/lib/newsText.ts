@@ -1,0 +1,1 @@
+export { sanitizeNewsText } from "../../supabase/functions/_shared/intel-article";
